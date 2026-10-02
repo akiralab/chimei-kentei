@@ -53,3 +53,9 @@
 - フォントは `index.html` の `<link>` で Google Fonts から読み込む（design 側が追加）
 - `src/main.tsx` が `./styles/tokens.css` と `./styles/theme.css` を import する（ui 側が追加）
 - ダークモード対応は不要。正誤は色と記号（○×）の両方で示す
+
+## v1 追加（担当分け）
+
+- `src/styles/map.css`（地図・2 カラム。クラス接頭辞 `.layout*` `.map*` `.jp-map*` `.info-card*`）は **地図 UI 担当**が所有し、`theme.css` には書かない。
+- `src/styles/tokens.css` / `theme.css` / `index.html` のフォント指定は **タイポグラフィ担当**が所有する。
+- `src/components/HiraganaInput.tsx` は **入力担当**が所有し、クラスは既存の `.answer-input` を使う（必要な修飾子は `.answer-input--ime` のように接尾）。

@@ -78,3 +78,48 @@ export interface RankingStore {
 export const QUESTIONS_PER_SET = 10
 export const TIME_LIMIT_MS = 20_000
 export const MIN_POOL_FOR_SCOPE = 20
+
+// ---------------------------------------------------------------------------
+// 地図・統計（v1）。出典: 総務省統計局 e-Stat 境界データ（2020 年国勢調査・小地域）を市区町村に集約
+// ---------------------------------------------------------------------------
+
+/** 市区町村の統計。`public/geo/municipalities.json` は Record<lgCode, MunicipalityStats> */
+export interface MunicipalityStats {
+  /** 問題バンクと同じ 6 桁コード（政令指定都市は市のコード） */
+  lgCode: string
+  prefCode: string
+  /** 表示名。郡名を含まない市区町村名（例 '匝瑳市'、'浪江町'）。政令市は市名 */
+  name: string
+  population: number
+  households: number
+  /** 面積 km²（小数 2 桁） */
+  areaKm2: number
+  /** 人口密度 人/km²（整数） */
+  densityPerKm2: number
+  /** 代表点 [経度, 緯度] */
+  centroid: [number, number]
+  source: 'census2020'
+}
+
+/** `public/geo/pref/{prefCode}.json`（GeoJSON FeatureCollection, WGS84, 市区町村ポリゴン）の properties */
+export interface MunicipalityFeatureProps {
+  lgCode: string
+  prefCode: string
+  name: string
+}
+
+/** `public/geo/japan.json`（GeoJSON FeatureCollection, WGS84, 都道府県ポリゴン・強く簡略化）の properties */
+export interface PrefectureFeatureProps {
+  prefCode: string
+  name: string
+}
+
+/** 共有ランキング API（infra/API.md）が返す 1 行。answers と clientToken は公開しない */
+export interface RankingRow {
+  entryId: string
+  setId: string
+  nickname: string
+  score: number
+  timeMs: number
+  createdAt: string
+}
