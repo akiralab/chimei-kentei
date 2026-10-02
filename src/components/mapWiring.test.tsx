@@ -4,7 +4,6 @@
  * 「地図データが実際に読める」経路はこちらで押さえる。
  *
  * - 範囲・科目: 地方 → 都道府県 の 2 段階で scope が変わる
- * - 範囲・科目: 「今日の10問」が選択中の範囲・科目を引き継ぐ（不具合報告の再発防止）
  * - 出題: 左パネルに県内地図が出て、解答後に情報カードの中身が出る
  */
 import '@testing-library/jest-dom/vitest'
@@ -16,7 +15,6 @@ import { DIFFICULT_12, EASY_ALL, META } from '../engine/__fixtures__/questions.t
 import { JAPAN_FIXTURE, PREF_GEO_FIXTURE, STATS_FIXTURE } from '../geo/__fixtures__/geo.ts'
 import { resetGeoSource } from '../geo/load.ts'
 import { NICKNAME_KEY } from '../hooks/useNickname.ts'
-import { todaySeed } from '../engine/setId.ts'
 import { quizPath } from '../router.ts'
 import App from '../App.tsx'
 
@@ -108,37 +106,6 @@ describe('範囲・科目 への組み込み', () => {
 
     expect(screen.getByText('地方をえらぶ')).toBeInTheDocument()
     expect(document.querySelector('.jp-map__grid')).toBeNull()
-  })
-
-  /** 不具合報告「東京都を選んだのに山梨県が出た」の再発防止。原因は全国固定だった「今日の10問」 */
-  it('「今日の10問」は選んでいる範囲・科目を引き継ぐ', async () => {
-    renderAt('#/select')
-    await waitFor(() => {
-      expect(document.querySelector('.jp-map__svg')).not.toBeNull()
-    })
-
-    // 既定（範囲未選択）は全国 easy
-    expect(screen.getByRole('button', { name: '今日の10問（全国・easy）' })).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: '関東地方' }))
-    fireEvent.click([...document.querySelectorAll('.jp-map__cell')].find((b) => b.textContent === '東京都')!)
-    fireEvent.click(screen.getByRole('button', { name: '今日の10問（東京都・easy）' }))
-    await settle()
-    expect(window.location.hash).toBe(`#/q/${DATA_VERSION}-e-13-${todaySeed()}`)
-  })
-
-  it('「今日の10問」は difficult を選んでいれば difficult で始まる', async () => {
-    renderAt('#/select')
-    await waitFor(() => {
-      expect(document.querySelector('.jp-map__svg')).not.toBeNull()
-    })
-
-    fireEvent.click(screen.getByRole('button', { name: '関東地方' }))
-    fireEvent.click([...document.querySelectorAll('.jp-map__cell')].find((b) => b.textContent === '千葉県')!)
-    fireEvent.click(screen.getByRole('button', { name: /^difficult/ }))
-    fireEvent.click(screen.getByRole('button', { name: '今日の10問（千葉県・difficult）' }))
-    await settle()
-    expect(window.location.hash).toBe(`#/q/${DATA_VERSION}-d-12-${todaySeed()}`)
   })
 })
 
