@@ -3,7 +3,8 @@
 GitHub Pages は静的配信のため、ランキングは別ホストの API に保存する。クライアント（`src/engine/ranking-remote.ts`）とサーバー（`infra/api/`）はこの契約に従う。
 
 ## 原則
-- **採点はサーバーで行う。** クライアントは setId と各問の入力だけを送る。サーバーは setId から問題セットを**同じエンジンコード**（`src/engine/bank.ts` の `buildQuestionSet`）で再導出し、`grade()` で採点して得点・所要時間を計算する。問題バンクは公開サイト `https://akiralab.github.io/chimei-kentei/questions/` から取得する（環境変数 `BANK_BASE_URL`）。
+- **採点はサーバーで行う。** クライアントは setId と各問の入力だけを送る。サーバーは setId から問題セットを**同じエンジンコード**（`src/engine/bank.ts` の `buildQuestionSet`）で再導出し、`grade()` で採点して得点・所要時間を計算する。問題バンクは公開サイト `https://akiralab.github.io/chimei-kentei/questions/` から取得する（環境変数 `BANK_BASE_URL` ＋ `DATA_VERSION`）。
+- **setId の先頭は問題バンクの版**（`DATA_VERSION`。現行 `abr20260925r2`）。サーバーは自分がバンドルした版で再導出するため、**版が違う setId は 400**（`invalid`）になる。版を上げたときは Pages のデプロイ後に `npm run deploy:api` が必要（→ [data/README.md の「版の扱い」](../data/README.md#版の扱い)）。
 - **1 セット 1 登録**（setId × clientToken）。2 回目は 409。
 - clientToken と answers は一覧に出さない。
 
@@ -11,7 +12,7 @@ GitHub Pages は静的配信のため、ランキングは別ホストの API �
 
 ### POST /results
 ```json
-{ "setId": "abr20260925-e-12-0417", "nickname": "たろう",
+{ "setId": "abr20260925r2-e-12-0417", "nickname": "たろう",
   "clientToken": "uuid", "timeLimitMs": 0,
   "answers": [ { "questionId": "c:122351:匝瑳", "input": "そうさ", "ms": 4210, "passed": false } ] }
 ```

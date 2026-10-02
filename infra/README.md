@@ -41,7 +41,7 @@ DynamoDB  RankingTable（PAY_PER_REQUEST・PITR 有効）
 | 変数 | 既定値 | 用途 |
 |---|---|---|
 | `TABLE_NAME` | （スタックが決める） | DynamoDB テーブル名 |
-| `BANK_BASE_URL` | `https://akiralab.github.io/chimei-kentei/questions/` | 問題バンクの置き場。**版ディレクトリの 1 つ上**。Lambda が末尾に `abr20260925/` を足す |
+| `BANK_BASE_URL` | `https://akiralab.github.io/chimei-kentei/questions/` | 問題バンクの置き場。**版ディレクトリの 1 つ上**。Lambda が末尾に `src/engine/bank.ts` の `DATA_VERSION`（現行 `abr20260925r2/`）を足す |
 | `ALLOWED_ORIGINS` | `https://akiralab.github.io,http://localhost:5173,http://localhost:4173` | CORS 許可 Origin（カンマ区切り） |
 
 ## デプロイ
@@ -50,6 +50,12 @@ DynamoDB  RankingTable（PAY_PER_REQUEST・PITR 有効）
 npm ci
 AWS_PROFILE=<あなたのプロファイル> npm run deploy:api
 ```
+
+> **問題バンクの版（`DATA_VERSION`）を上げたら、Pages のデプロイ後に必ずこれを流す。**
+> Lambda は `src/engine/bank.ts` の `DATA_VERSION` をバンドルに同梱しており、
+> 受け取った setId を自分の版で再導出して一致しなければ 400（`invalid`）を返す。
+> 更新前のあいだ、新しい版の setId は共有ランキングに登録できない。手順の正本は
+> [data/README.md の「版の扱い」](../data/README.md#版の扱い)。
 
 `infra/deploy.sh` が順にやること（何度流しても同じ結果になる）:
 

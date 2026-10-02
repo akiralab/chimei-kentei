@@ -6,7 +6,7 @@ Parameters:
   BankBaseUrl:
     Type: String
     Default: https://akiralab.github.io/chimei-kentei/questions/
-    Description: 問題バンクの置き場。版ディレクトリ（abr20260925/）の 1 つ上を指す。Lambda が末尾に版を足して読む
+    Description: 問題バンクの置き場。版ディレクトリ（abr20260925r2/）の 1 つ上を指す。Lambda が末尾に版を足して読む
   AllowedOrigins:
     Type: CommaDelimitedList
     Default: https://akiralab.github.io,http://localhost:5173,http://localhost:4173

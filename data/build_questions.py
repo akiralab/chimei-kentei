@@ -18,23 +18,36 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 DEFAULT_ABR = Path.home() / "workspace" / "abr-data" / "processed"
-DATA_VERSION = "abr20260925"
+DATA_VERSION = "abr20260925r2"
 SOURCE = (
     "デジタル庁 アドレス・ベース・レジストリ 全国 町字マスター "
     "2026-09-25 版（CC BY 4.0）を加工"
 )
 
 # --- 幹の文字種判定 -------------------------------------------------------
-# ルール e: 幹が「漢字（々 と 〆 を含む）のみ」で構成されるものだけ残す。
-# 数字（半角/全角）・カタカナ・ひらがな・記号（・ ー 〇 など）を含む行は除外。
-KANJI_ONLY = re.compile(
-    r"^[々〆"
+# 「漢字」として扱う文字の集合（々 と 〆 を含む）。数字（半角/全角）・カタカナ・
+# ひらがな・記号（・ ー 〇 など）はここに入らない。
+KANJI_CLASS = (
+    r"々〆"
     r"㐀-䶿"  # CJK 拡張 A
     r"一-鿿"  # CJK 統合漢字
     r"豈-﫿"  # CJK 互換漢字
     r"\U00020000-\U0002ebef"  # CJK 拡張 B 以降
-    r"]+$"
 )
+
+# ルール e（difficult）: 幹が「漢字のみ」で構成されるものだけ残す。
+KANJI_ONLY = re.compile(rf"^[{KANJI_CLASS}]+$")
+
+# ルール e（easy）: 幹に漢字が 1 字も無いものを除外する。市区町村名は
+# 「鎌ケ谷」「ふじみ野」「南アルプス」のように漢字とかなが混ざる形も読みとして成立するので、
+# difficult の「漢字のみ」とは別に「1 字以上あるか」で判定する。
+KANJI_ANY = re.compile(rf"[{KANJI_CLASS}]")
+
+
+def has_kanji(stem: str) -> bool:
+    """幹に漢字（々・〆 を含む）が 1 字以上あるか。"""
+    return KANJI_ANY.search(stem) is not None
+
 
 # ルール b: 市区町村の接尾辞とその読み
 SUFFIX_KANA = {"市": ("シ",), "区": ("ク",), "町": ("チョウ", "マチ"), "村": ("ソン", "ムラ")}
@@ -80,6 +93,7 @@ def build_easy(city_csv: Path, report: dict):
     questions = []
     suffix_count = Counter()
     cities_meta = []
+    dropped_no_kanji = []  # ルール e（easy）で落とした市区町村名
 
     for (pref, city), rs in groups.items():
         kana_set = {r["city_kana"] for r in rs}
@@ -105,18 +119,23 @@ def build_easy(city_csv: Path, report: dict):
             raise ValueError(f"接尾辞の読みを剥がせない: {pref}{city} ({city_kana})")
         stem_kana = city_kana[: -len(tail)]
 
-        suffix_count[suffix] += 1
-        questions.append(
-            {
-                "id": f"c:{lg_code}:{stem}",
-                "prefCode": lg_code[:2],
-                "pref": pref,
-                "lgCode": lg_code,
-                "display": stem,
-                "suffix": suffix,
-                "answer": to_hira(stem_kana),
-            }
-        )
+        # ルール e（easy）: 幹に漢字が 1 字も無いものは読む問題にならないので出題しない。
+        # meta.cities には残す（範囲選択の市区町村検索と difficult の絞り込みに使うため）。
+        if has_kanji(stem):
+            suffix_count[suffix] += 1
+            questions.append(
+                {
+                    "id": f"c:{lg_code}:{stem}",
+                    "prefCode": lg_code[:2],
+                    "pref": pref,
+                    "lgCode": lg_code,
+                    "display": stem,
+                    "suffix": suffix,
+                    "answer": to_hira(stem_kana),
+                }
+            )
+        else:
+            dropped_no_kanji.append(city)
         cities_meta.append(
             {
                 "lgCode": lg_code,
@@ -130,6 +149,8 @@ def build_easy(city_csv: Path, report: dict):
     cities_meta.sort(key=lambda c: c["lgCode"])
     report["easy_total"] = len(questions)
     report["easy_suffix"] = dict(sorted(suffix_count.items()))
+    report["cities_total"] = len(cities_meta)
+    report["easy_drop_no_kanji"] = sorted(dropped_no_kanji)
     report["seirei_cities"] = len({v for v in ward_to_city.values()})
     return questions, cities_meta, ward_to_city
 
@@ -285,7 +306,12 @@ def main() -> int:
     counts = {c: len(v) for c, v in difficult.items()}
     lo = min(counts.items(), key=lambda kv: kv[1])
     hi = max(counts.items(), key=lambda kv: kv[1])
+    dropped = report["easy_drop_no_kanji"]
+    easy_counts = {p["code"]: p["easyCount"] for p in meta["prefectures"]}
+    easy_lo = min(easy_counts.items(), key=lambda kv: kv[1])
     print(f"easy            : {report['easy_total']} 件 {report['easy_suffix']}")
+    print(f"  最小 {easy_lo[0]}={easy_lo[1]}  （meta.cities は全 {report['cities_total']} 件を残す）")
+    print(f"  ルール e で除外（幹に漢字なし）: {len(dropped)} 件 {'・'.join(dropped)}")
     print(f"政令指定都市     : {report['seirei_cities']} 市（区コードを市コードへ集約）")
     print(f"difficult       : {report['difficult_total']} 件 / {len(difficult)} 都道府県")
     print(f"  最小 {lo[0]}={lo[1]}  最大 {hi[0]}={hi[1]}")
