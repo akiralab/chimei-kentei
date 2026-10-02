@@ -1,0 +1,863 @@
+/* ==========================================================================
+   theme-preview.css — 結合コピー（正本ではない）
+   --------------------------------------------------------------------------
+   正本は src/styles/tokens.css と src/styles/theme.css。
+   このファイルはその 2 本をこの順に単純連結したコピーで、
+   public/theme-preview.html を Vite のビルド成果物に依存させず
+   （file:// でも /chimei-kentei/theme-preview.html でも）表示するためだけに存在する。
+   public/ は Vite がそのままコピーするので、ここから src/ は参照できない。
+
+   ここを直接編集しない。正本を直したら、このコメントブロックを保ったまま
+   その後ろを下のコマンドの出力で置き換える:
+
+     cat src/styles/tokens.css src/styles/theme.css
+
+   ========================================================================== */
+
+/* ==========================================================================
+   tokens.css — 答案用紙テーマの CSS 変数（正本）
+   --------------------------------------------------------------------------
+   方向性: 行政文書風ではなく「中高の小テスト用紙をポップに再現」。
+   黒板色の地にクリーム色の答案用紙が 1 枚。赤ペン・蛍光マーカー・得点スタンプ。
+   ダークモードは作らない（用紙の白地が主役なので反転させる意味がない）。
+   部品は theme.css 側。クラス名の契約は CONTRACT.md。
+   ========================================================================== */
+
+:root {
+  /* ---- 色 ------------------------------------------------------------- */
+  --color-board: #2e6b5e; /* 黒板（緑板）*/
+  --color-paper: #fbf7ec; /* 答案用紙のクリーム地 */
+  --color-paper-line: #c9d7e8; /* 罫線の水色 */
+  --color-ink: #2b2b2b; /* 本文の黒 */
+  --color-pencil: #6b6b6b; /* 鉛筆書き・補助テキスト */
+  --color-red-pen: #e0362c; /* 採点の赤ペン */
+  --color-stamp: #d7263d; /* 得点スタンプの朱 */
+  --color-correct: #2ba84a; /* 正解の緑（記号と併用。色単独では使わない）*/
+  --color-marker-yellow: #ffe86b;
+  --color-marker-pink: #ffb3c7;
+  --color-marker-blue: #a9ddf5;
+
+  /* 派生色（上の基本色から作った陰影。基本色を変えたらここも見直す）*/
+  --color-board-deep: #245449; /* 黒板の四隅の落ち */
+  --color-chalk: rgba(255, 255, 255, 0.07); /* チョークの粉 */
+  --color-paper-edge: #efe7d4; /* 用紙の折り目・ヘッダ下の陰 */
+  --color-rule-strong: #9bb2cd; /* 二重線・欄の下線（罫線より濃い）*/
+  --color-red-pen-faint: rgba(224, 54, 44, 0.14);
+
+  /* ---- フォント ------------------------------------------------------- */
+  /* index.html の Google Fonts <link> で読み込む。必ずフォールバックを添える */
+  --font-body: 'Shippori Mincho B1', 'Hiragino Mincho ProN', 'Yu Mincho', 'YuMincho', serif;
+  --font-display: 'Dela Gothic One', 'Hiragino Sans', 'Yu Gothic', sans-serif;
+  --font-hand: 'Klee One', 'Hiragino Mincho ProN', 'Yu Mincho', serif;
+  --font-pen: 'Yusei Magic', 'Hiragino Sans', 'Yu Gothic', sans-serif;
+
+  /* ---- 文字サイズ（clamp で 375px〜1024px+ を 1 本化）----------------- */
+  --fs-xs: 0.75rem;
+  --fs-sm: 0.8125rem;
+  --fs-md: 0.9375rem;
+  --fs-lg: 1.0625rem;
+  --fs-xl: clamp(1.125rem, 0.95rem + 0.9vw, 1.5rem);
+  --fs-title: clamp(1.25rem, 1rem + 1.6vw, 1.875rem);
+  /* 出題漢字: 最小 2.4rem を下限に、375px では約 2.8rem まで縮む */
+  --fs-kanji: clamp(2.4rem, 1.4rem + 6vw, 4.4rem);
+  --fs-answer: clamp(1.5rem, 1.1rem + 2.4vw, 2.25rem);
+  --fs-mark: clamp(1.75rem, 1.2rem + 2.4vw, 2.75rem);
+  --fs-stamp: clamp(2.25rem, 1.5rem + 3.6vw, 3.5rem);
+
+  /* ---- 余白（4px グリッド）-------------------------------------------- */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 2.5rem;
+  --space-8: 3rem;
+
+  /* ---- 形 ------------------------------------------------------------- */
+  --radius-paper: 6px;
+  --radius-sm: 4px;
+  --radius-pill: 999px;
+  --shadow-paper: 0 8px 24px rgba(0, 0, 0, 0.25);
+  --shadow-chip: 0 2px 0 rgba(0, 0, 0, 0.12);
+
+  /* 罫線 1 行の高さ。.paper の背景グラデーションと行間の両方が参照する */
+  --rule-height: 2rem;
+  /* 用紙の最大幅（1 画面 1 枚）*/
+  --paper-max: 720px;
+}
+
+/* ==========================================================================
+   theme.css — 答案用紙テーマの部品（正本）
+   --------------------------------------------------------------------------
+   前提: tokens.css を先に読み込む（main.tsx で tokens → theme の順に import）。
+   クラス名の契約は CONTRACT.md。ここで名前を変えてはいけない。
+   設計: 黒板（.board）の上にクリーム色の答案用紙（.paper）1 枚。
+         採点は赤ペン（.mark / .pen-comment）、得点は斜めスタンプ（.stamp）、
+         強調は蛍光マーカー（.marker）。
+   正誤は色だけで示さない。必ず記号（○ ×）と文字を伴わせる。
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. 土台
+   -------------------------------------------------------------------------- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-md);
+  line-height: 1.8;
+  color: var(--color-ink);
+  background: var(--color-board);
+}
+
+/* 読み上げ専用テキスト（「正解」「誤り」などを記号と併記するため）*/
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+:where(a, button, input, [tabindex]):focus-visible {
+  outline: 3px solid var(--color-marker-blue);
+  outline-offset: 2px;
+}
+
+/* --------------------------------------------------------------------------
+   2. .board — 黒板
+   チョークの粉は CSS グラデーションのみで表現（画像を持ちたくない）
+   -------------------------------------------------------------------------- */
+
+.board {
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: var(--space-5) var(--space-3) var(--space-8);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-5);
+  background-color: var(--color-board);
+  background-image:
+    radial-gradient(ellipse 60% 40% at 18% 12%, var(--color-chalk), transparent 70%),
+    radial-gradient(ellipse 50% 35% at 82% 78%, var(--color-chalk), transparent 70%),
+    radial-gradient(ellipse 120% 90% at 50% 50%, transparent 55%, var(--color-board-deep) 100%);
+  background-repeat: no-repeat;
+}
+
+/* --------------------------------------------------------------------------
+   3. .paper — 答案用紙
+   罫線は repeating-linear-gradient。background-attachment: local で
+   中身が伸びても行がずれない。
+   -------------------------------------------------------------------------- */
+
+.paper {
+  width: 100%;
+  max-width: var(--paper-max);
+  padding: var(--space-5) clamp(var(--space-3), 3vw, var(--space-6)) var(--space-6);
+  position: relative;
+  background-color: var(--color-paper);
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent calc(var(--rule-height) - 1px),
+    var(--color-paper-line) calc(var(--rule-height) - 1px),
+    var(--color-paper-line) var(--rule-height)
+  );
+  background-attachment: local;
+  background-position: left top;
+  border-radius: var(--radius-paper);
+  box-shadow: var(--shadow-paper);
+  overflow: hidden; /* 罫線を角丸で切る */
+}
+
+/* 用紙の左に綴じ代（薄い縦線）。装飾なので小さい画面では出さない */
+@media (min-width: 540px) {
+  .paper::before {
+    content: '';
+    position: absolute;
+    inset-block: 0;
+    left: clamp(var(--space-5), 5vw, var(--space-7));
+    width: 1px;
+    background: var(--color-red-pen-faint);
+    pointer-events: none;
+  }
+}
+
+.paper__header {
+  /* 罫線の上に乗せて隠す（自力で不透明な地を持つ）*/
+  position: relative;
+  z-index: 1;
+  margin: calc(var(--space-5) * -1) calc(clamp(var(--space-3), 3vw, var(--space-6)) * -1) var(--space-5);
+  padding: var(--space-4) clamp(var(--space-3), 3vw, var(--space-6)) var(--space-3);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3) var(--space-5);
+  background: var(--color-paper);
+  border-bottom: 3px double var(--color-rule-strong);
+}
+
+.paper__title {
+  margin: 0;
+  margin-right: auto;
+  font-family: var(--font-display);
+  font-size: var(--fs-title);
+  font-weight: 400;
+  line-height: 1.3;
+  letter-spacing: 0.02em;
+  color: var(--color-ink);
+}
+
+/* 見出しに添える小さな注記（「第1回・全国版」など）*/
+.paper__subtitle {
+  margin: 0;
+  flex-basis: 100%;
+  order: 1;
+  font-size: var(--fs-sm);
+  color: var(--color-pencil);
+}
+
+/* --------------------------------------------------------------------------
+   4. .field — 氏名欄・得点欄などの記入欄
+   -------------------------------------------------------------------------- */
+
+.field {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  /* 伸び放題だと氏名欄だけで帯を食い潰し、得点欄が次の行へ落ちる */
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.field__label {
+  flex: none;
+  font-family: var(--font-body);
+  font-size: var(--fs-xs);
+  letter-spacing: 0.1em;
+  color: var(--color-pencil);
+}
+
+.field__input {
+  flex: 1 1 5rem;
+  min-width: 3.5rem;
+  max-width: 11rem;
+  padding: 0 var(--space-1) 2px;
+  font-family: var(--font-hand);
+  font-size: var(--fs-lg);
+  color: var(--color-ink);
+  background: transparent;
+  border: 0;
+  border-bottom: 1.5px solid var(--color-rule-strong);
+  border-radius: 0;
+  appearance: none;
+}
+
+.field__input::placeholder {
+  color: var(--color-paper-line);
+}
+
+.field__input:focus {
+  outline: none;
+  border-bottom-color: var(--color-red-pen);
+  background: linear-gradient(transparent 70%, var(--color-marker-blue) 70%);
+}
+
+/* --------------------------------------------------------------------------
+   5. 出題
+   -------------------------------------------------------------------------- */
+
+.q-number {
+  display: block;
+  font-family: var(--font-display);
+  font-size: var(--fs-xl);
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  color: var(--color-ink);
+}
+
+.q-prompt {
+  margin: var(--space-1) 0 var(--space-5);
+  font-family: var(--font-body);
+  font-size: var(--fs-md);
+  color: var(--color-ink);
+}
+
+.q-kanji {
+  display: block;
+  margin: 0;
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: var(--fs-kanji);
+  line-height: 1.25;
+  letter-spacing: 0.08em;
+  /* 長い地名でも 375px で溢れない */
+  overflow-wrap: anywhere;
+  color: var(--color-ink);
+}
+
+.q-suffix {
+  font-family: var(--font-body);
+  font-size: 0.42em; /* .q-kanji 基準。単独使用時は .q-kanji 内に置く前提 */
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  color: var(--color-pencil);
+  vertical-align: 0.5em;
+}
+
+.q-pref {
+  display: block;
+  margin-top: var(--space-2);
+  font-family: var(--font-hand);
+  font-size: var(--fs-sm);
+  color: var(--color-pencil);
+}
+
+/* --------------------------------------------------------------------------
+   6. .answer-input — ひらがなの解答欄
+   -------------------------------------------------------------------------- */
+
+.answer-input {
+  display: block;
+  width: 100%;
+  margin: var(--space-5) 0 var(--space-3);
+  padding: var(--space-1) var(--space-2) var(--space-2);
+  font-family: var(--font-hand);
+  font-size: var(--fs-answer);
+  line-height: 1.5;
+  letter-spacing: 0.08em;
+  color: var(--color-ink);
+  background: transparent;
+  border: 0;
+  border-bottom: 2.5px solid var(--color-ink);
+  border-radius: 0;
+  appearance: none;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.answer-input::placeholder {
+  color: var(--color-paper-line);
+  letter-spacing: 0.04em;
+}
+
+.answer-input:focus {
+  outline: none;
+  border-bottom-color: var(--color-marker-blue);
+  /* 色覚に依存しないよう、下線色の変化に薄い塗りも足す */
+  background-color: #eaf7fd; /* color-mix 非対応ブラウザ向けフォールバック */
+  background-color: color-mix(in srgb, var(--color-marker-blue) 25%, transparent);
+}
+
+.answer-input:disabled {
+  color: var(--color-pencil);
+  border-bottom-style: dashed;
+}
+
+/* --------------------------------------------------------------------------
+   7. .timer — 残り時間
+   .timer が溝、.timer__bar が中身。幅は画面側が inline style（width: N%）で動かす。
+   .timer__label は時計絵文字＋秒数を置く兄弟要素。
+   -------------------------------------------------------------------------- */
+
+.timer {
+  position: relative;
+  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  background: var(--color-paper-line);
+  border-radius: var(--radius-pill);
+}
+
+.timer__bar {
+  display: block;
+  width: 100%; /* 既定値。実際は inline style で上書きされる */
+  height: 100%;
+  background: var(--color-board);
+  border-radius: inherit;
+  transition: width 0.2s linear, background-color 0.3s ease;
+}
+
+.timer.is-urgent .timer__bar,
+.timer__bar.is-urgent {
+  background: var(--color-red-pen);
+}
+
+.timer__label {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-1);
+  margin-bottom: var(--space-1);
+  font-family: var(--font-hand);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-pencil);
+}
+
+.timer__label.is-urgent {
+  color: var(--color-red-pen);
+}
+
+/* --------------------------------------------------------------------------
+   8. 赤ペン採点
+   ○ × の文字そのものは markup 側が入れる（記号で示す要件のため CSS で生成しない）。
+   .sr-only で「正解」「誤り」を併記する。
+   -------------------------------------------------------------------------- */
+
+.mark {
+  /* 置き場所ごとの大きさは --mark-size で与える（.mark--* の倍率はその上に乗る）*/
+  --mark-size: var(--fs-mark);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 1.4em;
+  height: 1.4em;
+  font-family: var(--font-pen);
+  font-size: var(--mark-size);
+  line-height: 1;
+  color: var(--color-red-pen);
+  /* 手で書いた傾き */
+  transform: rotate(-4deg);
+}
+
+.mark--correct {
+  color: var(--color-red-pen);
+  /* ○ は字面が小さく見えるので少しだけ大きく */
+  font-size: calc(var(--mark-size) * 1.1);
+}
+
+.mark--wrong {
+  color: var(--color-red-pen);
+  /* × は ○ より字面が小さく出るフォントが多いので上げて釣り合わせる */
+  font-size: calc(var(--mark-size) * 1.45);
+  transform: rotate(6deg);
+}
+
+.pen-comment {
+  display: inline-block;
+  margin-left: var(--space-2);
+  font-family: var(--font-pen);
+  font-size: var(--fs-lg);
+  color: var(--color-red-pen);
+  transform: rotate(-3deg);
+}
+
+/* --------------------------------------------------------------------------
+   9. .stamp — 得点スタンプ
+   -------------------------------------------------------------------------- */
+
+.stamp {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  padding: var(--space-3) var(--space-5);
+  font-family: var(--font-display);
+  font-weight: 400;
+  line-height: 1;
+  color: var(--color-stamp);
+  border: 3px solid var(--color-stamp);
+  border-radius: var(--radius-sm);
+  /* 二重枠（外枠）＋ 内側のにじみ */
+  box-shadow:
+    0 0 0 2px var(--color-paper),
+    0 0 0 5px var(--color-stamp),
+    inset 0 0 10px rgba(215, 38, 61, 0.28);
+  background: rgba(215, 38, 61, 0.07);
+  transform: rotate(-12deg);
+  animation: stamp-press 0.35s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+
+.stamp__num {
+  font-size: var(--fs-stamp);
+  letter-spacing: 0.02em;
+}
+
+.stamp__label {
+  margin-top: var(--space-1);
+  font-family: var(--font-pen);
+  font-size: var(--fs-xs);
+  letter-spacing: 0.22em;
+}
+
+@keyframes stamp-press {
+  from {
+    transform: rotate(-12deg) scale(1.5);
+    opacity: 0;
+  }
+  to {
+    transform: rotate(-12deg) scale(1);
+    opacity: 1;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   10. .marker — 蛍光マーカー
+   線の下 45% を塗る（上から塗ると文字が沈むので下寄せ）
+   -------------------------------------------------------------------------- */
+
+.marker {
+  --marker-color: var(--color-marker-yellow);
+  --marker-top: 55%;
+  padding: 0 0.12em;
+  background-image: linear-gradient(
+    transparent var(--marker-top),
+    var(--marker-color) var(--marker-top),
+    var(--marker-color) 94%,
+    transparent 94%
+  );
+  background-repeat: no-repeat;
+}
+
+.marker--yellow {
+  --marker-color: var(--color-marker-yellow);
+}
+
+.marker--pink {
+  --marker-color: var(--color-marker-pink);
+}
+
+.marker--blue {
+  --marker-color: var(--color-marker-blue);
+}
+
+/* --------------------------------------------------------------------------
+   11. .btn
+   -------------------------------------------------------------------------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 44px; /* タップ領域 */
+  padding: var(--space-2) var(--space-5);
+  font-family: var(--font-display);
+  font-size: var(--fs-md);
+  font-weight: 400;
+  line-height: 1.4;
+  letter-spacing: 0.04em;
+  color: var(--color-ink);
+  text-decoration: none;
+  background: transparent;
+  border: 2px solid var(--color-ink);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background-color 0.12s ease;
+}
+
+.btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: none;
+}
+
+.btn:disabled {
+  color: var(--color-pencil);
+  border-color: var(--color-paper-line);
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.btn--primary {
+  background: var(--color-marker-yellow);
+  border-color: var(--color-ink);
+  box-shadow: 0 3px 0 var(--color-ink);
+}
+
+.btn--primary:disabled {
+  background: var(--color-paper-edge);
+  box-shadow: none;
+}
+
+.btn--ghost {
+  font-family: var(--font-body);
+  font-weight: 700;
+  background: transparent;
+  border-color: var(--color-pencil);
+  color: var(--color-pencil);
+}
+
+.btn--ghost:hover:not(:disabled) {
+  color: var(--color-ink);
+  border-color: var(--color-ink);
+}
+
+/* --------------------------------------------------------------------------
+   12. .pref-grid — 47 都道府県の選択
+   -------------------------------------------------------------------------- */
+
+.pref-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(5rem, 1fr));
+  gap: var(--space-2);
+  margin: var(--space-4) 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pref-grid__item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: var(--space-1) var(--space-2);
+  font-family: var(--font-hand);
+  font-size: var(--fs-md);
+  line-height: 1.3;
+  text-align: center;
+  color: var(--color-ink);
+  background: #fdfaf3; /* color-mix 非対応ブラウザ向けフォールバック */
+  background: color-mix(in srgb, var(--color-paper) 70%, #fff);
+  border: 1.5px solid var(--color-paper-line);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  /* 「神奈川県」程度は 1 行で収める */
+  white-space: nowrap;
+}
+
+.pref-grid__item:hover {
+  border-color: var(--color-pencil);
+}
+
+.pref-grid__item.is-selected {
+  font-weight: 600;
+  background: var(--color-marker-blue);
+  border-color: var(--color-ink);
+  /* 色だけに頼らないよう枠を太くする */
+  box-shadow: inset 0 0 0 1px var(--color-ink);
+}
+
+/* --------------------------------------------------------------------------
+   13. .mode-switch — easy / difficult
+   -------------------------------------------------------------------------- */
+
+.mode-switch {
+  display: inline-flex;
+  padding: 3px;
+  gap: 3px;
+  background: var(--color-paper-edge);
+  border: 1.5px solid var(--color-rule-strong);
+  border-radius: var(--radius-pill);
+}
+
+.mode-switch__item {
+  padding: var(--space-2) var(--space-4);
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-family: var(--font-body);
+  font-size: var(--fs-md);
+  font-weight: 700;
+  color: var(--color-pencil);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+
+.mode-switch__item.is-selected {
+  color: var(--color-ink);
+  background: var(--color-paper);
+  box-shadow: var(--shadow-chip);
+}
+
+/* --------------------------------------------------------------------------
+   14. .review — 答案の見直し（1 行 1 問）
+   -------------------------------------------------------------------------- */
+
+.review {
+  margin: var(--space-4) 0;
+  padding: 0;
+  list-style: none;
+}
+
+.review__row {
+  display: grid;
+  /* ○× | 出題 | 自分の解答 | 正解 */
+  grid-template-columns: auto minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1fr);
+  align-items: baseline;
+  gap: var(--space-1) var(--space-4);
+  padding: var(--space-3) 0;
+  border-bottom: 1px dashed var(--color-rule-strong);
+}
+
+.review__row .mark {
+  /* 一覧なので採点画面ほど大きくしない（行が 90px 超になるのを防ぐ）*/
+  --mark-size: var(--fs-xl);
+  align-self: center;
+}
+
+/* 正解の行だけ左端に緑の縁。判別の主役は ○ の記号で、色はあくまで補助 */
+.review__row:has(.mark--correct) {
+  box-shadow: inset 3px 0 0 var(--color-correct);
+}
+
+.review__q {
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: var(--fs-lg);
+  overflow-wrap: anywhere;
+}
+
+/* 自分の解答 */
+.review__mine {
+  font-family: var(--font-hand);
+  font-size: var(--fs-md);
+  color: var(--color-ink);
+  overflow-wrap: anywhere;
+}
+
+/* 正解（赤ペンで書き足した体裁）*/
+.review__answer {
+  font-family: var(--font-pen);
+  font-size: var(--fs-md);
+  color: var(--color-red-pen);
+  overflow-wrap: anywhere;
+}
+
+/* スマホでは ○× を左に残し、出題・自分の解答・正解を縦に折り返す */
+@media (max-width: 560px) {
+  .review__row {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .review__row .mark {
+    grid-row: 1 / span 3;
+    align-self: start;
+  }
+
+  .review__q,
+  .review__mine,
+  .review__answer {
+    grid-column: 2;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   15. .ranking — 順位表
+   -------------------------------------------------------------------------- */
+
+.ranking {
+  margin: var(--space-4) 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ranking__row {
+  display: grid;
+  grid-template-columns: 2.5rem minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-2);
+  border-bottom: 1px solid var(--color-paper-line);
+}
+
+.ranking__rank {
+  font-family: var(--font-display);
+  font-size: var(--fs-md);
+  text-align: center;
+}
+
+.ranking__name {
+  font-family: var(--font-hand);
+  font-size: var(--fs-md);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ranking__score {
+  font-family: var(--font-display);
+  font-size: var(--fs-md);
+  font-variant-numeric: tabular-nums;
+}
+
+.ranking__time {
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-pencil);
+}
+
+.ranking__row.is-me {
+  /* 自分の行は蛍光黄。色だけでなく「★」等の記号を markup 側で添える */
+  background: var(--color-marker-yellow);
+  border-bottom-color: var(--color-ink);
+  font-weight: 700;
+}
+
+@media (max-width: 420px) {
+  .ranking__row {
+    grid-template-columns: 2.25rem minmax(0, 1fr) auto;
+  }
+
+  .ranking__time {
+    grid-column: 2 / -1;
+    text-align: right;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   16. .footer-credit — 出典表記
+   -------------------------------------------------------------------------- */
+
+.footer-credit {
+  max-width: var(--paper-max);
+  margin: 0 auto;
+  font-family: var(--font-body);
+  font-size: var(--fs-xs);
+  line-height: 1.7;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.55); /* 黒板の上に載るため白系 */
+}
+
+.footer-credit a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* --------------------------------------------------------------------------
+   17. 動きの抑制
+   回転（スタンプ・赤ペンの傾き）は静的な transform なので残す。
+   時間変化するものだけ止める。
+   -------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+
+  .btn:hover:not(:disabled),
+  .btn:active:not(:disabled) {
+    transform: none;
+  }
+}

@@ -1,0 +1,72 @@
+/* ==========================================================================
+   tokens.css — 答案用紙テーマの CSS 変数（正本）
+   --------------------------------------------------------------------------
+   方向性: 行政文書風ではなく「中高の小テスト用紙をポップに再現」。
+   黒板色の地にクリーム色の答案用紙が 1 枚。赤ペン・蛍光マーカー・得点スタンプ。
+   ダークモードは作らない（用紙の白地が主役なので反転させる意味がない）。
+   部品は theme.css 側。クラス名の契約は CONTRACT.md。
+   ========================================================================== */
+
+:root {
+  /* ---- 色 ------------------------------------------------------------- */
+  --color-board: #2e6b5e; /* 黒板（緑板）*/
+  --color-paper: #fbf7ec; /* 答案用紙のクリーム地 */
+  --color-paper-line: #c9d7e8; /* 罫線の水色 */
+  --color-ink: #2b2b2b; /* 本文の黒 */
+  --color-pencil: #6b6b6b; /* 鉛筆書き・補助テキスト */
+  --color-red-pen: #e0362c; /* 採点の赤ペン */
+  --color-stamp: #d7263d; /* 得点スタンプの朱 */
+  --color-correct: #2ba84a; /* 正解の緑（記号と併用。色単独では使わない）*/
+  --color-marker-yellow: #ffe86b;
+  --color-marker-pink: #ffb3c7;
+  --color-marker-blue: #a9ddf5;
+
+  /* 派生色（上の基本色から作った陰影。基本色を変えたらここも見直す）*/
+  --color-board-deep: #245449; /* 黒板の四隅の落ち */
+  --color-chalk: rgba(255, 255, 255, 0.07); /* チョークの粉 */
+  --color-paper-edge: #efe7d4; /* 用紙の折り目・ヘッダ下の陰 */
+  --color-rule-strong: #9bb2cd; /* 二重線・欄の下線（罫線より濃い）*/
+  --color-red-pen-faint: rgba(224, 54, 44, 0.14);
+
+  /* ---- フォント ------------------------------------------------------- */
+  /* index.html の Google Fonts <link> で読み込む。必ずフォールバックを添える */
+  --font-body: 'Shippori Mincho B1', 'Hiragino Mincho ProN', 'Yu Mincho', 'YuMincho', serif;
+  --font-display: 'Dela Gothic One', 'Hiragino Sans', 'Yu Gothic', sans-serif;
+  --font-hand: 'Klee One', 'Hiragino Mincho ProN', 'Yu Mincho', serif;
+  --font-pen: 'Yusei Magic', 'Hiragino Sans', 'Yu Gothic', sans-serif;
+
+  /* ---- 文字サイズ（clamp で 375px〜1024px+ を 1 本化）----------------- */
+  --fs-xs: 0.75rem;
+  --fs-sm: 0.8125rem;
+  --fs-md: 0.9375rem;
+  --fs-lg: 1.0625rem;
+  --fs-xl: clamp(1.125rem, 0.95rem + 0.9vw, 1.5rem);
+  --fs-title: clamp(1.25rem, 1rem + 1.6vw, 1.875rem);
+  /* 出題漢字: 最小 2.4rem を下限に、375px では約 2.8rem まで縮む */
+  --fs-kanji: clamp(2.4rem, 1.4rem + 6vw, 4.4rem);
+  --fs-answer: clamp(1.5rem, 1.1rem + 2.4vw, 2.25rem);
+  --fs-mark: clamp(1.75rem, 1.2rem + 2.4vw, 2.75rem);
+  --fs-stamp: clamp(2.25rem, 1.5rem + 3.6vw, 3.5rem);
+
+  /* ---- 余白（4px グリッド）-------------------------------------------- */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 2.5rem;
+  --space-8: 3rem;
+
+  /* ---- 形 ------------------------------------------------------------- */
+  --radius-paper: 6px;
+  --radius-sm: 4px;
+  --radius-pill: 999px;
+  --shadow-paper: 0 8px 24px rgba(0, 0, 0, 0.25);
+  --shadow-chip: 0 2px 0 rgba(0, 0, 0, 0.12);
+
+  /* 罫線 1 行の高さ。.paper の背景グラデーションと行間の両方が参照する */
+  --rule-height: 2rem;
+  /* 用紙の最大幅（1 画面 1 枚）*/
+  --paper-max: 720px;
+}

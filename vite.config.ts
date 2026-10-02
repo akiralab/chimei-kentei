@@ -7,8 +7,10 @@ export default defineConfig({
   base: '/chimei-kentei/',
   plugins: [react()],
   test: {
+    // 既定は node（エンジンのテスト）。画面テストはファイル先頭の
+    // `// @vitest-environment jsdom` コメントで jsdom に切り替える
     environment: 'node',
-    include: ['src/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
     passWithNoTests: true,
   },
 })

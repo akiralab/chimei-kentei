@@ -1,0 +1,55 @@
+# 答案用紙テーマ 部品クラスの契約
+
+`src/styles/tokens.css`（CSS 変数）と `src/styles/theme.css`（部品）を画面側が使う。クラス名は固定。
+
+| クラス | 役割 |
+|---|---|
+| `.board` | 画面全体の背景（黒板色）。`body` 直下のラッパー |
+| `.paper` | 答案用紙（クリーム地・罫線・影・角丸）。1 画面 1 枚 |
+| `.paper__header` | 用紙上部の帯（科目名・氏名欄・得点欄を横並び） |
+| `.paper__title` | 用紙の見出し（`--font-display`） |
+| `.field` / `.field__label` / `.field__input` | 氏名欄などの記入欄（下線スタイル） |
+| `.q-number` | 「問三 / 十」の番号 |
+| `.q-prompt` | 「次の地名の読みを書け。」 |
+| `.q-kanji` | 出題の漢字（大きく・明朝） |
+| `.q-suffix` | 接尾辞 ［市］（薄い・小さい） |
+| `.q-pref` | 都道府県名の添え書き |
+| `.answer-input` | ひらがな入力欄（`--font-hand`・下線・大きめ） |
+| `.timer` / `.timer__bar` | 20 秒の残り（砂時計は絵文字可） |
+| `.mark` / `.mark--correct` / `.mark--wrong` | 赤ペンの ○ / ×（`--font-pen`） |
+| `.pen-comment` | 赤ペンの一言（「おしい！」） |
+| `.stamp` | 斜めの得点スタンプ（朱・二重枠・`rotate(-12deg)`） |
+| `.marker` / `.marker--yellow` / `.marker--pink` / `.marker--blue` | 蛍光マーカーの塗り |
+| `.btn` / `.btn--primary` / `.btn--ghost` | ボタン |
+| `.pref-grid` / `.pref-grid__item` / `.is-selected` | 都道府県の選択グリッド |
+| `.mode-switch` / `.mode-switch__item` / `.is-selected` | easy / difficult の切替 |
+| `.review` / `.review__row` | 答案の見直し（1 行 1 問） |
+| `.ranking` / `.ranking__row` / `.is-me` | 順位表 |
+| `.footer-credit` | 出典表記 |
+
+## 追加した補助クラス（2026-10-02 / design 側）
+
+上の表の部品を組むのに必要だったものだけ足した。名前はこのまま使ってよい。
+
+| クラス | 役割 |
+|---|---|
+| `.sr-only` | 読み上げ専用テキスト。○ × の隣に「正解 / 誤り」を併記するために使う |
+| `.paper__subtitle` | `.paper__header` 内の小さな注記（データ版・所要時間など）。1 行まるごと使う |
+| `.timer__label` | 時計絵文字＋残り秒数。`.timer` の**兄弟**として直前に置く |
+| `.is-urgent` | `.timer` / `.timer__bar` / `.timer__label` に付けると赤ペン色になる |
+| `.stamp__num` / `.stamp__label` | `.stamp` の中の得点数字と「テン」などの小さな添え字 |
+| `.review__q` / `.review__mine` / `.review__answer` | `.review__row` の中の 出題 / 自分の解答 / 正解（赤ペン） |
+| `.ranking__rank` / `.ranking__name` / `.ranking__score` / `.ranking__time` | `.ranking__row` の 4 列 |
+
+実装上の約束:
+
+- **`.mark` の ○ × の文字は markup 側が入れる。** CSS は `content` を生成しない（記号を DOM に持たせるため）。`aria-hidden="true"` を付け、隣に `.sr-only` で「正解 / 誤り」を書く
+- `.mark` の大きさは `--mark-size`（既定 `--fs-mark`）で決まる。`.mark--correct` ×1.1 / `.mark--wrong` ×1.45 の補正がその上に乗る（× は字面が小さく出るため）。別の場所で小さくしたいときは `font-size` ではなく **`--mark-size` を上書き**する（`.review__row .mark` がその例）
+- `.q-suffix` は `.q-kanji` の**内側**に置く（サイズが `em` 基準）
+- `.timer__bar` の幅は画面側が inline style（`style="width: 65%"`）で与える
+- `.ranking__row.is-me` は蛍光黄だが、色だけに頼らないよう `.ranking__rank` に「★」等の記号を markup 側で添える
+- 部品の見本は `public/theme-preview.html`（`/chimei-kentei/theme-preview.html`）。CSS は `public/theme-preview.css` に結合コピーしてあるので、**正本を直したらそちらも再生成する**
+
+- フォントは `index.html` の `<link>` で Google Fonts から読み込む（design 側が追加）
+- `src/main.tsx` が `./styles/tokens.css` と `./styles/theme.css` を import する（ui 側が追加）
+- ダークモード対応は不要。正誤は色と記号（○×）の両方で示す
