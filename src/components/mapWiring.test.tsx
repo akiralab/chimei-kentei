@@ -82,7 +82,6 @@ describe('範囲・科目 への組み込み', () => {
     expect(screen.getByText('地方をえらぶ')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '千葉県' })).toBeNull()
     expect(screen.getByRole('button', { name: '全国' })).toBeInTheDocument()
-    expect(screen.getByLabelText('市区町村で絞る')).toBeInTheDocument()
 
     // 段階 2 へ
     fireEvent.click(screen.getByRole('button', { name: '関東地方' }))

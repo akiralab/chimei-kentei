@@ -116,7 +116,7 @@ async function poolFor(mode: Mode, scope: string, source: BankSource): Promise<Q
   }
   // difficult
   if (scope === SCOPE_NATIONWIDE) {
-    throw new Error('全国 × difficult はこのデモでは対応していません。都道府県か市区町村を選んでください。')
+    throw new Error('全国 × difficult はこのデモでは対応していません。都道府県を選んでください。')
   }
   const prefCode = scope.slice(0, 2)
   const [easy, difficult] = await Promise.all([source.easy(), source.difficult(prefCode)])
