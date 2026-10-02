@@ -1100,3 +1100,38 @@ body {
     transform: none;
   }
 }
+
+/* 出題画面: 丸バツと正解（入力欄の直下）。高さを確保して表示時にレイアウトが跳ねないようにする */
+.q-feedback {
+  margin: var(--space-2) 0 0;
+  min-height: 1.6em;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* 低くて狭い画面（スマホ縦）では補助文を省き、解答ボタンまでスクロールなしで収める */
+@media (max-width: 600px) and (max-height: 740px) {
+  .answer-hint,
+  .q-note {
+    display: none;
+  }
+  /* 出題画面の帯では氏名欄を省く（結果画面に出る）。解答ボタンまで 1 画面に収めるため */
+  .layout .paper__header .field {
+    display: none;
+  }
+  .layout .q-kanji {
+    margin-block: var(--space-2);
+  }
+  /* 「タイトルへ戻る」は帯の中で 1 行を食うので、地図パネルの右上（空いている）に浮かせる */
+  .layout .layout__exit {
+    position: fixed;
+    top: var(--space-3);
+    right: var(--space-3);
+    z-index: 3;
+  }
+  /* 地図パネルを少し低くして解答ボタンまで収める（map.css の 24dvh を上書き） */
+  .board .layout__map {
+    height: 20dvh;
+  }
+}

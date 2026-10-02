@@ -24,9 +24,12 @@ describe('projectCollection', () => {
   it('余白のぶん viewBox の原点が負側にずれる（輪郭線が枠で切れない）', () => {
     const projected = projectCollection(PREF_GEO_FIXTURE['12'])
     const [x, y, w, h] = (projected?.viewBox ?? '').split(' ').map(Number)
-    // fitExtent の片側は必ず 0 に接するので、原点は -pad になる
-    expect(Math.min(x, y)).toBe(-VIEWBOX_PADDING)
-    expect(Math.max(w, h)).toBeCloseTo(1000 + VIEWBOX_PADDING * 2, 3)
+    // fitExtent の片側はほぼ 0 に接するので原点は -pad 付近。
+    // d3-geo は辺を測地線として再標本化するため数単位ふくらむので、厳密一致にはしない
+    expect(Math.min(x, y)).toBeLessThanOrEqual(-VIEWBOX_PADDING)
+    expect(Math.min(x, y)).toBeGreaterThan(-VIEWBOX_PADDING - 10)
+    expect(Math.max(w, h)).toBeGreaterThan(1000)
+    expect(Math.max(w, h)).toBeLessThan(1000 + VIEWBOX_PADDING * 2 + 20)
   })
 
   it('feature が無ければ null', () => {

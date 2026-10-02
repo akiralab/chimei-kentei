@@ -233,6 +233,17 @@ export default function Quiz({ setId }: { setId: string }) {
             ariaLabel="読みをひらがなで入力"
           />
 
+          {/* 丸バツと正解は入力欄の直下に出す（用紙の底に置くと欠ける） */}
+          {feedback && (
+            <p className="q-feedback">
+              <span className={feedback.correct ? 'mark mark--correct' : 'mark mark--wrong'} aria-hidden="true">
+                {feedback.correct ? '○' : '×'}
+              </span>
+              <span className="sr-only">{feedback.correct ? '正解' : '誤り'}</span>{' '}
+              <span className="marker marker--yellow">{feedback.answer}</span>
+            </p>
+          )}
+
           <div className={urgent ? 'timer__label is-urgent' : 'timer__label'}>
             <span aria-hidden="true">⏳</span>
             <span>のこり {Math.ceil(remainMs / 1000)} 秒</span>
@@ -246,17 +257,8 @@ export default function Quiz({ setId }: { setId: string }) {
               解答
             </button>
           </p>
-          <p>空欄のまま解答するとパスになります。</p>
+          <p className="q-note">空欄のまま解答するとパスになります。</p>
 
-          {feedback && (
-            <p>
-              <span className={feedback.correct ? 'mark mark--correct' : 'mark mark--wrong'} aria-hidden="true">
-                {feedback.correct ? '○' : '×'}
-              </span>
-              <span className="sr-only">{feedback.correct ? '正解' : '誤り'}</span>{' '}
-              <span className="marker marker--yellow">{feedback.answer}</span>
-            </p>
-          )}
         </div>
       </div>
     </div>

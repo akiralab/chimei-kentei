@@ -142,16 +142,20 @@
   min-height: 0;
 }
 
-/* 県内の市区町村。既定は薄い輪郭だけ */
-.map-muni__path {
-  fill: color-mix(in srgb, var(--color-paper) 82%, #fff);
-  stroke: var(--color-paper-line);
+/* 市区町村・都道府県の輪郭（共通）。
+   塗りは用紙色より少し濃いトーン、輪郭は墨の 45%。
+   線幅は viewBox 単位に依存しないよう画面基準で固定する（non-scaling-stroke） */
+.map-muni__path,
+.jp-map__path {
+  fill: #f2eee2; /* color-mix 非対応ブラウザ向けフォールバック */
+  fill: color-mix(in srgb, var(--color-ink) 8%, var(--color-paper));
+  stroke: rgba(43, 43, 43, 0.45); /* 同フォールバック（--color-ink 45%）*/
+  stroke: color-mix(in srgb, var(--color-ink) 45%, transparent);
   stroke-width: 1;
-  /* viewBox の単位がデータごとに変わるので、線の太さは画面基準で固定する */
   vector-effect: non-scaling-stroke;
 }
 
-/* 出題中の自治体。塗り＋濃い輪郭で、色だけに頼らず形が浮く */
+/* 出題中の自治体。蛍光ピンクの塗り＋赤ペンの輪郭。色だけに頼らず形が浮く */
 .map-muni__path--target {
   fill: var(--color-marker-pink);
   stroke: var(--color-red-pen);
@@ -159,6 +163,25 @@
   transition:
     fill 180ms ease-out,
     stroke 180ms ease-out;
+}
+
+/* 対象の下に敷く太い縁取り。小さい自治体でも「ここ」と分かる */
+.map-muni__halo {
+  fill: none;
+  stroke: rgba(224, 54, 44, 0.35);
+  stroke: color-mix(in srgb, var(--color-red-pen) 35%, transparent);
+  stroke-width: 7;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+/* 対象が地図の短辺の 12% 未満のときだけ出る照準リング（位置の手がかり） */
+.map-muni__pin {
+  fill: none;
+  stroke: var(--color-red-pen);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 4;
+  vector-effect: non-scaling-stroke;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -186,6 +209,15 @@
   padding: var(--space-2);
 }
 
+/* 日本は縦長なので、広い画面では台紙の方を絞って余白を減らす
+   （preserveAspectRatio=meet では高さが地図の大きさを決めるため、幅を広げても地図は大きくならない） */
+@media (min-width: 720px) {
+  .jp-map {
+    max-width: 26rem;
+    margin-inline: auto;
+  }
+}
+
 .jp-map__svg {
   display: block;
   width: 100%;
@@ -206,16 +238,12 @@
 }
 
 .jp-map__path {
-  fill: color-mix(in srgb, var(--color-paper) 70%, #fff);
-  stroke: var(--color-rule-strong);
-  stroke-width: 1;
-  vector-effect: non-scaling-stroke;
   cursor: pointer;
 }
 
 /* hover / focus は同じ見た目（マウスとキーボードで手応えを揃える） */
 .jp-map__path--active {
-  fill: var(--color-marker-yellow);
+  fill: var(--color-marker-blue);
   stroke: var(--color-ink);
   stroke-width: 1.5;
 }
@@ -228,9 +256,19 @@
 
 /* 選択中。色だけに頼らないよう輪郭も濃くする */
 .jp-map__path--selected {
-  fill: var(--color-marker-blue);
+  fill: var(--color-marker-pink);
   stroke: var(--color-ink);
   stroke-width: 2;
+}
+
+/* 沖縄県のインセット枠（別投影で描いている目印） */
+.jp-map__inset-frame {
+  fill: none;
+  stroke: rgba(43, 43, 43, 0.35);
+  stroke: color-mix(in srgb, var(--color-ink) 35%, transparent);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+  vector-effect: non-scaling-stroke;
 }
 
 .jp-map__label {
@@ -362,13 +400,40 @@
     display: none;
   }
 
-  /* 帯の中は 見出し ＋ 数字 ＋ 出典 の 3 行に抑える。都道府県名は用紙側の .q-pref と重複するので省く */
+  /* 帯は地図に重なるので、できるだけ低くする。
+     都道府県名は用紙側の .q-pref と重複するので省き、数値はラベルと同じ行に流し込む */
   .info-card__pref {
     display: none;
   }
 
+  .info-card__head {
+    padding-bottom: 0;
+    border-bottom: 0;
+  }
+
+  .info-card__stats {
+    margin-top: var(--space-1);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 var(--space-3);
+  }
+
+  .info-card__row {
+    display: flex;
+    align-items: baseline;
+    gap: 0.3em;
+  }
+
+  .info-card__label {
+    display: inline;
+  }
+
   .info-card__value {
     font-size: var(--fs-sm);
+  }
+
+  .info-card__source {
+    margin-top: var(--space-1);
   }
 }
 
