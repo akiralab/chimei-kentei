@@ -1,0 +1,230 @@
+<!doctype html>
+<!--
+  og.html — リンクプレビュー用画像（public/og.png）の原稿。
+  1200×630 の 1 画面に答案用紙テーマ（src/styles/tokens.css の色とフォント）を再現する。
+  `npm run build:og` が render.mjs でこのページを撮影して public/og.png を上書きする。
+  ハッシュルーティングのため、どの画面を共有しても出るのはこの 1 枚。
+-->
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <title>地名読み検定 OGP</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Klee+One:wght@400;600&family=Mochiy+Pop+One&family=Shippori+Mincho+B1:wght@400;700&family=Yusei+Magic&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        /* src/styles/tokens.css と同じ値。変えるならあちらを正本にする */
+        --color-board: #2e6b5e;
+        --color-board-deep: #245449;
+        --color-paper: #fbf7ec;
+        --color-paper-line: #c9d7e8;
+        --color-rule-strong: #9bb2cd;
+        --color-ink: #2b2b2b;
+        --color-pencil: #6b6b6b;
+        --color-red-pen: #e0362c;
+        --color-red-pen-faint: rgba(224, 54, 44, 0.14);
+        --color-stamp: #d7263d;
+        --color-marker-yellow: #ffe86b;
+        --font-body: 'Shippori Mincho B1', 'Hiragino Mincho ProN', 'Yu Mincho', serif;
+        --font-display: 'Mochiy Pop One', 'Hiragino Sans', 'Yu Gothic', sans-serif;
+        --font-hand: 'Klee One', 'Hiragino Mincho ProN', 'Yu Mincho', serif;
+        --font-pen: 'Yusei Magic', 'Hiragino Sans', 'Yu Gothic', sans-serif;
+        --rule: 44px;
+      }
+
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        width: 1200px;
+        height: 630px;
+        overflow: hidden;
+        display: grid;
+        place-items: center;
+        background-color: var(--color-board);
+        background-image: radial-gradient(ellipse at 50% 45%, var(--color-board) 0%, var(--color-board-deep) 100%);
+        font-family: var(--font-body);
+        color: var(--color-ink);
+      }
+
+      /* 答案用紙。画面と同じ罫線・左の縦線・二重線の見出し */
+      .paper {
+        position: relative;
+        box-sizing: border-box;
+        width: 1040px;
+        height: 520px;
+        padding: 40px 56px 0;
+        background-color: var(--color-paper);
+        background-image: repeating-linear-gradient(
+          to bottom,
+          transparent 0,
+          transparent calc(var(--rule) - 1px),
+          var(--color-paper-line) calc(var(--rule) - 1px),
+          var(--color-paper-line) var(--rule)
+        );
+        background-position: left top;
+        border-radius: 10px;
+        box-shadow: 0 18px 44px rgba(0, 0, 0, 0.35);
+        transform: rotate(-1deg);
+      }
+
+      .paper::before {
+        content: '';
+        position: absolute;
+        left: 64px;
+        top: 0;
+        bottom: 0;
+        border-left: 2px solid var(--color-paper-line);
+      }
+
+      .head {
+        position: relative;
+        text-align: center;
+        padding-bottom: 18px;
+        border-bottom: 4px double var(--color-rule-strong);
+      }
+
+      .title {
+        margin: 0;
+        font-family: var(--font-display);
+        font-weight: 400;
+        font-size: 84px;
+        line-height: 1.2;
+        letter-spacing: 0.04em;
+      }
+
+      .subtitle {
+        margin: 6px 0 0;
+        font-family: var(--font-hand);
+        font-size: 28px;
+        letter-spacing: 0.14em;
+        color: var(--color-pencil);
+      }
+
+      /* 出題例。漢字の下に、読みの文字数ぶんの解答マス */
+      .samples {
+        display: flex;
+        justify-content: center;
+        gap: 72px;
+        margin-top: 24px;
+      }
+
+      .sample {
+        text-align: center;
+      }
+
+      .kanji {
+        display: block;
+        font-family: var(--font-body);
+        font-weight: 700;
+        font-size: 72px;
+        line-height: 1.2;
+        letter-spacing: 0.08em;
+      }
+
+      .boxes {
+        display: flex;
+        justify-content: center;
+        gap: 6px;
+        margin-top: 12px;
+      }
+
+      .box {
+        width: 40px;
+        height: 40px;
+        box-sizing: border-box;
+        border: 2px solid var(--color-rule-strong);
+        border-radius: 4px;
+        background: #fff;
+      }
+
+      /* 赤ペンの吹き出し（表紙と同じ文句） */
+      .bubble {
+        position: absolute;
+        right: 48px;
+        bottom: 28px;
+        margin: 0;
+        transform: rotate(-1.5deg);
+        padding: 10px 26px;
+        font-family: var(--font-pen);
+        font-size: 32px;
+        line-height: 1.4;
+        white-space: nowrap;
+        color: var(--color-red-pen);
+        background: var(--color-paper);
+        border: 3px solid var(--color-red-pen);
+        border-radius: 22px;
+        box-shadow:
+          0 0 0 2px var(--color-paper),
+          0 0 0 5px var(--color-red-pen-faint);
+      }
+
+      /* 右上の朱印 */
+      .stamp {
+        position: absolute;
+        right: 44px;
+        top: 30px;
+        padding: 8px 18px;
+        font-family: var(--font-display);
+        font-size: 30px;
+        line-height: 1;
+        letter-spacing: 0.12em;
+        color: var(--color-stamp);
+        border: 3px solid var(--color-stamp);
+        border-radius: 4px;
+        box-shadow:
+          0 0 0 2px var(--color-paper),
+          0 0 0 5px var(--color-stamp),
+          inset 0 0 10px rgba(215, 38, 61, 0.28);
+        background: rgba(215, 38, 61, 0.07);
+        transform: rotate(-10deg);
+      }
+
+      /* 左下の蛍光マーカー風の注記 */
+      .note {
+        position: absolute;
+        left: 92px;
+        bottom: 40px;
+        margin: 0;
+        padding: 2px 10px;
+        font-family: var(--font-hand);
+        font-size: 22px;
+        letter-spacing: 0.06em;
+        color: var(--color-ink);
+        background: linear-gradient(transparent 35%, var(--color-marker-yellow) 35%, var(--color-marker-yellow) 90%, transparent 90%);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="paper">
+      <div class="stamp">満点</div>
+      <div class="head">
+        <h1 class="title">地名読み検定</h1>
+        <p class="subtitle">この地名、読めますか</p>
+      </div>
+      <div class="samples">
+        <div class="sample">
+          <span class="kanji">匝瑳</span>
+          <div class="boxes"><span class="box"></span><span class="box"></span><span class="box"></span></div>
+        </div>
+        <div class="sample">
+          <span class="kanji">宿毛</span>
+          <div class="boxes"><span class="box"></span><span class="box"></span><span class="box"></span></div>
+        </div>
+        <div class="sample">
+          <span class="kanji">南風原</span>
+          <div class="boxes"><span class="box"></span><span class="box"></span><span class="box"></span><span class="box"></span></div>
+        </div>
+      </div>
+      <p class="note">都道府県を選んで 10 問</p>
+      <p class="bubble">目指せ！全国の自治体マスター！</p>
+    </div>
+  </body>
+</html>

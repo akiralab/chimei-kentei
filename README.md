@@ -48,6 +48,7 @@ npm test           # vitest（エンジン・画面・API ハンドラの単体�
 npm run build      # dist/ を生成
 npm run build:api  # Lambda のバンドル（infra/api/dist/handler.mjs）
 npm run deploy:api # 共有ランキング API を AWS へデプロイ（infra/README.md）
+npm run build:og   # リンクプレビュー用の public/og.png を og/og.html から撮り直す（Google Chrome が要る）
 ```
 
 共有ランキングをつないで手元で試すとき:
@@ -73,6 +74,7 @@ src/engine/                  セットID・決定論的抽出・採点の正規�
 infra/                       共有ランキング API（Lambda / HTTP API / DynamoDB・CloudFormation）
 src/screens/                 表紙・範囲選択・出題・結果
 src/styles/                  答案用紙テーマ（デザイントークン・部品）
+og/                          リンクプレビュー画像（OGP）の原稿 og.html と撮影スクリプト render.mjs → public/og.png
 ```
 
 設計の正本（画面・前処理ルール・セットIDの仕様・未決論点）は作者の個人ノートにあり、要点は Issues に分割して管理する。
