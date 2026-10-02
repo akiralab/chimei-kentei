@@ -22,6 +22,30 @@ GitHub Pages は静的配信のため、ランキングは別ホストの API �
 
 ### GET /results?setId=...&limit=20
 - 200: `{ "entries": RankingRow[] }`（得点降順 → 所要時間昇順 → 登録順。limit 既定 20・最大 100）
+- `RankingRow` には `mode` と `scope`（setId から導ける出題条件）も入る。
+
+### GET /results?prefCode=13&limit=30
+- その都道府県で登録された結果を、セットを横断して返す（「これまでのランキング」の詳細画面）。
+- `prefCode` は 2 桁。setId の scope の先頭 2 桁で、**全国（scope '00'）は `'00'`**。
+- 200: `{ "entries": RankingRow[] }`（並びは `?setId=` と同じ。**limit 既定 30**・最大 100）
+- 400: `prefCode` が 2 桁でない。`setId` と `prefCode` の両方があれば `prefCode` を優先する。
+
+### GET /stats/prefectures
+- 200: `{ "prefectures": PrefectureStat[] }`（prefCode 昇順。`entries` が 0 の行は返さない）
+- `PrefectureStat = { prefCode, entries, players }`。`entries` は答案の件数、`players` は登録した端末（clientToken）の数。全国は `prefCode: '00'` の 1 行。
+
+## 保存の形（DynamoDB・1 テーブル）
+
+| pk | sk | 役割 |
+|---|---|---|
+| `set#{setId}` | `token#{clientToken}` | 1 セット 1 登録の予約（`attribute_not_exists(pk)`） |
+| `set#{setId}` | `entry#{createdAt}#{entryId}` | 本体。`GET /results?setId=` が引く |
+| `pref#{prefCode}` | `entry#{createdAt}#{entryId}` | 都道府県インデックス（本体の写し）。`GET /results?prefCode=` が引く |
+| `pref#{prefCode}` | `player#{clientToken}` | 人数を数える印（`attribute_not_exists(pk)`） |
+| `stats#pref` | `{prefCode}` | カウンタ。`entries` は常に +1、`players` は印が新規のときだけ +1（ADD） |
+
+- 予約と本体は TransactWrite で一括（片方だけ残らない）。
+- **都道府県インデックスは本体とは別のリクエストで書く。** player 印の条件失敗（＝同じ端末の 2 セット目）で本体の登録を巻き戻さないため。索引の書き込みが失敗しても POST は 201 のまま返し、ログだけ残す。
 
 ## CORS
 - 許可 Origin: `https://akiralab.github.io`、`http://localhost:5173`、`http://localhost:4173`
@@ -29,3 +53,5 @@ GitHub Pages は静的配信のため、ランキングは別ホストの API �
 ## クライアント側
 - `import.meta.env.VITE_RANKING_API`（例 `https://xxxx.execute-api.ap-northeast-1.amazonaws.com`）が設定されていれば `RemoteRankingStore`、無ければ `LocalRankingStore`。GitHub Actions では repository variable `VITE_RANKING_API` を build に渡す。
 - 自分の行の判定は POST 応答の `entry.entryId` を localStorage `submitted:{setId}` に保存して行う。
+- `RankingStore` は 4 メソッド（`submit` / `list` / `prefectureStats` / `listByPrefecture`）。Local は localStorage の `ranking:*` を走査して同じ答えを作る（`players` は clientToken の distinct 数）。
+- 「これまでのランキング」画面は `#/ranking`（都道府県ごとの人数）と `#/ranking/{prefCode}`（上位 30 件）。

@@ -1,5 +1,6 @@
 /**
- * ハッシュルーティング。'#/' 表紙 / '#/select' 範囲・科目 / '#/q/{setId}' 出題 / '#/result/{setId}' 結果。
+ * ハッシュルーティング。'#/' 表紙 / '#/select' 範囲・科目 / '#/q/{setId}' 出題 / '#/result/{setId}' 結果 /
+ * '#/ranking' これまでのランキング / '#/ranking/{prefCode}' 都道府県の詳細。
  * 不明なハッシュは表紙へ。
  */
 export type Route =
@@ -7,9 +8,17 @@ export type Route =
   | { name: 'select' }
   | { name: 'quiz'; setId: string }
   | { name: 'result'; setId: string }
+  | { name: 'ranking' }
+  | { name: 'rankingPref'; prefCode: string }
 
 export const COVER_PATH = '#/'
 export const SELECT_PATH = '#/select'
+export const RANKING_PATH = '#/ranking'
+
+/** prefCode は 2 桁（'00' は全国） */
+export function rankingPrefPath(prefCode: string): string {
+  return `#/ranking/${prefCode}`
+}
 
 export function quizPath(setId: string): string {
   return `#/q/${setId}`
@@ -24,6 +33,9 @@ export function parseHash(hash: string): Route {
   const path = raw === '' ? '/' : raw
   if (path === '/') return { name: 'cover' }
   if (path === '/select') return { name: 'select' }
+  if (path === '/ranking') return { name: 'ranking' }
+  const rp = /^\/ranking\/(\d{2})$/.exec(path)
+  if (rp) return { name: 'rankingPref', prefCode: rp[1] }
   const q = /^\/q\/([^/?#]+)$/.exec(path)
   if (q) return { name: 'quiz', setId: decodeURIComponent(q[1]) }
   const r = /^\/result\/([^/?#]+)$/.exec(path)

@@ -79,6 +79,10 @@ export interface RankingStore {
   submit(entry: ResultEntry): Promise<SubmitResult>
   /** 得点降順 → 所要時間昇順 → 登録順。上位 limit 件（既定 20） */
   list(setId: string, limit?: number): Promise<RankingRow[]>
+  /** 都道府県ごとの登録件数・人数。「これまでのランキング」のトップ画面で使う */
+  prefectureStats(): Promise<PrefectureStat[]>
+  /** ある都道府県の上位 limit 件（既定 30）。list と同じ並び */
+  listByPrefecture(prefCode: string, limit?: number): Promise<RankingRow[]>
 }
 
 export const QUESTIONS_PER_SET = 10
@@ -128,4 +132,20 @@ export interface RankingRow {
   score: number
   timeMs: number
   createdAt: string
+  /** setId から導ける出題条件。都道府県別の一覧で科目・範囲を見せるために添える */
+  mode?: Mode
+  /** '00' = 全国、2 桁 = 都道府県、6 桁 = 市区町村 */
+  scope?: string
+}
+
+/**
+ * 都道府県ごとの登録状況（`GET /stats/prefectures`）。
+ * prefCode は setId の scope の先頭 2 桁。全国（scope '00'）は '00' に集める。
+ */
+export interface PrefectureStat {
+  prefCode: string
+  /** 登録された答案の件数 */
+  entries: number
+  /** 登録した端末の数（clientToken の distinct） */
+  players: number
 }

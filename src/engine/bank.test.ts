@@ -102,4 +102,18 @@ describe('buildQuestionSet', () => {
   it('出題できる地名が無ければ throw', async () => {
     await expect(buildQuestionSet('e', '990001', '1234', src)).rejects.toThrow()
   })
+
+  /**
+   * 「東京都を選んだのに山梨県が出た」という報告の切り分け用。
+   * 原因は Select 側（今日の10問が全国固定だった）で、抽出は混ざらない。それを固定する。
+   */
+  it('都道府県スコープの 10 問はすべてその県（抽出で他県が混ざらない）', async () => {
+    for (const seed of ['1234', '20261002', '20261003']) {
+      const easy = await buildQuestionSet('e', '12', seed, src)
+      expect(easy.questions.map((q) => q.prefCode)).toEqual(Array(easy.questions.length).fill('12'))
+
+      const difficult = await buildQuestionSet('d', '12', seed, src)
+      expect(difficult.questions.map((q) => q.prefCode)).toEqual(Array(difficult.questions.length).fill('12'))
+    }
+  })
 })

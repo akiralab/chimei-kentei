@@ -5,8 +5,10 @@ import { buildQuestionSet } from '../engine/bank.ts'
 import { grade } from '../engine/grading.ts'
 import { SCOPE_NATIONWIDE, parseSetId } from '../engine/setId.ts'
 import { readNickname } from '../hooks/useNickname.ts'
-import { writeAnswerSheet } from '../hooks/answerSheet.ts'
-import { SELECT_PATH, navigate, resultPath } from '../router.ts'
+import { answerSheetKey, writeAnswerSheet } from '../hooks/answerSheet.ts'
+import { COVER_PATH, SELECT_PATH, navigate, resultPath } from '../router.ts'
+import MunicipalityMap from '../components/MunicipalityMap.tsx'
+import MunicipalityInfo from '../components/MunicipalityInfo.tsx'
 
 const KANJI_NUM = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十']
 const FEEDBACK_MS = 1000
@@ -45,6 +47,8 @@ export default function Quiz({ setId }: { setId: string }) {
   const [records, setRecords] = useState<AnswerRecord[]>([])
   const [feedback, setFeedback] = useState<Feedback | null>(null)
   const [remainMs, setRemainMs] = useState(TIME_LIMIT_MS)
+  /** 「タイトルへ戻る」を押した後。タイマーと結果への自動遷移を止めるだけのフラグ */
+  const [exiting, setExiting] = useState(false)
   const startedAt = useRef(0)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const nickname = readNickname()
@@ -72,7 +76,7 @@ export default function Quiz({ setId }: { setId: string }) {
 
   // 問ごとのカウントダウン。0 で自動パス
   useEffect(() => {
-    if (!question || feedback) return
+    if (!question || feedback || exiting) return
     startedAt.current = Date.now()
     inputRef.current?.focus()
     const timer = setInterval(() => {
@@ -90,7 +94,7 @@ export default function Quiz({ setId }: { setId: string }) {
       setFeedback({ correct: false, answer: question.answer })
     }, 100)
     return () => clearInterval(timer)
-  }, [question, feedback])
+  }, [question, feedback, exiting])
 
   // ○× を 1 秒見せてから次の問へ
   useEffect(() => {
@@ -106,11 +110,11 @@ export default function Quiz({ setId }: { setId: string }) {
 
   // 10 問終わったら答案を保存して結果へ
   useEffect(() => {
-    if (!set || feedback) return
+    if (!set || feedback || exiting) return
     if (index < set.questions.length || records.length < set.questions.length) return
     writeAnswerSheet(set.setId, records)
     navigate(resultPath(set.setId))
-  }, [set, index, records, feedback])
+  }, [set, index, records, feedback, exiting])
 
   const answerNow = () => {
     if (!question || feedback) return
@@ -119,6 +123,20 @@ export default function Quiz({ setId }: { setId: string }) {
     const ms = passed ? TIME_LIMIT_MS : Math.min(Math.max(Date.now() - startedAt.current, 0), TIME_LIMIT_MS)
     setRecords((prev) => [...prev, { questionId: question.id, input: input.trim(), correct, ms, passed }])
     setFeedback({ correct, answer: question.answer })
+  }
+
+  /**
+   * 回答中にタイトルへ戻る。進行中の答案は保存せず破棄する（確認ダイアログは出さない）。
+   * exiting を立ててからの遷移なので、カウントダウンと結果への自動遷移は先に止まる。
+   */
+  const backToCover = () => {
+    setExiting(true)
+    try {
+      sessionStorage.removeItem(answerSheetKey(setId))
+    } catch {
+      // 保存できない環境では消すものも無い
+    }
+    navigate(COVER_PATH)
   }
 
   if (error) {
@@ -158,70 +176,92 @@ export default function Quiz({ setId }: { setId: string }) {
   const urgent = remainMs <= URGENT_MS
 
   return (
-    <div className="paper">
-      {set.widened && <p className="pen-comment">範囲が狭いため都道府県に広げました</p>}
+    <div className="layout">
+      {/* 左（スマホでは上）: 県内のどこか ＋ 解答後の自治体情報 */}
+      <aside className="layout__map">
+        <MunicipalityMap prefCode={question.prefCode} lgCode={question.lgCode} prefName={question.pref} />
+        {/* カードは常に置く（中身は解答後だけ）。出入りで全体の高さが動くと 1 画面に収まらなくなる */}
+        <MunicipalityInfo
+          lgCode={question.lgCode}
+          revealed={feedback !== null}
+          reading={set.mode === 'e' ? question.answer : undefined}
+          prefName={set.scope === SCOPE_NATIONWIDE ? question.pref : undefined}
+        />
+      </aside>
 
-      <div className="paper__header">
-        <span>範囲: {rangeLabel(set)}</span>
-        <span>科目: {set.mode === 'e' ? 'easy（市区町村名）' : 'difficult（大字・町名）'}</span>
-        <span className="field">
-          <span className="field__label">氏名</span>
-          <span className="field__input">{nickname || '名無し'}</span>
-        </span>
+      <div className="layout__quiz">
+        <div className="paper">
+          {set.widened && <p className="pen-comment">範囲が狭いため都道府県に広げました</p>}
+
+          <div className="paper__header">
+            <span>範囲: {rangeLabel(set)}</span>
+            <span>科目: {set.mode === 'e' ? 'easy（市区町村名）' : 'difficult（大字・町名）'}</span>
+            <span className="field">
+              <span className="field__label">氏名</span>
+              <span className="field__input">{nickname || '名無し'}</span>
+            </span>
+            {/* 解答欄・解答ボタンから離れた用紙の右上。押すと答案を捨てて表紙へ */}
+            <span className="layout__exit">
+              <button type="button" className="btn btn--ghost" onClick={backToCover}>
+                タイトルへ戻る
+              </button>
+            </span>
+          </div>
+
+          <div className="q-number">
+            問{kanjiNumber(index + 1)} / {kanjiNumber(set.questions.length)}
+          </div>
+          <p className="q-prompt">次の地名の読みを書け。</p>
+
+          {/* .q-suffix の font-size は .q-kanji 基準（0.42em）なので .q-kanji の中に置く */}
+          <p className="q-kanji">
+            {question.display}
+            {set.mode === 'e' && question.suffix && <span className="q-suffix">［{question.suffix}］</span>}
+          </p>
+          {note && <div className="q-pref">{note}</div>}
+
+          <input
+            ref={inputRef}
+            className="answer-input"
+            type="text"
+            value={input}
+            autoFocus
+            autoComplete="off"
+            placeholder="ひらがなで"
+            aria-label="読みをひらがなで入力"
+            disabled={feedback !== null}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.nativeEvent.isComposing) answerNow()
+            }}
+          />
+
+          <div className={urgent ? 'timer__label is-urgent' : 'timer__label'}>
+            <span aria-hidden="true">⏳</span>
+            <span>のこり {Math.ceil(remainMs / 1000)} 秒</span>
+          </div>
+          <div className={urgent ? 'timer is-urgent' : 'timer'}>
+            <span className="timer__bar" style={{ width: `${remainPct}%` }} />
+          </div>
+
+          <p>
+            <button type="button" className="btn btn--primary" onClick={answerNow} disabled={feedback !== null}>
+              解答
+            </button>
+          </p>
+          <p>空欄のまま解答するとパスになります。</p>
+
+          {feedback && (
+            <p>
+              <span className={feedback.correct ? 'mark mark--correct' : 'mark mark--wrong'} aria-hidden="true">
+                {feedback.correct ? '○' : '×'}
+              </span>
+              <span className="sr-only">{feedback.correct ? '正解' : '誤り'}</span>{' '}
+              <span className="marker marker--yellow">{feedback.answer}</span>
+            </p>
+          )}
+        </div>
       </div>
-
-      <div className="q-number">
-        問{kanjiNumber(index + 1)} / {kanjiNumber(set.questions.length)}
-      </div>
-      <p className="q-prompt">次の地名の読みを書け。</p>
-
-      {/* .q-suffix の font-size は .q-kanji 基準（0.42em）なので .q-kanji の中に置く */}
-      <p className="q-kanji">
-        {question.display}
-        {set.mode === 'e' && question.suffix && <span className="q-suffix">［{question.suffix}］</span>}
-      </p>
-      {note && <div className="q-pref">{note}</div>}
-
-      <input
-        ref={inputRef}
-        className="answer-input"
-        type="text"
-        value={input}
-        autoFocus
-        autoComplete="off"
-        placeholder="ひらがなで"
-        aria-label="読みをひらがなで入力"
-        disabled={feedback !== null}
-        onChange={(e) => setInput(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' && !e.nativeEvent.isComposing) answerNow()
-        }}
-      />
-
-      <div className={urgent ? 'timer__label is-urgent' : 'timer__label'}>
-        <span aria-hidden="true">⏳</span>
-        <span>のこり {Math.ceil(remainMs / 1000)} 秒</span>
-      </div>
-      <div className={urgent ? 'timer is-urgent' : 'timer'}>
-        <span className="timer__bar" style={{ width: `${remainPct}%` }} />
-      </div>
-
-      <p>
-        <button type="button" className="btn btn--primary" onClick={answerNow} disabled={feedback !== null}>
-          解答
-        </button>
-      </p>
-      <p>空欄のまま解答するとパスになります。</p>
-
-      {feedback && (
-        <p>
-          <span className={feedback.correct ? 'mark mark--correct' : 'mark mark--wrong'} aria-hidden="true">
-            {feedback.correct ? '○' : '×'}
-          </span>
-          <span className="sr-only">{feedback.correct ? '正解' : '誤り'}</span>{' '}
-          <span className="marker marker--yellow">{feedback.answer}</span>
-        </p>
-      )}
     </div>
   )
 }

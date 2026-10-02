@@ -1,0 +1,129 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: 地名読み検定の共有ランキング API（HTTP API + Lambda + DynamoDB）。契約は infra/API.md
+
+Parameters:
+  BankBaseUrl:
+    Type: String
+    Default: https://akiralab.github.io/chimei-kentei/questions/
+    Description: 問題バンクの置き場。版ディレクトリ（abr20260925/）の 1 つ上を指す。Lambda が末尾に版を足して読む
+  AllowedOrigins:
+    Type: CommaDelimitedList
+    Default: https://akiralab.github.io,http://localhost:5173,http://localhost:4173
+    Description: CORS で許可する Origin
+
+Globals:
+  Function:
+    Runtime: nodejs22.x
+    Architectures: [arm64]
+    MemorySize: 256
+    Timeout: 10
+
+Resources:
+  # ランキング 1 件 = 2 アイテム（予約 + 本体）。pk は set#{setId}
+  #   予約: sk = token#{clientToken}  … attribute_not_exists(pk) で 1 セット 1 登録を担保
+  #   本体: sk = entry#{createdAt}#{entryId} … GET は begins_with(sk, 'entry#') で引く
+  # 都道府県インデックス（pk = pref#{prefCode}）
+  #   本体の写し: sk = entry#{createdAt}#{entryId}
+  #   人数の印:   sk = player#{clientToken} … attribute_not_exists(pk) で distinct を数える
+  # カウンタ（pk = stats#pref、sk = prefCode）… entries / players を ADD で加算
+  RankingTable:
+    Type: AWS::DynamoDB::Table
+    UpdateReplacePolicy: Retain
+    DeletionPolicy: Retain
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+
+  ResultsApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      # $default ステージ（URL にステージ名が付かない）
+      StageName: $default
+      CorsConfiguration:
+        AllowOrigins: !Ref AllowedOrigins
+        AllowMethods: [GET, POST, OPTIONS]
+        AllowHeaders: [content-type]
+        MaxAge: 86400
+      # アクセスログは既定で付けない（無料枠内に収めるため）
+
+  ResultsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: api/dist/
+      Handler: handler.handler
+      Description: POST /results で再採点して登録、GET /results と GET /stats/prefectures で順位表を返す
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref RankingTable
+          BANK_BASE_URL: !Ref BankBaseUrl
+          ALLOWED_ORIGINS: !Join [',', !Ref AllowedOrigins]
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:PutItem
+                - dynamodb:Query
+                - dynamodb:UpdateItem
+                - dynamodb:TransactWriteItems
+              Resource: !GetAtt RankingTable.Arn
+      Events:
+        PostResults:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ResultsApi
+            Method: POST
+            Path: /results
+        GetResults:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ResultsApi
+            Method: GET
+            Path: /results
+        OptionsResults:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ResultsApi
+            Method: OPTIONS
+            Path: /results
+        GetPrefectureStats:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ResultsApi
+            Method: GET
+            Path: /stats/prefectures
+        OptionsPrefectureStats:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ResultsApi
+            Method: OPTIONS
+            Path: /stats/prefectures
+
+  # ログは 14 日で捨てる（Lambda が作る前に先に作っておく）
+  ResultsFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${ResultsFunction}
+      RetentionInDays: 14
+
+Outputs:
+  ApiUrl:
+    Description: VITE_RANKING_API に設定するベース URL（末尾スラッシュなし）
+    Value: !Sub https://${ResultsApi}.execute-api.${AWS::Region}.amazonaws.com
+  TableName:
+    Description: ランキングを入れている DynamoDB テーブル
+    Value: !Ref RankingTable

@@ -1,0 +1,398 @@
+/* ==========================================================================
+   map.css — 地図 UI と 2 カラムレイアウト（v1 / 地図 UI 担当）
+   --------------------------------------------------------------------------
+   接頭辞は .layout* / .map* / .jp-map* / .info-card* の 4 つだけ。
+   色・フォント・余白は必ず tokens.css の変数を参照する（直書き禁止）。
+   既存クラス（.paper など）は使うだけで、ここでは再定義しない。
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. .layout — 出題画面の 2 カラム（スクロールなしで 1 画面）
+   --------------------------------------------------------------------------
+   高さの考え方: .board が `height: 100dvh` の flex column（theme.css）なので、
+   .layout は **.paper と同じ作法**（flex: 0 1 auto ／ min-height: 0 ／ max-height: 100%）で
+   その中に収まる。余白の内訳を calc() で持たない＝theme.css の padding が変わっても壊れない。
+   中の高さは flex で配り、SVG は viewBox ＋ flex で伸縮させる（固定 px にしない）。
+   -------------------------------------------------------------------------- */
+
+.layout {
+  width: 100%;
+  max-width: var(--paper-max);
+  /* 使える高さを常に使い切る（0 1 auto だと中身の増減で高さが動き、
+     解答の ○× が出た瞬間に 2 カラム全体がガタつく） */
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  /* はみ出しは内側（.paper の overflow-y）が吸収する。黒板の外へは出さない */
+  overflow: hidden;
+}
+
+.layout__map {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  min-height: 0;
+  /* スマホは地図を上に積む。情報カードは地図に重ねるので、ここは地図ぶんだけ。
+     高さを **確定値** にするのが要点。auto のままだと中の flex:1 1 0 な SVG が 0 に潰れる */
+  flex: 0 0 auto;
+  height: 24dvh;
+  /* スマホで .info-card を地図の下端に重ねるための基準 */
+  position: relative;
+}
+
+.layout__quiz {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* .paper 本体は touch しない（max-height: 100% と overflow-y は theme.css が持つ）。
+   2 カラムの中では横幅いっぱいに伸ばすだけ */
+.layout__quiz > .paper {
+  align-self: stretch;
+  width: 100%;
+}
+
+@media (min-width: 900px) {
+  .layout {
+    /* 左カラムを足したぶんだけ用紙より広く使う。用紙自体の幅は変えない */
+    max-width: calc(var(--paper-max) + 20rem);
+    flex-direction: row;
+    align-items: stretch;
+    gap: var(--space-5);
+  }
+
+  .layout__map {
+    flex: 0 0 38%;
+    /* row 方向では .layout の高さに合わせて伸ばす。
+       スマホ用の height: 24dvh を残すと地図が潰れる（align-items: stretch が効かない） */
+    height: auto;
+    max-height: none;
+  }
+
+  .layout__quiz {
+    flex: 1 1 60%;
+  }
+}
+
+/* 回答中の「タイトルへ戻る」。.paper__header の右端に寄せ、解答欄から離す。
+   ボタンの見た目は .btn.btn--ghost のまま、この位置でだけ小さく詰める（縦を食わないため） */
+.layout__exit {
+  margin-left: auto;
+}
+
+.layout__exit .btn {
+  min-height: 32px;
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--fs-xs);
+}
+
+/* --------------------------------------------------------------------------
+   2. .map-* — 地図パネルの共通部品
+   -------------------------------------------------------------------------- */
+
+/* 地図を載せる台紙。用紙と同じクリーム地だが罫線は引かない */
+.map-muni,
+.jp-map {
+  padding: var(--space-3);
+  background-color: var(--color-paper);
+  border: 1.5px solid var(--color-paper-line);
+  border-radius: var(--radius-paper);
+  box-shadow: var(--shadow-chip);
+}
+
+/* 地図の台紙は残り高さをすべて使い、中の SVG にそのまま渡す */
+.map-muni {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* 読み込み失敗・未生成のときの 1 行。パネルは消さない */
+.map-note {
+  margin: 0;
+  padding: var(--space-3) 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  color: var(--color-pencil);
+  text-align: center;
+}
+
+.map-muni__caption {
+  margin: 0 0 var(--space-2);
+  flex: 0 0 auto;
+  font-family: var(--font-body);
+  font-size: var(--fs-xs);
+  letter-spacing: 0.04em;
+  color: var(--color-pencil);
+}
+
+/* 親の残り高さに合わせて伸縮する。viewBox ＋ preserveAspectRatio が中身を収めるので
+   固定 px も ResizeObserver も要らない（flex-basis 0 ＋ min-height 0 が要点） */
+.map-muni__svg {
+  display: block;
+  width: 100%;
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+/* 県内の市区町村。既定は薄い輪郭だけ */
+.map-muni__path {
+  fill: color-mix(in srgb, var(--color-paper) 82%, #fff);
+  stroke: var(--color-paper-line);
+  stroke-width: 1;
+  /* viewBox の単位がデータごとに変わるので、線の太さは画面基準で固定する */
+  vector-effect: non-scaling-stroke;
+}
+
+/* 出題中の自治体。塗り＋濃い輪郭で、色だけに頼らず形が浮く */
+.map-muni__path--target {
+  fill: var(--color-marker-pink);
+  stroke: var(--color-red-pen);
+  stroke-width: 2;
+  transition:
+    fill 180ms ease-out,
+    stroke 180ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-muni__path--target {
+    transition: none;
+  }
+}
+
+/* 地図の下に置く操作列（全国ボタン＋一覧トグル） */
+.map-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-1) 0 var(--space-2);
+}
+
+/* --------------------------------------------------------------------------
+   3. .jp-map — 範囲・科目 画面の日本地図
+   スマホ(375x667)で 1 画面に収めるため画面高基準。広い画面では 420px まで。
+   -------------------------------------------------------------------------- */
+
+.jp-map {
+  margin: var(--space-1) 0;
+  padding: var(--space-2);
+}
+
+.jp-map__svg {
+  display: block;
+  width: 100%;
+  height: min(26dvh, 240px);
+}
+
+/* 縦に余裕のない端末（375x667 など）はさらに削る。他の行（科目切替・ボタン）を残すため */
+@media (max-height: 720px) {
+  .jp-map__svg {
+    height: 18dvh;
+  }
+}
+
+@media (min-width: 720px) and (min-height: 760px) {
+  .jp-map__svg {
+    height: min(38dvh, 420px);
+  }
+}
+
+.jp-map__path {
+  fill: color-mix(in srgb, var(--color-paper) 70%, #fff);
+  stroke: var(--color-rule-strong);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  cursor: pointer;
+}
+
+/* hover / focus は同じ見た目（マウスとキーボードで手応えを揃える） */
+.jp-map__path--active {
+  fill: var(--color-marker-yellow);
+  stroke: var(--color-ink);
+  stroke-width: 1.5;
+}
+
+/* path の outline はブラウザが bbox の矩形で描いてしまうので切る。
+   代わりに onFocus で --active が付く（塗り＋輪郭が変わる）ので指標は残る */
+.jp-map__path:focus-visible {
+  outline: none;
+}
+
+/* 選択中。色だけに頼らないよう輪郭も濃くする */
+.jp-map__path--selected {
+  fill: var(--color-marker-blue);
+  stroke: var(--color-ink);
+  stroke-width: 2;
+}
+
+.jp-map__label {
+  font-family: var(--font-pen);
+  fill: var(--color-ink);
+  /* paint-order で縁取りを文字の下に回す（用紙色の縁 → 細い県の上でも読める） */
+  stroke: var(--color-paper);
+  paint-order: stroke;
+  text-anchor: middle;
+  dominant-baseline: middle;
+  pointer-events: none;
+}
+
+/* --------------------------------------------------------------------------
+   4. .info-card — 自治体情報カード
+   数字は大きく（--font-pen）、ラベルは明朝で小さく（--font-body）。
+   --------------------------------------------------------------------------
+   高さの扱いが画面幅で変わる:
+   - スマホ: 地図の下端に **重ねる**（半透明の帯）。積んだときに縦を食わないため。
+     未解答のプレースホルダーは出さない（重ねているので高さは動かない）
+   - PC(>=900px): 地図の下に通常フローで置き、未解答でも枠を確保する
+     （解答した瞬間に 2 カラムの高さが動かないように）
+   -------------------------------------------------------------------------- */
+
+.info-card {
+  padding: var(--space-3);
+  background-color: var(--color-paper);
+  border: 1.5px solid var(--color-rule-strong);
+  border-radius: var(--radius-paper);
+  box-shadow: var(--shadow-chip);
+}
+
+.info-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding-bottom: var(--space-1);
+  border-bottom: 2px solid var(--color-rule-strong);
+}
+
+.info-card__name {
+  font-family: var(--font-display);
+  font-size: var(--fs-lg);
+  line-height: 1.3;
+  color: var(--color-ink);
+}
+
+.info-card__reading {
+  font-family: var(--font-hand);
+  font-size: var(--fs-md);
+  color: var(--color-red-pen);
+}
+
+.info-card__pref {
+  margin: var(--space-1) 0 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-xs);
+  line-height: 1.4;
+  color: var(--color-pencil);
+}
+
+/* スマホは 4 列 1 行（カード全体で 2〜3 行に収める）。PC は 2 列 × 2 行 */
+.info-card__stats {
+  margin: var(--space-2) 0 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.info-card__row {
+  min-width: 0;
+}
+
+.info-card__label {
+  display: block;
+  font-family: var(--font-body);
+  font-size: var(--fs-xs);
+  line-height: 1.3;
+  letter-spacing: 0.04em;
+  color: var(--color-pencil);
+}
+
+.info-card__value {
+  margin: 0;
+  font-family: var(--font-pen);
+  font-size: var(--fs-md);
+  line-height: 1.25;
+  color: var(--color-ink);
+  /* 桁が多い自治体（東京 23 区など）でも折り返して収める */
+  overflow-wrap: anywhere;
+}
+
+.info-card__unit {
+  margin-left: 0.2em;
+  font-family: var(--font-body);
+  font-size: var(--fs-xs);
+  color: var(--color-pencil);
+}
+
+.info-card__source {
+  margin: var(--space-2) 0 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-xs);
+  line-height: 1.3;
+  color: var(--color-pencil);
+}
+
+/* 値が未確定（解答前・統計なし）のときは薄く */
+.info-card--placeholder .info-card__value,
+.info-card--placeholder .info-card__name {
+  color: var(--color-pencil);
+}
+
+/* ---- スマホ: 地図に重ねる帯 ---- */
+@media (max-width: 899px) {
+  .info-card {
+    position: absolute;
+    inset-inline: var(--space-2);
+    bottom: var(--space-2);
+    padding: var(--space-2);
+    /* 用紙色の半透明。地図の輪郭がうっすら透ける */
+    background-color: color-mix(in srgb, var(--color-paper) 92%, transparent);
+    backdrop-filter: blur(2px);
+  }
+
+  /* 重ねているので高さは動かない → 未解答の枠は出さない */
+  .info-card--placeholder {
+    display: none;
+  }
+
+  /* 帯の中は 見出し ＋ 数字 ＋ 出典 の 3 行に抑える。都道府県名は用紙側の .q-pref と重複するので省く */
+  .info-card__pref {
+    display: none;
+  }
+
+  .info-card__value {
+    font-size: var(--fs-sm);
+  }
+}
+
+/* ---- PC: 地図の下に通常フローで ---- */
+@media (min-width: 900px) {
+  .info-card {
+    flex: 0 0 auto;
+    padding: var(--space-4);
+  }
+
+  .info-card__name {
+    font-size: var(--fs-xl);
+  }
+
+  .info-card__reading {
+    font-size: var(--fs-lg);
+  }
+
+  .info-card__stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-3);
+  }
+
+  .info-card__value {
+    font-size: var(--fs-lg);
+  }
+}

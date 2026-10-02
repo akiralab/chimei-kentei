@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useState } from 'react'
-import type { QuestionSet, ResultEntry } from '../engine/types.ts'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import type { QuestionSet, RankingRow } from '../engine/types.ts'
 import { buildQuestionSet } from '../engine/bank.ts'
 import { parseSetId } from '../engine/setId.ts'
-import { LocalRankingStore, getClientToken, isValidNickname } from '../engine/ranking.ts'
+import { defaultStorage, getClientToken, isValidNickname } from '../engine/ranking.ts'
+import { defaultRankingStore, isRemoteRanking } from '../engine/ranking-factory.ts'
 import { readNickname } from '../hooks/useNickname.ts'
 import { readAnswerSheet } from '../hooks/answerSheet.ts'
-import { SELECT_PATH, absoluteUrl, navigate, quizPath } from '../router.ts'
+import { COVER_PATH, SELECT_PATH, absoluteUrl, navigate, quizPath } from '../router.ts'
 
 const KANJI_NUM = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十']
 const RANKING_LIMIT = 20
@@ -19,15 +20,28 @@ function formatDuration(ms: number): string {
   return `${Math.floor(total / 60)}分${String(total % 60).padStart(2, '0')}秒`
 }
 
-const store = new LocalRankingStore()
+// VITE_RANKING_API があれば共有ランキング（Remote）、無ければ端末内（Local）
+const store = defaultRankingStore()
+const remote = isRemoteRanking()
+const storage = defaultStorage()
+
+/** 登録済みのしるし。値は自分の entryId（一覧の自分の行を見分けるのに使う） */
+function submittedKey(setId: string): string {
+  return `submitted:${setId}`
+}
 
 export default function Result({ setId }: { setId: string }) {
   const parsed = useMemo(() => parseSetId(setId), [setId])
   const [records] = useState(() => readAnswerSheet(setId))
   const [set, setSet] = useState<QuestionSet | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [entries, setEntries] = useState<ResultEntry[] | null>(null)
+  const [entries, setEntries] = useState<RankingRow[] | null>(null)
+  const [myEntryId, setMyEntryId] = useState<string | null>(() => storage.getItem(submittedKey(setId)))
+  const [registered, setRegistered] = useState(() => storage.getItem(submittedKey(setId)) !== null)
   const [myRank, setMyRank] = useState<number | null>(null)
+  const [loadingRanking, setLoadingRanking] = useState(false)
+  const [rankingError, setRankingError] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const [shareUrl, setShareUrl] = useState<string | null>(null)
   const clientToken = useMemo(() => getClientToken(), [])
@@ -58,27 +72,48 @@ export default function Result({ setId }: { setId: string }) {
     }
   }, [parsed])
 
-  // 既に登録済みなら最初から順位表を出す
+  /** 順位表を取り直す。自分の行は entryId で見分ける（clientToken は一覧に出てこない） */
+  const loadRanking = useCallback(
+    async (entryId: string | null, alive: () => boolean = () => true): Promise<void> => {
+      setLoadingRanking(true)
+      setRankingError(null)
+      try {
+        const rows = await store.list(setId, RANKING_LIMIT)
+        if (!alive()) return
+        setEntries(rows)
+        const i = entryId === null ? -1 : rows.findIndex((r) => r.entryId === entryId)
+        setMyRank(i < 0 ? null : i + 1)
+      } catch {
+        if (!alive()) return
+        setRankingError('ランキングに接続できませんでした。')
+      } finally {
+        if (alive()) setLoadingRanking(false)
+      }
+    },
+    [setId],
+  )
+
+  // 既に登録済み（localStorage に entryId がある）なら最初から順位表を出す
   useEffect(() => {
+    const saved = storage.getItem(submittedKey(setId))
+    if (saved === null) return
     let alive = true
     void (async () => {
-      const mine = await store.mine(setId, clientToken)
-      if (!alive || !mine) return
       setNotice('この問題にはすでに登録済みです。')
-      setEntries(await store.list(setId, RANKING_LIMIT))
-      setMyRank(await store.rank(setId, clientToken))
+      await loadRanking(saved, () => alive)
     })()
     return () => {
       alive = false
     }
-  }, [setId, clientToken])
+  }, [setId, loadRanking])
 
   const register = async () => {
-    if (!records) return
+    if (!records || registered || submitting) return
     if (!isValidNickname(nickname)) {
       setNotice('氏名（ニックネーム）が未記入です。表紙で記入してください。')
       return
     }
+    setSubmitting(true)
     const res = await store.submit({
       setId,
       nickname,
@@ -88,15 +123,26 @@ export default function Result({ setId }: { setId: string }) {
       clientToken,
       createdAt: new Date().toISOString(),
     })
+    setSubmitting(false)
     if (res.ok) {
+      storage.setItem(submittedKey(setId), res.entryId)
+      setMyEntryId(res.entryId)
+      setRegistered(true)
       setNotice(`${res.rank} 位で登録しました。`)
-    } else {
-      setNotice(
-        res.reason === 'already_submitted' ? 'この問題にはすでに登録済みです。' : '氏名が 1〜12 文字ではありません。',
-      )
+      await loadRanking(res.entryId)
+      return
     }
-    setEntries(await store.list(setId, RANKING_LIMIT))
-    setMyRank(await store.rank(setId, clientToken))
+    if (res.reason === 'already_submitted') {
+      setRegistered(true)
+      setNotice('この問題にはすでに登録済みです。')
+      await loadRanking(myEntryId)
+      return
+    }
+    if (res.reason === 'network') {
+      setNotice('ランキングに接続できませんでした。しばらくして試してください。')
+      return
+    }
+    setNotice('氏名が 1〜12 文字ではありません。')
   }
 
   const share = async () => {
@@ -178,7 +224,12 @@ export default function Result({ setId }: { setId: string }) {
       {shareUrl && <p className="review__mine">{shareUrl}</p>}
 
       <p>
-        <button type="button" className="btn btn--primary" onClick={() => void register()}>
+        <button
+          type="button"
+          className="btn btn--primary"
+          disabled={registered || submitting}
+          onClick={() => void register()}
+        >
           ランキングに登録
         </button>
         <button type="button" className="btn" onClick={() => void share()}>
@@ -187,7 +238,13 @@ export default function Result({ setId }: { setId: string }) {
         <button type="button" className="btn btn--ghost" onClick={() => navigate(SELECT_PATH)}>
           もう一度（別の問題）
         </button>
+        <button type="button" className="btn btn--ghost" onClick={() => navigate(COVER_PATH)}>
+          タイトルへ戻る
+        </button>
       </p>
+
+      {remote && loadingRanking && <p className="pen-comment">順位表を読み込んでいます…</p>}
+      {rankingError && <p className="pen-comment">{rankingError}</p>}
 
       {entries && (
         <>
@@ -197,9 +254,9 @@ export default function Result({ setId }: { setId: string }) {
           ) : (
             <ol className="ranking">
               {entries.map((e, i) => {
-                const me = e.clientToken === clientToken
+                const me = e.entryId === myEntryId
                 return (
-                  <li className={me ? 'ranking__row is-me' : 'ranking__row'} key={`${e.clientToken}-${e.createdAt}`}>
+                  <li className={me ? 'ranking__row is-me' : 'ranking__row'} key={e.entryId}>
                     <span className="ranking__rank">
                       {me && <span aria-hidden="true">★</span>}
                       {i + 1}

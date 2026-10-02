@@ -26,6 +26,9 @@ jobs:
       - run: npm ci
       - run: npm test -- --run
       - run: npm run build
+        env:
+          # 未設定なら空文字 → ランキングは端末内の localStorage にフォールバックする
+          VITE_RANKING_API: ${{ vars.VITE_RANKING_API }}
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

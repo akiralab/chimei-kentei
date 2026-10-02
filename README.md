@@ -12,13 +12,35 @@
 ライセンスは [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/deed.ja)。
 元データの前処理（読みの正規化・対応表化）は別リポジトリ `abr-data` で行い、本リポジトリの `data/build_questions.py` が問題バンク（`public/questions/`）を生成する。
 
+## 共有ランキング
+
+同じセットIDで解いた人の順位表。**保存先はビルド時の環境変数 `VITE_RANKING_API` で切り替わる。**
+
+| `VITE_RANKING_API` | ランキングの保存先 | 見える範囲 |
+|---|---|---|
+| 未設定（既定） | `localStorage`（`LocalRankingStore`） | その端末のその人だけ |
+| API のベース URL | AWS の共有ランキング API（`RemoteRankingStore`） | 同じセットIDを解いた全員 |
+
+- 得点は**サーバーが再採点する**。クライアントが送るのは セットID と各問の入力（`input` / `ms` / `passed`）だけで、点数を申告できない。
+- 1 セット 1 登録（セットID × 端末トークン）。登録すると自分の `entryId` を `localStorage['submitted:{setId}']` に残し、順位表の自分の行（`.is-me`）をそれで見分ける。
+- API の契約は [`infra/API.md`](infra/API.md)、構成とデプロイ手順は [`infra/README.md`](infra/README.md)。
+- GitHub Actions では repository variable `VITE_RANKING_API` を build に渡す（未設定なら空文字 → ローカルランキング）。
+
 ## 開発
 
 ```bash
 npm install
 npm run dev        # http://localhost:5173/chimei-kentei/
-npm test           # vitest（エンジンの単体テスト）
+npm test           # vitest（エンジン・画面・API ハンドラの単体テスト）
 npm run build      # dist/ を生成
+npm run build:api  # Lambda のバンドル（infra/api/dist/handler.mjs）
+npm run deploy:api # 共有ランキング API を AWS へデプロイ（infra/README.md）
+```
+
+共有ランキングをつないで手元で試すとき:
+
+```bash
+VITE_RANKING_API=https://xxxx.execute-api.ap-northeast-1.amazonaws.com npm run dev
 ```
 
 `main` への push で GitHub Actions が `dist/` を GitHub Pages に配信する。
@@ -29,6 +51,7 @@ npm run build      # dist/ を生成
 data/build_questions.py      対応表 → 問題バンク JSON（前処理ルール a〜f）
 public/questions/{版}/       easy.json / difficult/{都道府県コード}.json / meta.json
 src/engine/                  セットID・決定論的抽出・採点の正規化・ランキング保存（UI 非依存）
+infra/                       共有ランキング API（Lambda / HTTP API / DynamoDB・CloudFormation）
 src/screens/                 表紙・範囲選択・出題・結果
 src/styles/                  答案用紙テーマ（デザイントークン・部品）
 ```

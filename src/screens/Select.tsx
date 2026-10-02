@@ -3,6 +3,9 @@ import type { BankMeta, Mode } from '../engine/types.ts'
 import { DATA_VERSION, loadMeta } from '../engine/bank.ts'
 import { SCOPE_NATIONWIDE, buildSetId, randomSeed, todaySeed } from '../engine/setId.ts'
 import { navigate, quizPath } from '../router.ts'
+import type { PrefectureCollection } from '../geo/load.ts'
+import { defaultGeoSource } from '../geo/load.ts'
+import JapanMap from '../components/JapanMap.tsx'
 
 const CANDIDATE_LIMIT = 8
 
@@ -12,6 +15,10 @@ export default function Select() {
   const [scope, setScope] = useState<string>(SCOPE_NATIONWIDE)
   const [mode, setMode] = useState<Mode>('e')
   const [query, setQuery] = useState('')
+  // 地図は主、47 ボタンの一覧は折りたたみ。地図が読めなかったときだけ最初から開く
+  const [japan, setJapan] = useState<PrefectureCollection | null>(null)
+  const [mapLoading, setMapLoading] = useState(true)
+  const [listOpen, setListOpen] = useState(false)
 
   useEffect(() => {
     let alive = true
@@ -21,6 +28,24 @@ export default function Select() {
       })
       .catch((e: unknown) => {
         if (alive) setError(e instanceof Error ? e.message : String(e))
+      })
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  // 地図データ（public/geo/japan.json）。無くても範囲選択は一覧で成立する
+  useEffect(() => {
+    let alive = true
+    defaultGeoSource()
+      .japan()
+      .then((fc) => {
+        if (!alive) return
+        setJapan(fc)
+        setMapLoading(false)
+      })
+      .catch(() => {
+        if (alive) setMapLoading(false)
       })
     return () => {
       alive = false
@@ -45,6 +70,12 @@ export default function Select() {
   const nationwide = scope === SCOPE_NATIONWIDE
   const blocked = nationwide && mode === 'd'
 
+  /** 地図で光らせる県。市区町村を選んでいるときはその所属県 */
+  const mapSelected = nationwide ? undefined : scope.slice(0, 2)
+  const mapFailed = !mapLoading && japan === null
+  /** 地図が無ければ一覧が唯一の動線なので常に開く */
+  const showList = listOpen || mapFailed
+
   const scopeLabel = nationwide ? '全国' : (selectedCity?.name ?? selectedPref?.name ?? scope)
 
   const start = () => {
@@ -52,8 +83,14 @@ export default function Select() {
     navigate(quizPath(buildSetId(DATA_VERSION, mode, scope, randomSeed())))
   }
 
+  /**
+   * 「今日の10問」は **いま選んでいる範囲・科目** で日付シードのセットを作る。
+   * 以前は全国 easy 固定だったので「東京都を選んだのに山梨県が出た」と見える不具合報告になった。
+   * 全国 × difficult だけは母集団を組めないので easy に落とす。
+   */
+  const todayMode: Mode = blocked ? 'e' : mode
   const startToday = () => {
-    navigate(quizPath(buildSetId(DATA_VERSION, 'e', SCOPE_NATIONWIDE, todaySeed())))
+    navigate(quizPath(buildSetId(DATA_VERSION, todayMode, scope, todaySeed())))
   }
 
   if (error) {
@@ -84,7 +121,22 @@ export default function Select() {
         </p>
       </div>
 
-      <div className="pref-grid">
+      <div className="jp-map">
+        {japan ? (
+          <JapanMap
+            collection={japan}
+            selected={mapSelected}
+            onSelect={(prefCode) => {
+              setScope(prefCode)
+              setQuery('')
+            }}
+          />
+        ) : (
+          <p className="map-note">{mapLoading ? '地図を読み込み中…' : '地図を読み込めませんでした。一覧から選んでください。'}</p>
+        )}
+      </div>
+
+      <div className="map-actions">
         <button
           type="button"
           className={nationwide ? 'pref-grid__item is-selected' : 'pref-grid__item'}
@@ -95,20 +147,34 @@ export default function Select() {
         >
           全国
         </button>
-        {meta.prefectures.map((p) => (
-          <button
-            key={p.code}
-            type="button"
-            className={scope === p.code ? 'pref-grid__item is-selected' : 'pref-grid__item'}
-            onClick={() => {
-              setScope(p.code)
-              setQuery('')
-            }}
-          >
-            {p.name}
-          </button>
-        ))}
+        <button
+          type="button"
+          className="btn btn--ghost"
+          aria-expanded={showList}
+          onClick={() => setListOpen((open) => !open)}
+        >
+          一覧から選ぶ
+        </button>
       </div>
+
+      {/* .paper の直下に置く（theme.css の `.paper > .pref-grid` が用紙内スクロールを担う） */}
+      {showList && (
+        <div className="pref-grid">
+          {meta.prefectures.map((p) => (
+            <button
+              key={p.code}
+              type="button"
+              className={scope === p.code ? 'pref-grid__item is-selected' : 'pref-grid__item'}
+              onClick={() => {
+                setScope(p.code)
+                setQuery('')
+              }}
+            >
+              {p.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       <label className="field">
         <span className="field__label">市区町村で絞る</span>
@@ -165,7 +231,7 @@ export default function Select() {
           始める
         </button>
         <button type="button" className="btn btn--ghost" onClick={startToday}>
-          今日の10問
+          今日の10問（{scopeLabel}・{todayMode === 'e' ? 'easy' : 'difficult'}）
         </button>
       </p>
     </div>

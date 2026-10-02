@@ -31,17 +31,28 @@
   /* ---- フォント ------------------------------------------------------- */
   /* index.html の Google Fonts <link> で読み込む。必ずフォールバックを添える */
   --font-body: 'Shippori Mincho B1', 'Hiragino Mincho ProN', 'Yu Mincho', 'YuMincho', serif;
-  --font-display: 'Dela Gothic One', 'Hiragino Sans', 'Yu Gothic', sans-serif;
+  /* 見出し。Dela Gothic One から Mochiy Pop One へ（2026-10-02）。
+     Dela は字幅を詰めた極太デザインで、2 文字熟語の漢字（範囲・結果・匝瑳）が
+     1.4rem 前後で墨だまりになって読めなかった。Mochiy は同じくらいポップだが
+     画線が均一でフトコロが開いており、小さくしても字面が潰れない。 */
+  --font-display: 'Mochiy Pop One', 'Hiragino Sans', 'Yu Gothic', sans-serif;
   --font-hand: 'Klee One', 'Hiragino Mincho ProN', 'Yu Mincho', serif;
   --font-pen: 'Yusei Magic', 'Hiragino Sans', 'Yu Gothic', sans-serif;
+  /* 得点スタンプの数字だけ Dela Gothic One に残す。数字 2 桁しか使わないので
+     潰れようがなく、縦に詰まった字形がゴム印らしく見える */
+  --font-stamp: 'Dela Gothic One', 'Hiragino Sans', 'Yu Gothic', sans-serif;
 
   /* ---- 文字サイズ（clamp で 375px〜1024px+ を 1 本化）----------------- */
   --fs-xs: 0.75rem;
   --fs-sm: 0.8125rem;
+  /* 本文（明朝）の大きさ。ここは触らない */
   --fs-md: 0.9375rem;
-  --fs-lg: 1.0625rem;
-  --fs-xl: clamp(1.125rem, 0.95rem + 0.9vw, 1.5rem);
-  --fs-title: clamp(1.25rem, 1rem + 1.6vw, 1.875rem);
+  /* 氏名欄・得点欄・見直しの出題。2026-10-02 に 1.0625rem から 1 段上げた */
+  --fs-lg: 1.1875rem;
+  /* 節見出し（問番号・順位表・答案の見直し）。375px でも 1.4rem を割らない */
+  --fs-xl: clamp(1.4rem, 1.2rem + 0.9vw, 1.75rem);
+  /* 用紙の見出し。375px で約 1.83rem、1024px 以上で 2.4rem */
+  --fs-title: clamp(1.8rem, 1.45rem + 1.6vw, 2.4rem);
   /* 出題漢字: 最小 2.4rem を下限に、375px では約 2.8rem まで縮む */
   --fs-kanji: clamp(2.4rem, 1.4rem + 6vw, 4.4rem);
   --fs-answer: clamp(1.5rem, 1.1rem + 2.4vw, 2.25rem);
@@ -69,4 +80,26 @@
   --rule-height: 2rem;
   /* 用紙の最大幅（1 画面 1 枚）*/
   --paper-max: 720px;
+  /* 表紙のタイトル。見出しより更に一段大きい（表紙にしか使わない）*/
+  --fs-cover: clamp(2.25rem, 1.6rem + 2.8vw, 3.25rem);
+}
+
+/* --------------------------------------------------------------------------
+   縦に余裕のない画面（iPhone SE 375x667 など）。
+   ページをスクロールさせない方針なので、入りきらない分は余白と
+   「見出し以外」の文字で吸収する。
+   --fs-title / --fs-xl は可読性の下限として決めた値なので下げない。
+   -------------------------------------------------------------------------- */
+@media (max-height: 740px) {
+  :root {
+    --space-5: 1.125rem;
+    --space-6: 1.375rem;
+    --space-7: 1.75rem;
+    --space-8: 2rem;
+    --fs-kanji: clamp(2rem, 1.2rem + 5vw, 3.2rem);
+    --fs-answer: clamp(1.375rem, 1.1rem + 1.8vw, 1.875rem);
+    --fs-mark: clamp(1.5rem, 1.1rem + 1.8vw, 2.25rem);
+    --fs-stamp: clamp(1.875rem, 1.3rem + 2.6vw, 2.75rem);
+    --fs-cover: clamp(2rem, 1.5rem + 2.2vw, 2.75rem);
+  }
 }

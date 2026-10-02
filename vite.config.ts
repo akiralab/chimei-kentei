@@ -10,7 +10,7 @@ export default defineConfig({
     // 既定は node（エンジンのテスト）。画面テストはファイル先頭の
     // `// @vitest-environment jsdom` コメントで jsdom に切り替える
     environment: 'node',
-    include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+    include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'infra/**/*.test.ts'],
     passWithNoTests: true,
   },
 })

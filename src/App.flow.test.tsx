@@ -238,10 +238,11 @@ describe('範囲・科目', () => {
     expect(hash()).toMatch(new RegExp(`^#/q/${DATA_VERSION}-e-12-\\d{4}$`))
   })
 
-  it('「今日の10問」は全国 × easy × 日付シード', async () => {
+  it('「今日の10問」は（範囲未選択なら）全国 × easy × 日付シード', async () => {
     await openSelect()
 
-    fireEvent.click(screen.getByRole('button', { name: '今日の10問' }))
+    // ボタン名に範囲と科目が入るので前方一致で拾う（例「今日の10問（全国・easy）」）
+    fireEvent.click(screen.getByRole('button', { name: /^今日の10問/ }))
     await settle()
 
     expect(hash()).toBe(`#/q/${DATA_VERSION}-e-00-${todaySeed()}`)
@@ -455,10 +456,12 @@ describe('結果', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'ランキングに登録' }))
     await settle()
+
+    // 登録後はボタンを無効にするので 2 度目は押せない（サーバー側でも 409 で弾く）
+    expect(screen.getByRole('button', { name: 'ランキングに登録' })).toBeDisabled()
     fireEvent.click(screen.getByRole('button', { name: 'ランキングに登録' }))
     await settle()
 
-    expect(screen.getByText('この問題にはすでに登録済みです。')).toBeInTheDocument()
     expect(all('.ranking__row')).toHaveLength(1)
   })
 
