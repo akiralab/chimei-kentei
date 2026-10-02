@@ -40,6 +40,9 @@ const TRAILING_ROMAJI = /[A-Za-z]+$/u
 /** かな（ひらがな・カタカナ・長音・濁点）だけでできているか。踊り字も通す */
 const KANA_ONLY = /^[ぁ-ゖァ-ヺーゝゞヽヾ\u3099\u309A]*$/u
 
+/** かな・ローマ字・長音・空白だけでできているか（＝捨てる文字が無いか）の判定用 */
+const CONVERTIBLE = /^[ぁ-ゖァ-ヺーゝゞヽヾ\u3099\u309AA-Za-z\-'\s]*$/u
+
 /** 物理キーの code → ローマ字 1 文字。'\b' は 1 文字戻す、'' は無視 */
 const KEY_LETTER = /^Key([A-Z])$/
 
@@ -131,4 +134,17 @@ export function pushStroke(buffer: string, code: string): string {
   if (ch === '') return buffer
   if (ch === STROKE_BACK) return buffer.slice(0, -1)
   return buffer + ch
+}
+
+/**
+ * ひらがなに直せない文字（漢字・記号・数字など）が混じっているか。
+ *
+ * 入力欄に入れた文字が黙って消えると「壊れている」と見えるので、捨てたことを
+ * 一言伝えるために使う。ローマ字（A-Za-z）・長音の素になる「-」・撥音の「'」・
+ * 空白は「捨てたが伝える必要のない文字」として通す（空白はかなの区切りとして
+ * 貼り付けに混ざるだけで、利用者が入れた文字ではない）。
+ * 半角カタカナや全角英字は NFKC で畳んでから見るので、`ｿｳｻ` は false。
+ */
+export function hasUnconvertible(raw: string): boolean {
+  return !CONVERTIBLE.test(fold(raw))
 }

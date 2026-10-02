@@ -446,3 +446,141 @@ describe('その他', () => {
     expect(input).toHaveValue('もんぜん')
   })
 })
+
+/**
+ * 漢字を捨てた・読みに戻したことを入力欄の下に一言出す（#20）。
+ * 「黙って消える」のが不具合なので、値だけでなく通知の有無を固定する。
+ */
+describe('捨てた・戻したことを伝える', () => {
+  const DROPPED = '漢字や記号は入りません。ひらがなで書いてください'
+  const RECOVERED = '漢字を読み（ひらがな）に戻しました'
+
+  /** 入力欄の下の通知。空なら '' */
+  function notice() {
+    return (document.querySelector('.answer-notice') as HTMLElement).textContent
+  }
+
+  it('貼り付けた漢字を捨てたら、その旨を出す', () => {
+    const { input, value } = setup()
+    fireEvent.change(input, { target: { value: '銚子' } })
+    expect(value()).toBe('')
+    expect(input).toHaveValue('')
+    expect(notice()).toBe(DROPPED)
+  })
+
+  it('読み上げ用に aria-live を持ち、案内文の場所を借りる', () => {
+    const { input } = setup()
+    const region = document.querySelector('.answer-notice') as HTMLElement
+    expect(region).toHaveAttribute('aria-live', 'polite')
+    expect(document.querySelector('.answer-hint')).not.toHaveClass('is-hushed')
+
+    fireEvent.change(input, { target: { value: '銚子' } })
+    expect(document.querySelector('.answer-hint')).toHaveClass('is-hushed')
+  })
+
+  it.each([
+    ['ちょうし'],
+    ['チョウシ'],
+    ['choushi'],
+    ['kuma-ta'],
+    [''],
+  ])('ひらがな・カタカナ・ローマ字（%s）では出さない', (typed) => {
+    const { input } = setup()
+    fireEvent.change(input, { target: { value: typed } })
+    expect(notice()).toBe('')
+  })
+
+  it('打ちかけの子音が残っていても出さない', async () => {
+    const user = userEvent.setup()
+    const { input } = setup()
+    await user.type(input, 'monzen')
+    expect(input).toHaveValue('もんぜn')
+    expect(notice()).toBe('')
+  })
+
+  it('次の入力で消える', () => {
+    const { input } = setup()
+    fireEvent.change(input, { target: { value: '銚子' } })
+    expect(notice()).toBe(DROPPED)
+    fireEvent.change(input, { target: { value: 'ちょ' } })
+    expect(notice()).toBe('')
+  })
+
+  it('IME の確定（compositionend）で捨てたときも出る', () => {
+    const { input, value } = setup()
+    fireEvent.compositionStart(input)
+    fireEvent.change(input, { target: { value: '銚子' } })
+    fireEvent.compositionEnd(input, { data: '銚子' })
+    // 打鍵の痕跡が無い（手書き入力・候補の貼り付け）ので漢字は落ちる
+    expect(value()).toBe('')
+    expect(notice()).toBe(DROPPED)
+
+    // Chrome が後追いで出す「変換後の生の値」の input でも消えない
+    fireEvent.change(input, { target: { value: '銚子' } })
+    expect(notice()).toBe(DROPPED)
+  })
+
+  it('打鍵列から読みに戻せたときは「戻した」と出す', () => {
+    const { input, value } = setup()
+    fireEvent.keyDown(input, { key: 'Process', code: 'KeyT', keyCode: 229, isComposing: false })
+    fireEvent.compositionStart(input)
+    for (const code of ['KeyY', 'KeyO', 'KeyU', 'KeyS', 'KeyH', 'KeyI']) {
+      fireEvent.keyDown(input, { key: 'Process', code, keyCode: 229, isComposing: true })
+    }
+    fireEvent.change(input, { target: { value: '銚子' } })
+    fireEvent.compositionEnd(input, { data: '銚子' })
+
+    expect(value()).toBe('ちょうし')
+    expect(input).toHaveValue('ちょうし')
+    expect(notice()).toBe(RECOVERED)
+  })
+
+  it('かなのまま確定したときは何も出さない', () => {
+    const { input, value } = setup()
+    fireEvent.compositionStart(input)
+    fireEvent.change(input, { target: { value: 'チョウシ' } })
+    fireEvent.compositionEnd(input, { data: 'チョウシ' })
+    expect(value()).toBe('ちょうし')
+    expect(notice()).toBe('')
+  })
+
+  it('変換を始めた時点で前の通知は消える', () => {
+    const { input } = setup()
+    fireEvent.change(input, { target: { value: '銚子' } })
+    expect(notice()).toBe(DROPPED)
+    fireEvent.compositionStart(input)
+    expect(notice()).toBe('')
+  })
+
+  it('Enter で送ると消える', async () => {
+    const user = userEvent.setup()
+    const { input } = setup()
+    await user.click(input)
+    fireEvent.change(input, { target: { value: 'ちょうし銚子' } })
+    expect(notice()).toBe(DROPPED)
+    await user.keyboard('{Enter}')
+    expect(notice()).toBe('')
+  })
+
+  it('次の問題（親が value を空に戻す）で消える', () => {
+    function Reset() {
+      const [value, setValue] = useState('')
+      return (
+        <>
+          <HiraganaInput value={value} onChange={setValue} onSubmit={() => {}} ariaLabel="よみ" />
+          <button type="button" onClick={() => setValue('')}>
+            つぎ
+          </button>
+        </>
+      )
+    }
+    render(<Reset />)
+    const input = screen.getByLabelText('よみ')
+    fireEvent.change(input, { target: { value: '銚子' } })
+    expect(notice()).toBe(DROPPED)
+    fireEvent.change(input, { target: { value: 'ちょうし' } })
+    fireEvent.click(screen.getByRole('button', { name: 'つぎ' }))
+    expect(input).toHaveValue('')
+    expect(notice()).toBe('')
+  })
+})

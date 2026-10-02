@@ -4,7 +4,14 @@
  * 例外（拗音・促音・撥音・長音）を主に固定する。
  */
 import { describe, expect, it } from 'vitest'
-import { isKanaOnly, pushStroke, romajiFromKeyCode, splitHiragana, toHiraganaStrict } from './hiragana.ts'
+import {
+  hasUnconvertible,
+  isKanaOnly,
+  pushStroke,
+  romajiFromKeyCode,
+  splitHiragana,
+  toHiraganaStrict,
+} from './hiragana.ts'
 
 describe('toHiraganaStrict — ローマ字', () => {
   it('素直なローマ字をひらがなにする', () => {
@@ -142,5 +149,30 @@ describe('romajiFromKeyCode / pushStroke — 打鍵列の復元', () => {
     let buf = ''
     for (const code of ['KeyK', 'KeyU', 'KeyM', 'KeyA', 'Minus', 'KeyT', 'KeyA']) buf = pushStroke(buf, code)
     expect(toHiraganaStrict(buf)).toBe('くまーた')
+  })
+})
+
+describe('hasUnconvertible — 捨てる文字が混じっているか', () => {
+  it.each([['匝瑳'], ['銚子'], ['はつかいち市'], ['ちょうし。'], ['12'], ['そうさ？']])(
+    '%s はひらがなに直せない文字を含む',
+    (raw) => {
+      expect(hasUnconvertible(raw)).toBe(true)
+    },
+  )
+
+  it.each([
+    [''],
+    ['そうさ'],
+    ['ソウサ'],
+    ['ｿｳｻ'],
+    ['choushi'],
+    ['CHOUSHI'],
+    ['monzen'],
+    ['kuma-ta'],
+    ['そう さ'],
+    ["sin'you"],
+    ['くまーた'],
+  ])('%s は全部ひらがなに直せる（何も捨てない）', (raw) => {
+    expect(hasUnconvertible(raw)).toBe(false)
   })
 })

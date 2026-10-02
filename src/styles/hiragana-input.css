@@ -1,0 +1,54 @@
+/* ==========================================================================
+   hiragana-input.css — HiraganaInput が出す「捨てた・戻した」通知
+   --------------------------------------------------------------------------
+   入力欄（.answer-input）と案内文（.answer-hint）の見た目は theme.css 側。
+   ここは通知のためだけの最小限。トークンは tokens.css を参照する。
+
+   出題画面は 375x667 でもスクロールなしで 1 枚に収まる高さで組んであるので、
+   通知で行を増やしてはいけない。そこで
+     - .answer-field を基準にして通知を position: absolute で入力欄の下に重ねる
+       （入力欄の margin は .answer-field を突き抜けるので高さは変わらない）
+     - 通知が出ている間、案内文は visibility で伏せる（行は残すので詰まらない）
+   とする。スマホ縦では案内文が theme.css 側で display: none になるため、
+   そこに通知だけが浮く形になる。
+   ========================================================================== */
+
+/* 通知を重ねるための基準。入力欄をくるむだけで、箱としては何も足さない */
+.answer-field {
+  position: relative;
+  display: block;
+}
+
+/* 赤ペンで欄外に書き足した一言のつもり。中身が空なら何も描かれない */
+.answer-notice {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  margin: 2px 0 0;
+  /* 文字の長さぶんだけ敷く（右端まで伸ばすと赤い帯になって重い）*/
+  width: max-content;
+  max-width: 100%;
+  font-family: var(--font-hand);
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+  letter-spacing: 0;
+  color: var(--color-red-pen);
+  /* 重なった下の文字と混ざらないよう、薄い赤を敷く */
+  background: var(--color-red-pen-faint);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-1);
+  /* 入力欄の上に浮いているので、クリックは必ず下の入力欄へ通す */
+  pointer-events: none;
+}
+
+.answer-notice:empty {
+  background: none;
+  padding: 0;
+}
+
+/* 通知に場所を譲る。display: none にすると行が詰まって下がずれる */
+.answer-hint.is-hushed {
+  visibility: hidden;
+}
