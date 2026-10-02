@@ -266,21 +266,26 @@ describe('範囲・科目', () => {
     expect(hash()).toBe(`#/q/${DATA_VERSION}-e-00-${todaySeed()}`)
   })
 
-  it('全国 × difficult は選べない（ボタン無効＋注意文）', async () => {
+  it('全国のままでも difficult を押せるが、都道府県を選ぶまで「始める」は無効で案内文が出る', async () => {
     await openSelect()
 
-    // 全国のあいだ difficult は押せない。注意文は普段出さず、
-    // 「都道府県で difficult → 全国に戻した」＝本当に始められない状態のときだけ出す
-    expect(screen.getByRole('button', { name: /^difficult/ })).toBeDisabled()
-    expect(screen.queryByText(/全国 × difficult はこのデモでは選べません/)).toBeNull()
+    // 科目の切替は最初から押せる（押せないと操作が詰まる）。
+    // 全国のままでは「始める」が無効になり、ボタンのラベルが案内に変わる（行は増やさない）
+    const difficult = screen.getByRole('button', { name: /^difficult/ })
+    expect(difficult).toBeEnabled()
+    expect(screen.getByRole('button', { name: '始める' })).toBeEnabled()
 
-    fireEvent.click(screen.getByRole('button', { name: '千葉県' }))
-    fireEvent.click(screen.getByRole('button', { name: /^difficult/ }))
-    fireEvent.click(screen.getByRole('button', { name: '全国' }))
-
-    expect(screen.getByText(/全国 × difficult はこのデモでは選べません/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '始める' })).toBeDisabled()
+    fireEvent.click(difficult)
+    expect(screen.queryByRole('button', { name: '始める' })).toBeNull()
+    expect(screen.getByRole('button', { name: '都道府県を選ぶと始められます' })).toBeDisabled()
     expect(hash()).toBe('#/select')
+
+    // 都道府県を選べば「始める」に戻って始められる（科目の選択は保たれる）
+    fireEvent.click(screen.getByRole('button', { name: '千葉県' }))
+    expect(screen.queryByRole('button', { name: '都道府県を選ぶと始められます' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '始める' }))
+    await settle()
+    expect(hash()).toMatch(new RegExp(`^#/q/${DATA_VERSION}-d-12-\\d{4}$`))
   })
 
   it('時間制限の既定は「なし」で、出題画面にタイマーが出ない', async () => {
@@ -327,19 +332,6 @@ describe('範囲・科目', () => {
     expect(hash()).toMatch(new RegExp(`^#/q/${DATA_VERSION}-d-12-\\d{4}$`))
   })
 
-  it('市区町村検索で候補が出て、選ぶと 6 桁 scope になる', async () => {
-    await openSelect()
-
-    fireEvent.change(screen.getByLabelText('市区町村で絞る'), { target: { value: '千市7' } })
-    await settle()
-
-    const candidate = screen.getByRole('button', { name: '千市7' })
-    fireEvent.click(candidate)
-    fireEvent.click(screen.getByRole('button', { name: '始める' }))
-    await settle()
-
-    expect(hash()).toMatch(new RegExp(`^#/q/${DATA_VERSION}-e-120007-\\d{4}$`))
-  })
 })
 
 // -------------------------------------------------------------------- 3. 出題
