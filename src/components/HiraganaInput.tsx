@@ -14,7 +14,7 @@
  * 「もんぜん」）、onChange と onSubmit を同じ tick で呼ぶと親はまだ古い value を
  * 握っている。そこで確定が発生したときだけ onSubmit を次のコミットまで遅らせる。
  */
-import type { ChangeEvent, CompositionEvent, FocusEvent, KeyboardEvent } from 'react'
+import type { ChangeEvent, CompositionEvent, FocusEvent, KeyboardEvent, Ref } from 'react'
 import { useEffect, useId, useRef, useState } from 'react'
 import { splitHiragana, toHiraganaStrict } from './hiragana.ts'
 
@@ -30,6 +30,8 @@ export interface HiraganaInputProps {
   placeholder?: string
   className?: string
   ariaLabel?: string
+  /** 解答後の再フォーカス用。React 19 なので forwardRef せず props で受け取れる */
+  ref?: Ref<HTMLInputElement>
 }
 
 const HINT = 'ローマ字でもひらがなでも入力できます。変換せずにそのまま Enter'
@@ -43,6 +45,7 @@ export default function HiraganaInput({
   placeholder = 'ひらがなで',
   className,
   ariaLabel,
+  ref,
 }: HiraganaInputProps) {
   const hintId = useId()
   /** 入力欄に実際に出す文字列（= value ＋ 未確定のローマ字） */
@@ -135,6 +138,7 @@ export default function HiraganaInput({
   return (
     <>
       <input
+        ref={ref}
         className={className ? `answer-input ${className}` : 'answer-input'}
         type="text"
         value={shown}

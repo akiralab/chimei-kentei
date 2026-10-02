@@ -28,12 +28,25 @@ const FEEDBACK_MS = 1000
 
 // ---------------------------------------------------------------- フィクスチャ
 
+/**
+ * フィクスチャの読みは連番入りなので `し1` のように算用数字を含む（makeEasy / makeDifficult）。
+ * 解答欄（HiraganaInput）には仕様どおり「ひらがな＋ー」しか入らないため、数字のままでは
+ * どう打っても一致しない。実データ（ABR の読み）は必ずひらがななので、
+ * フィクスチャ側を実データに寄せて数字をかな読みへ置き換える（`し1` → `しいち`）。
+ * 桁ごとの置換なので連番の一意性は保たれる。
+ */
+const KANA_DIGITS = ['ぜろ', 'いち', 'に', 'さん', 'よん', 'ご', 'ろく', 'なな', 'はち', 'きゅう']
+
+function kanaizeAnswers(questions: Question[]): Question[] {
+  return questions.map((q) => ({ ...q, answer: q.answer.replace(/\d/g, (d) => KANA_DIGITS[Number(d)]) }))
+}
+
 // 千葉県は easy 15 件・大字 30 件、東京都は easy 14 件。どちらも「今日の10問」に足りる
-const EASY_12 = makeEasy('12', '千葉県', 15)
-const EASY_13 = makeEasy('13', '東京都', 14)
+const EASY_12 = kanaizeAnswers(makeEasy('12', '千葉県', 15))
+const EASY_13 = kanaizeAnswers(makeEasy('13', '東京都', 14))
 const EASY_ALL: Question[] = [...EASY_12, ...EASY_13]
-const DIFFICULT_12 = makeDifficult('12', '千葉県', 1, 30)
-const DIFFICULT_13 = makeDifficult('13', '東京都', 1, 30)
+const DIFFICULT_12 = kanaizeAnswers(makeDifficult('12', '千葉県', 1, 30))
+const DIFFICULT_13 = kanaizeAnswers(makeDifficult('13', '東京都', 1, 30))
 
 const META: BankMeta = {
   dataVersion: DATA_VERSION,
@@ -341,6 +354,27 @@ describe('出題', () => {
     expect(all('.mark--correct')).toHaveLength(1)
   })
 
+  it('ローマ字で打てる。打ちかけの n は画面に残り、Enter で「ん」に確定して解答される', async () => {
+    await openQuiz(SET_ID)
+
+    const input = answerInput()
+    // 'san' の末尾 n はまだ「ん」か「な行」か決まらないので、値は「さ」／表示は「さn」
+    fireEvent.change(input, { target: { value: 'san' } })
+    expect(input).toHaveValue('さn')
+
+    // Enter で確定（onChange → 再描画 → onSubmit）まで一息で進む。IME の変換は要らない
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(all('.mark')).toHaveLength(1)
+
+    await settle(FEEDBACK_MS)
+    expect(el('.q-number').textContent).toBe('問二 / 十')
+
+    // 残り 9 問を埋めて、1 問目に「さん」が記録されていることを確かめる
+    for (let i = 1; i < EXPECTED.questions.length; i++) await answerOne(EXPECTED.questions[i].answer)
+    const records = JSON.parse(sessionStorage.getItem(answerSheetKey(SET_ID)) ?? '[]')
+    expect(records[0]).toMatchObject({ input: 'さん', passed: false })
+  })
+
   it('誤答では × と正解が出る', async () => {
     await openQuiz(SET_ID)
 
@@ -626,7 +660,35 @@ describe('出題の表示', () => {
   })
 })
 
-// ------------------------------------------------------- 7. 2 回目のプレイ
+// ------------------------------------------------- 7. 表紙 → ランキングの導線
+
+describe('ランキングへの導線', () => {
+  it('表紙の「ランキングを見る」のリンク先が #/ranking で、開くと都道府県の一覧が出る', async () => {
+    renderApp()
+
+    const link = screen.getByRole('link', { name: 'ランキングを見る' })
+    expect(link).toHaveAttribute('href', '#/ranking')
+
+    // jsdom は <a href="#..."> のクリックでハッシュを動かさないので、同じ遷移をルータ経由で起こす
+    goto(link.getAttribute('href') as string)
+    await settle()
+
+    expect(screen.getByRole('heading', { name: 'これまでのランキング' })).toBeInTheDocument()
+    // 地図データ（public/geo/）が無くても一覧だけで成立する
+    expect(screen.getByRole('button', { name: /千葉県/ })).toBeInTheDocument()
+  })
+
+  it('#/ranking/{prefCode} は都道府県の詳細を出す', async () => {
+    goto('#/ranking/12')
+    renderApp()
+    await settle()
+
+    expect(screen.getByRole('heading', { name: '千葉県のランキング' })).toBeInTheDocument()
+    expect(screen.getByText('まだ登録がありません。')).toBeInTheDocument()
+  })
+})
+
+// ------------------------------------------------------- 8. 2 回目のプレイ
 
 describe('もう一度', () => {
   it('結果から範囲選択へ戻って別の問題を始め直せる', async () => {

@@ -196,6 +196,8 @@ export default function Result({ setId }: { setId: string }) {
         <span className="stamp__label">点</span>
       </p>
 
+      <h3 className="paper__section">答案の見直し</h3>
+
       {/* .review__row は ○× | 出題 | 自分の解答 | 正解 の 4 列グリッド */}
       <ol className="review">
         {records.map((r, i) => {
@@ -248,7 +250,7 @@ export default function Result({ setId }: { setId: string }) {
 
       {entries && (
         <>
-          <p>この問題の順位表{myRank !== null && <> ／ あなたは {myRank} 位</>}</p>
+          <h3 className="paper__section">この問題の順位表{myRank !== null && <> ／ あなたは {myRank} 位</>}</h3>
           {entries.length === 0 ? (
             <p>まだ登録がありません。</p>
           ) : (

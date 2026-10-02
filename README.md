@@ -45,6 +45,12 @@ VITE_RANKING_API=https://xxxx.execute-api.ap-northeast-1.amazonaws.com npm run d
 
 `main` への push で GitHub Actions が `dist/` を GitHub Pages に配信する。
 
+### 解答欄（ひらがな専用入力）
+
+- 解答欄に入るのは**ひらがなと長音記号「ー」だけ**。ローマ字で打つと逐次ひらがなになる（`monzen` → 「もんぜん」。打ちかけの子音は `もんぜn` のように画面にだけ残り、Enter / フォーカス外れで確定する）。
+- カタカナ・半角カタカナ・全角英数はひらがなへ畳み、漢字・記号・空白は取り除く（`src/components/hiragana.ts`）。
+- **IME の変換は不要**。日本語 IME が無い端末でもそのまま Enter で解答できる。IME 変換中（未確定文字列）は一切書き換えず、確定した瞬間に正規化する。
+
 ## 構成
 
 ```

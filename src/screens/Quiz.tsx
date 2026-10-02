@@ -9,6 +9,7 @@ import { answerSheetKey, writeAnswerSheet } from '../hooks/answerSheet.ts'
 import { COVER_PATH, SELECT_PATH, navigate, resultPath } from '../router.ts'
 import MunicipalityMap from '../components/MunicipalityMap.tsx'
 import MunicipalityInfo from '../components/MunicipalityInfo.tsx'
+import HiraganaInput from '../components/HiraganaInput.tsx'
 
 const KANJI_NUM = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十']
 const FEEDBACK_MS = 1000
@@ -220,20 +221,16 @@ export default function Quiz({ setId }: { setId: string }) {
           </p>
           {note && <div className="q-pref">{note}</div>}
 
-          <input
+          {/* 入るのはひらがなだけ。ローマ字で打っても IME の変換は不要（HiraganaInput が正規化する） */}
+          <HiraganaInput
             ref={inputRef}
-            className="answer-input"
-            type="text"
             value={input}
-            autoFocus
-            autoComplete="off"
-            placeholder="ひらがなで"
-            aria-label="読みをひらがなで入力"
+            onChange={setInput}
+            onSubmit={answerNow}
             disabled={feedback !== null}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.nativeEvent.isComposing) answerNow()
-            }}
+            autoFocus
+            placeholder="ひらがなで"
+            ariaLabel="読みをひらがなで入力"
           />
 
           <div className={urgent ? 'timer__label is-urgent' : 'timer__label'}>
