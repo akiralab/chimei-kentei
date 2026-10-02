@@ -9,7 +9,7 @@
  * を見る。実ブラウザの IME は再現できないので composition イベントで代用する。
  */
 import '@testing-library/jest-dom/vitest'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -127,6 +127,231 @@ describe('日本語 IME の変換中', () => {
   })
 })
 
+/**
+ * macOS の日本語 IME（Chrome / Safari）でローマ字を打つと composition が始まり、
+ * スペースやライブ変換で漢字になってから Enter で確定する。
+ * 実機のイベント順序:
+ *   compositionstart
+ *   → (keydown → input → compositionupdate) を打鍵ごとに繰り返す
+ *   → 変換（Space / ライブ変換）で compositionupdate の data だけが漢字になる
+ *   → 確定の Enter で keydown → compositionend(data=確定文字列) → input
+ * keydown の key は変換中 'Process' などになるので code（物理キー）で拾う。
+ */
+describe('IME で漢字に変換されても読みに戻す', () => {
+  /**
+   * 変換中の 1 打鍵ぶん（keydown → input → compositionupdate）を流す。
+   * 2 文字目以降なので isComposing は true。
+   */
+  function stroke(input: HTMLInputElement, code: string, composed: string) {
+    fireEvent.keyDown(input, { key: 'Process', code, keyCode: 229, isComposing: true })
+    fireEvent.change(input, { target: { value: composed } })
+    fireEvent.compositionUpdate(input, { data: composed })
+  }
+
+  /**
+   * IME の 1 打鍵目。実機では keydown が compositionstart より**前**に来て、
+   * この keydown の isComposing はまだ false（keyCode だけが 229 になる）。
+   */
+  function firstStroke(input: HTMLInputElement, code: string, composed: string) {
+    fireEvent.keyDown(input, { key: 'Process', code, keyCode: 229, isComposing: false })
+    fireEvent.compositionStart(input)
+    fireEvent.change(input, { target: { value: composed } })
+    fireEvent.compositionUpdate(input, { data: composed })
+  }
+
+  it('(a) スペースで変換して Enter 確定しても、打鍵列から読みに戻る', () => {
+    const onSubmit = vi.fn()
+    const { input, value } = setup({ onSubmit })
+
+    firstStroke(input, 'KeyS', 's')
+    stroke(input, 'KeyO', 'そ')
+    stroke(input, 'KeyU', 'そう')
+    stroke(input, 'KeyS', 'そうs')
+    stroke(input, 'KeyA', 'そうさ')
+
+    // 変換キー（スペース）。打鍵列には入らない
+    fireEvent.keyDown(input, { key: 'Process', code: 'Space', isComposing: true })
+    fireEvent.change(input, { target: { value: '匝瑳' } })
+    fireEvent.compositionUpdate(input, { data: '匝瑳' })
+
+    // 確定の Enter。これは解答の送信ではない
+    fireEvent.keyDown(input, { key: 'Enter', code: 'Enter', isComposing: true })
+    fireEvent.compositionEnd(input, { data: '匝瑳' })
+    expect(onSubmit).not.toHaveBeenCalled()
+
+    expect(value()).toBe('そうさ')
+    expect(input).toHaveValue('そうさ')
+
+    // 続く Enter は解答の送信
+    fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' })
+    expect(onSubmit).toHaveBeenCalledTimes(1)
+  })
+
+  it('(a) 確定直後に遅れて届く「変換後の値」の input で上書きされない', () => {
+    const { input, value } = setup()
+    firstStroke(input, 'KeyS', 's')
+    stroke(input, 'KeyO', 'そ')
+    stroke(input, 'KeyU', 'そう')
+    stroke(input, 'KeyS', 'そうs')
+    stroke(input, 'KeyA', 'そうさ')
+    fireEvent.change(input, { target: { value: '匝瑳' } })
+    fireEvent.compositionUpdate(input, { data: '匝瑳' })
+    fireEvent.compositionEnd(input, { data: '匝瑳' })
+    // Chrome は compositionend の直後に、まだ変換後の値のまま input を出す
+    fireEvent.change(input, { target: { value: '匝瑳' } })
+
+    expect(value()).toBe('そうさ')
+    expect(input).toHaveValue('そうさ')
+  })
+
+  it('(b) ライブ変換で途中から漢字になっても打鍵列から戻る', () => {
+    const { input, value } = setup()
+    firstStroke(input, 'KeyS', 's')
+    stroke(input, 'KeyO', 'そ')
+    stroke(input, 'KeyU', 'そう')
+    // ここからライブ変換が走って未確定文字列が漢字になる
+    stroke(input, 'KeyS', '総')
+    stroke(input, 'KeyA', '総さ')
+    fireEvent.compositionUpdate(input, { data: '匝瑳' })
+    fireEvent.compositionEnd(input, { data: '匝瑳' })
+
+    expect(value()).toBe('そうさ')
+  })
+
+  it('(c) Backspace を含む打鍵列を正しくたどる', () => {
+    const { input, value } = setup()
+    fireEvent.keyDown(input, { key: 'Process', code: 'KeyS', keyCode: 229, isComposing: false })
+    fireEvent.compositionStart(input)
+    for (const code of ['KeyO', 'KeyU', 'KeyS', 'KeyA', 'Backspace', 'Backspace', 'KeyK', 'KeyI']) {
+      fireEvent.keyDown(input, { key: 'Process', code, keyCode: 229, isComposing: true })
+    }
+    fireEvent.change(input, { target: { value: '双鬼' } })
+    fireEvent.compositionEnd(input, { data: '双鬼' })
+
+    expect(value()).toBe('そうき')
+  })
+
+  it('(d) かなのまま確定したら確定文字列を使う（フリック・かな入力）', () => {
+    const { input, value } = setup()
+    fireEvent.compositionStart(input)
+    fireEvent.change(input, { target: { value: 'そうさ' } })
+    fireEvent.compositionEnd(input, { data: 'そうさ' })
+
+    expect(value()).toBe('そうさ')
+  })
+
+  it('(d) 打鍵列があっても、かなで確定したならそちらを優先する', () => {
+    const { input, value } = setup()
+    firstStroke(input, 'KeyS', 's')
+    stroke(input, 'KeyO', 'そ')
+    // 候補から別の読みを選び直してかなで確定した
+    fireEvent.compositionEnd(input, { data: 'ソウサ' })
+
+    expect(value()).toBe('そうさ')
+  })
+
+  it('(e) 打鍵も未確定履歴も無い漢字（貼り付け）は従来どおり取り除く', () => {
+    const { input, value } = setup()
+    fireEvent.compositionStart(input)
+    fireEvent.change(input, { target: { value: '匝瑳' } })
+    fireEvent.compositionEnd(input, { data: '匝瑳' })
+
+    expect(value()).toBe('')
+  })
+
+  it('既に確定している文字の後ろに変換を足しても、前半は壊れない', () => {
+    const { input, value } = setup()
+    fireEvent.change(input, { target: { value: 'はつ' } })
+    expect(value()).toBe('はつ')
+
+    fireEvent.keyDown(input, { key: 'Process', code: 'KeyK', keyCode: 229, isComposing: false })
+    fireEvent.compositionStart(input)
+    for (const code of ['KeyA', 'KeyI', 'KeyC', 'KeyH', 'KeyI']) {
+      fireEvent.keyDown(input, { key: 'Process', code, keyCode: 229, isComposing: true })
+    }
+    fireEvent.change(input, { target: { value: 'はつ市' } })
+    fireEvent.compositionEnd(input, { data: '市' })
+
+    expect(value()).toBe('はつかいち')
+  })
+
+  it('先頭の keydown が compositionstart より前でも 1 文字目を落とさない', () => {
+    const { input, value } = setup()
+
+    // 実機の順序: keydown(229・isComposing=false) → compositionstart → input → update
+    fireEvent.keyDown(input, { key: 'Process', code: 'KeyS', keyCode: 229, isComposing: false })
+    fireEvent.compositionStart(input)
+    fireEvent.change(input, { target: { value: 's' } })
+    fireEvent.compositionUpdate(input, { data: 's' })
+
+    stroke(input, 'KeyO', 'そ')
+    stroke(input, 'KeyU', 'そう')
+    stroke(input, 'KeyS', 'そうs')
+    stroke(input, 'KeyA', 'そうさ')
+    fireEvent.change(input, { target: { value: '匝瑳' } })
+    fireEvent.compositionUpdate(input, { data: '匝瑳' })
+    fireEvent.compositionEnd(input, { data: '匝瑳' })
+
+    // 先頭を拾い損ねると「おうさ」になる
+    expect(value()).toBe('そうさ')
+  })
+
+  it('先頭 keydown の key が Process でなく keyCode だけ 229 の場合も拾う', () => {
+    const { input, value } = setup()
+
+    fireEvent.keyDown(input, { key: 'Unidentified', code: 'KeyS', keyCode: 229, isComposing: false })
+    fireEvent.compositionStart(input)
+    stroke(input, 'KeyO', 'そ')
+    stroke(input, 'KeyU', 'そう')
+    stroke(input, 'KeyS', 'そうs')
+    stroke(input, 'KeyA', 'そうさ')
+    fireEvent.compositionEnd(input, { data: '匝瑳' })
+
+    expect(value()).toBe('そうさ')
+  })
+
+  it('2 問続けて変換しても、前の問題の打鍵列が混ざらない', () => {
+    const { input, value } = setup()
+
+    firstStroke(input, 'KeyS', 's')
+    stroke(input, 'KeyO', 'そ')
+    stroke(input, 'KeyU', 'そう')
+    stroke(input, 'KeyS', 'そうs')
+    stroke(input, 'KeyA', 'そうさ')
+    fireEvent.change(input, { target: { value: '匝瑳' } })
+    fireEvent.compositionEnd(input, { data: '匝瑳' })
+    expect(value()).toBe('そうさ')
+
+    // 解答欄をクリアして次の変換へ
+    fireEvent.change(input, { target: { value: '' } })
+    expect(value()).toBe('')
+
+    firstStroke(input, 'KeyK', 'k')
+    stroke(input, 'KeyA', 'か')
+    fireEvent.change(input, { target: { value: '蚊' } })
+    fireEvent.compositionEnd(input, { data: '蚊' })
+
+    expect(value()).toBe('か')
+  })
+
+  it('英数モードのローマ字直打ち（229 でない keydown）は従来どおり wanakana で変換する', async () => {
+    const user = userEvent.setup()
+    const { input, value } = setup()
+    await user.type(input, 'sousa')
+    expect(value()).toBe('そうさ')
+  })
+
+  it('code が取れない環境（古い Android など）では従来動作に落ちる', () => {
+    const { input, value } = setup()
+    fireEvent.keyDown(input, { key: 'Process', keyCode: 229, isComposing: false })
+    fireEvent.compositionStart(input)
+    fireEvent.change(input, { target: { value: '匝瑳' } })
+    fireEvent.compositionEnd(input, { data: '匝瑳' })
+
+    expect(value()).toBe('')
+  })
+})
+
 describe('Enter', () => {
   it('送信する', async () => {
     const user = userEvent.setup()
@@ -155,8 +380,9 @@ describe('Enter', () => {
 describe('その他', () => {
   it('案内文を添える', () => {
     const { input } = setup()
-    const hint = screen.getByText(/ローマ字でもひらがなでも入力できます/)
-    expect(hint).toHaveClass('answer-hint')
+    const hint = document.querySelector('.answer-hint') as HTMLElement
+    expect(hint).toHaveTextContent('ローマ字でもひらがなでも入力できます。漢字に変換されても読みに戻ります')
+    expect(hint).toHaveTextContent('IME を英数にすると変換なしで打てます')
     expect(input).toHaveAttribute('aria-describedby', hint.id)
   })
 
@@ -165,6 +391,23 @@ describe('その他', () => {
       <HiraganaInput value="" onChange={() => {}} onSubmit={() => {}} className="extra" ariaLabel="よみ" />,
     )
     expect(screen.getByLabelText('よみ')).toHaveClass('answer-input', 'extra')
+  })
+
+  it('ref で入力欄そのものを受け取れる（画面側がフォーカスを戻すため）', () => {
+    function WithRef() {
+      const ref = useRef<HTMLInputElement>(null)
+      return (
+        <>
+          <HiraganaInput value="" onChange={() => {}} onSubmit={() => {}} ariaLabel="よみ" ref={ref} />
+          <button type="button" onClick={() => ref.current?.focus()}>
+            もどす
+          </button>
+        </>
+      )
+    }
+    render(<WithRef />)
+    fireEvent.click(screen.getByRole('button', { name: 'もどす' }))
+    expect(screen.getByLabelText('よみ')).toHaveFocus()
   })
 
   it('disabled のときは打てない', async () => {

@@ -9,8 +9,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import type { ResultEntry } from '../engine/types.ts'
 import { DATA_VERSION } from '../engine/bank.ts'
 import { LocalRankingStore, rankingKey } from '../engine/ranking.ts'
-import { resetGeoSource } from '../geo/load.ts'
-import { JAPAN_FIXTURE } from '../geo/__fixtures__/geo.ts'
+import { RANKING_MODE_KEY } from '../hooks/useRankingMode.ts'
 import { EASY_12, META } from '../engine/__fixtures__/questions.ts'
 import { quizPath } from '../router.ts'
 import Ranking from './Ranking.tsx'
@@ -36,17 +35,14 @@ function put(setId: string, entries: ResultEntry[]): void {
   localStorage.setItem(rankingKey(setId), JSON.stringify(entries))
 }
 
-/** meta.json と geo/japan.json を返す fetch。地図を使わない検証では withMap=false */
-function installFetchMock(withMap = true): void {
+/** 都道府県名の引き当てに meta.json だけ返す（この画面は地図を使わない） */
+function installFetchMock(): void {
   vi.stubGlobal(
     'fetch',
     vi.fn((input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : String(input)
       if (url.endsWith('/meta.json')) {
         return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(META) })
-      }
-      if (withMap && url.endsWith('/geo/japan.json')) {
-        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(JAPAN_FIXTURE) })
       }
       return Promise.resolve({ ok: false, status: 404, json: () => Promise.reject(new Error('not found')) })
     }),
@@ -57,13 +53,18 @@ function rows(): HTMLElement[] {
   return [...document.querySelectorAll<HTMLElement>('.ranking__row')]
 }
 
+function el(selector: string): HTMLElement {
+  const found = document.querySelector<HTMLElement>(selector)
+  if (!found) throw new Error(`見つかりません: ${selector}`)
+  return found
+}
+
 function hash(): string {
   return window.location.hash
 }
 
 beforeEach(() => {
-  localStorage.clear()
-  resetGeoSource()
+  localStorage.clear() // 科目の設定（rankingMode）も毎回 easy に戻る
   window.location.hash = '#/ranking'
 })
 
@@ -74,23 +75,64 @@ afterEach(() => {
 
 describe('トップ（都道府県ごとの人数）', () => {
   beforeEach(() => {
-    // 千葉県は 2 セット・2 端末、東京都は 1 件、全国も 1 件
+    // 千葉県: easy 1 件（tok-a）＋ difficult 1 件（tok-b）、東京都: easy 1 件、全国: easy 1 件
     put(SET_12A, [entry({ entryId: 'a', setId: SET_12A, clientToken: 'tok-a' })])
     put(SET_12B, [entry({ entryId: 'b', setId: SET_12B, clientToken: 'tok-b' })])
     put(SET_13, [entry({ entryId: 'c', setId: SET_13, clientToken: 'tok-a' })])
     put(SET_00, [entry({ entryId: 'd', setId: SET_00, clientToken: 'tok-a' })])
   })
 
-  it('全国と都道府県の人数が並び、登録件数が見出しに出る', async () => {
+  it('地図は出さず、都道府県ボタンの一覧だけを出す', async () => {
     installFetchMock()
     render(<Ranking />)
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: '千葉県 2人が回答' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: '千葉県 1人が回答（easy）' })).toBeInTheDocument()
     })
-    expect(screen.getByRole('button', { name: '全国 1人が回答' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '東京都 1人が回答' })).toBeInTheDocument()
-    expect(screen.getByText(/登録 4 件/)).toBeInTheDocument()
+    expect(document.querySelector('.jp-map')).toBeNull()
+    expect(document.querySelector('.jp-map__svg')).toBeNull()
+    expect(document.querySelector('.pref-grid')).not.toBeNull()
+  })
+
+  it('選んだ科目の人数だけを数える（既定は easy）', async () => {
+    installFetchMock()
+    render(<Ranking />)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '千葉県 1人が回答（easy）' })).toBeInTheDocument()
+    })
+    expect(screen.getByRole('button', { name: '全国 1人が回答（easy）' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '東京都 1人が回答（easy）' })).toBeInTheDocument()
+    expect(screen.getByText(/easy ／ 登録 3 件/)).toBeInTheDocument()
+  })
+
+  it('difficult に切り替えると集計と色分けが切り替わる', async () => {
+    installFetchMock()
+    render(<Ranking />)
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '千葉県 1人が回答（easy）' })).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'difficult' }))
+
+    // difficult は千葉県だけ 1 件（tok-b）。東京都・全国は 0 件で押せない
+    expect(screen.getByRole('button', { name: '千葉県 1人が回答（difficult）' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: '東京都 0人が回答（difficult）' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '全国 0人が回答（difficult）' })).toBeDisabled()
+    expect(screen.getByText(/difficult ／ 登録 1 件/)).toBeInTheDocument()
+  })
+
+  it('登録がある都道府県だけラベルを蛍光マーカーで塗る', async () => {
+    installFetchMock()
+    render(<Ranking />)
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '千葉県 1人が回答（easy）' })).toBeInTheDocument()
+    })
+
+    const marked = [...document.querySelectorAll<HTMLElement>('.pref-grid__item .marker--yellow')]
+    expect(marked.map((m) => m.textContent)).toEqual(['全国 1人', '千葉県 1人', '東京都 1人'])
+    // 0 件の県は塗らず、押せない
+    expect(screen.getByRole('button', { name: '千葉県 1人が回答（easy）' })).toBeEnabled()
   })
 
   it('都道府県のボタンで #/ranking/{prefCode} へ移る', async () => {
@@ -98,31 +140,28 @@ describe('トップ（都道府県ごとの人数）', () => {
     render(<Ranking />)
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: '千葉県 2人が回答' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: '千葉県 1人が回答（easy）' })).toBeInTheDocument()
     })
-    fireEvent.click(screen.getByRole('button', { name: '千葉県 2人が回答' }))
+    fireEvent.click(screen.getByRole('button', { name: '千葉県 1人が回答（easy）' }))
     expect(hash()).toBe('#/ranking/12')
   })
 
-  it('地図の県をクリックしても詳細へ移る', async () => {
+  it('科目の選択は localStorage に残り、詳細画面にも引き継ぐ', async () => {
     installFetchMock()
     render(<Ranking />)
-
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: '東京都' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: '千葉県 1人が回答（easy）' })).toBeInTheDocument()
     })
-    fireEvent.click(screen.getByRole('button', { name: '東京都' }))
-    expect(hash()).toBe('#/ranking/13')
-  })
 
-  it('地図が読めなければ注記を出し、一覧だけで成立する', async () => {
-    installFetchMock(false)
-    render(<Ranking />)
+    fireEvent.click(screen.getByRole('button', { name: 'difficult' }))
+    expect(localStorage.getItem(RANKING_MODE_KEY)).toBe('d')
 
+    cleanup()
+    render(<Ranking prefCode="12" />)
     await waitFor(() => {
-      expect(screen.getByText(/地図を読み込めませんでした/)).toBeInTheDocument()
+      expect(rows()).toHaveLength(1)
     })
-    expect(screen.getByRole('button', { name: '千葉県 2人が回答' })).toBeInTheDocument()
+    expect(rows()[0].textContent).toContain('difficult')
   })
 
   it('登録の無い都道府県のボタンは押せない', async () => {
@@ -132,9 +171,9 @@ describe('トップ（都道府県ごとの人数）', () => {
     render(<Ranking />)
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: '東京都 1人が回答' })).toBeEnabled()
+      expect(screen.getByRole('button', { name: '東京都 1人が回答（easy）' })).toBeEnabled()
     })
-    expect(screen.getByRole('button', { name: '千葉県 0人が回答' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '千葉県 0人が回答（easy）' })).toBeDisabled()
   })
 })
 
@@ -149,44 +188,56 @@ describe('都道府県の詳細', () => {
     ])
   })
 
-  it('得点降順に並び、科目・範囲・登録日・挑戦リンクが出る', async () => {
+  it('得点降順に並び、範囲・登録日・挑戦リンクが出る（既定の easy）', async () => {
     installFetchMock()
     render(<Ranking prefCode="12" />)
 
     await waitFor(() => {
-      expect(rows()).toHaveLength(3)
+      expect(rows()).toHaveLength(2)
     })
-    expect(rows().map((r) => r.querySelector('.ranking__name')?.textContent)).toEqual(['はなこ', 'たろう', 'じろう'])
+    expect(rows().map((r) => r.querySelector('.ranking__name')?.textContent)).toEqual(['はなこ', 'たろう'])
     expect(rows()[0].textContent).toContain('100点')
     expect(rows()[0].textContent).toContain('easy')
     expect(rows()[0].textContent).toContain('千葉県')
     expect(rows()[0].textContent).toContain('2026-10-02')
-    // difficult の行は 6 桁スコープ → 市区町村名で出す
-    expect(rows()[2].textContent).toContain('difficult')
-    expect(rows()[2].textContent).toContain(EASY_12[0].display)
 
     const links = [...document.querySelectorAll<HTMLAnchorElement>('a.btn')]
-    expect(links).toHaveLength(3)
+    expect(links).toHaveLength(2)
     expect(links[0].getAttribute('href')).toBe(quizPath(SET_12A))
     expect(screen.getByRole('heading', { name: '千葉県のランキング' })).toBeInTheDocument()
   })
 
-  it('科目で絞り込める', async () => {
+  it('科目を切り替えるとストアから取り直す（6 桁スコープは市区町村名で出す）', async () => {
     installFetchMock()
     render(<Ranking prefCode="12" />)
     await waitFor(() => {
-      expect(rows()).toHaveLength(3)
+      expect(rows()).toHaveLength(2)
     })
 
     fireEvent.click(screen.getByRole('button', { name: 'difficult' }))
-    expect(rows()).toHaveLength(1)
+    await waitFor(() => {
+      expect(rows()).toHaveLength(1)
+    })
     expect(rows()[0].textContent).toContain('じろう')
+    expect(rows()[0].textContent).toContain('difficult')
+    expect(rows()[0].textContent).toContain(EASY_12[0].display)
 
     fireEvent.click(screen.getByRole('button', { name: 'easy' }))
-    expect(rows()).toHaveLength(2)
+    await waitFor(() => {
+      expect(rows()).toHaveLength(2)
+    })
+  })
 
-    fireEvent.click(screen.getByRole('button', { name: 'すべて' }))
-    expect(rows()).toHaveLength(3)
+  it('制限ありの行には ⏳ の印が付く', async () => {
+    put(SET_13, [
+      entry({ entryId: 'z', setId: SET_13, nickname: 'ぜろ', clientToken: 'tok-z', timeLimitMs: 20_000 }),
+    ])
+    installFetchMock()
+    render(<Ranking prefCode="13" />)
+    await waitFor(() => {
+      expect(rows()).toHaveLength(1)
+    })
+    expect(el('.ranking__time').textContent).toContain('⏳20秒')
   })
 
   it('登録が無ければ「まだ登録がありません。」', async () => {
@@ -202,7 +253,7 @@ describe('都道府県の詳細', () => {
     installFetchMock()
     render(<Ranking prefCode="12" />)
     await waitFor(() => {
-      expect(rows()).toHaveLength(3)
+      expect(rows()).toHaveLength(2)
     })
 
     expect(screen.getByRole('button', { name: 'もう一度（範囲選択へ）' })).toBeInTheDocument()

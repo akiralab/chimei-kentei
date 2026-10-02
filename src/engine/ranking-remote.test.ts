@@ -55,8 +55,21 @@ describe('RemoteRankingStore.submit', () => {
     expect(calls[0].init?.method).toBe('POST')
     const sent = JSON.parse(String(calls[0].init?.body)) as Record<string, unknown>
     // 採点はサーバーの仕事。score / correct / createdAt は送らない
-    expect(Object.keys(sent).sort()).toEqual(['answers', 'clientToken', 'nickname', 'setId'])
+    expect(Object.keys(sent).sort()).toEqual(['answers', 'clientToken', 'nickname', 'setId', 'timeLimitMs'])
+    // 時間制限は省略時 0（制限なし）として明示的に送る
+    expect(sent.timeLimitMs).toBe(0)
     expect(sent.answers).toEqual([{ questionId: 'c:120001:千市1', input: 'し1', ms: 3000, passed: false }])
+  })
+
+  it('時間制限は指定どおり送る', async () => {
+    const calls: { init?: RequestInit }[] = []
+    const store = new RemoteRankingStore('https://api.example.test', (_url, init) => {
+      calls.push({ init })
+      return Promise.resolve(response(201, { ok: true, rank: 1, entry: row() }))
+    })
+    await store.submit(entry({ timeLimitMs: 20_000 }))
+    const sent = JSON.parse(String(calls[0].init?.body)) as { timeLimitMs: number }
+    expect(sent.timeLimitMs).toBe(20_000)
   })
 
   it('409 は already_submitted、400 は invalid', async () => {

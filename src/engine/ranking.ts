@@ -2,8 +2,18 @@
  * ランキングの保存。デモでは localStorage に `ranking:{setId}` で置く。
  * テスト（node 環境）では localStorage が無いのでメモリ実装へフォールバックする。
  */
-import type { PrefectureStat, RankingRow, RankingStore, ResultEntry, SubmitResult } from './types.ts'
+import type {
+  Mode,
+  ModeCount,
+  PrefectureStat,
+  RankingRow,
+  RankingStore,
+  ResultEntry,
+  SubmitResult,
+} from './types.ts'
 import { SCOPE_NATIONWIDE, parseSetId } from './setId.ts'
+
+const MODES: Mode[] = ['e', 'd']
 
 export interface KeyValueStorage {
   getItem(key: string): string | null
@@ -107,6 +117,7 @@ export function toRow(entry: ResultEntry): RankingRow {
     timeMs: entry.timeMs,
     createdAt: entry.createdAt,
     ...(parsed ? { mode: parsed.mode, scope: parsed.scope } : {}),
+    ...(entry.timeLimitMs === undefined ? {} : { timeLimitMs: entry.timeLimitMs }),
   }
 }
 
@@ -175,39 +186,63 @@ export class LocalRankingStore implements RankingStore {
   }
 
   /** 端末内の `ranking:*` を全部読む。setId が読めないキーは捨てる */
-  private readAll(): { prefCode: string; entries: ResultEntry[] }[] {
-    const out: { prefCode: string; entries: ResultEntry[] }[] = []
+  private readAll(): { prefCode: string; mode: Mode; entries: ResultEntry[] }[] {
+    const out: { prefCode: string; mode: Mode; entries: ResultEntry[] }[] = []
     for (const key of rankingKeys(this.storage)) {
       const setId = key.slice(RANKING_KEY_PREFIX.length)
-      const prefCode = prefCodeOfSetId(setId)
-      if (prefCode === null) continue
-      out.push({ prefCode, entries: this.read(setId) })
+      const parsed = parseSetId(setId)
+      if (!parsed) continue
+      const prefCode = parsed.scope === SCOPE_NATIONWIDE ? SCOPE_NATIONWIDE : parsed.scope.slice(0, 2)
+      out.push({ prefCode, mode: parsed.mode, entries: this.read(setId) })
     }
     return out
   }
 
   async prefectureStats(): Promise<PrefectureStat[]> {
-    const counts = new Map<string, { entries: number; players: Set<string> }>()
-    for (const { prefCode, entries } of this.readAll()) {
+    interface Acc {
+      entries: number
+      players: Set<string>
+      byMode: Record<Mode, { entries: number; players: Set<string> }>
+    }
+    const counts = new Map<string, Acc>()
+    for (const { prefCode, mode, entries } of this.readAll()) {
       let hit = counts.get(prefCode)
       if (!hit) {
-        hit = { entries: 0, players: new Set<string>() }
+        hit = {
+          entries: 0,
+          players: new Set<string>(),
+          byMode: {
+            e: { entries: 0, players: new Set<string>() },
+            d: { entries: 0, players: new Set<string>() },
+          },
+        }
         counts.set(prefCode, hit)
       }
       for (const e of entries) {
         hit.entries += 1
         hit.players.add(e.clientToken)
+        hit.byMode[mode].entries += 1
+        hit.byMode[mode].players.add(e.clientToken)
       }
     }
+    const freeze = (v: { entries: number; players: Set<string> }): ModeCount => ({
+      entries: v.entries,
+      players: v.players.size,
+    })
     return [...counts]
-      .map(([prefCode, v]) => ({ prefCode, entries: v.entries, players: v.players.size }))
-      .filter((s) => s.entries > 0)
+      .map(([prefCode, v]) => ({
+        prefCode,
+        entries: v.entries,
+        players: v.players.size,
+        byMode: { e: freeze(v.byMode.e), d: freeze(v.byMode.d) },
+      }))
+      .filter((s) => s.entries > 0 || MODES.some((m) => s.byMode[m].entries > 0))
       .sort((a, b) => (a.prefCode < b.prefCode ? -1 : 1))
   }
 
-  async listByPrefecture(prefCode: string, limit = 30): Promise<RankingRow[]> {
+  async listByPrefecture(prefCode: string, limit = 30, mode?: Mode): Promise<RankingRow[]> {
     const rows = this.readAll()
-      .filter((g) => g.prefCode === prefCode)
+      .filter((g) => g.prefCode === prefCode && (mode === undefined || g.mode === mode))
       .flatMap((g) => g.entries)
     return rows.sort(compareEntries).slice(0, limit).map(toRow)
   }

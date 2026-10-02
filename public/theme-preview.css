@@ -1,30 +1,17 @@
 /* ==========================================================================
-
-/* ==========================================================================
-   tokens.css — 答案用紙テーマの CSS 変数（正本）
+   theme-preview.css — 結合コピー（正本ではない）
    --------------------------------------------------------------------------
-   方向性: 行政文書風ではなく「中高の小テスト用紙をポップに再現」。
-   黒板色の地にクリーム色の答案用紙が 1 枚。赤ペン・蛍光マーカー・得点スタンプ。
-   ダークモードは作らない（用紙の白地が主役なので反転させる意味がない）。
-   部品は theme.css 側。クラス名の契約は CONTRACT.md。
-   ========================================================================== */
+   正本は src/styles/tokens.css と src/styles/theme.css。
+   このファイルはその 2 本をこの順に単純連結したコピーで、
+   public/theme-preview.html を Vite のビルド成果物に依存させず
+   （file:// でも /chimei-kentei/theme-preview.html でも）表示するためだけに存在する。
+   public/ は Vite がそのままコピーするので、ここから src/ は参照できない。
 
-/* ==========================================================================
-   tokens.css — 答案用紙テーマの CSS 変数（正本）
-   --------------------------------------------------------------------------
-   方向性: 行政文書風ではなく「中高の小テスト用紙をポップに再現」。
-   黒板色の地にクリーム色の答案用紙が 1 枚。赤ペン・蛍光マーカー・得点スタンプ。
-   ダークモードは作らない（用紙の白地が主役なので反転させる意味がない）。
-   部品は theme.css 側。クラス名の契約は CONTRACT.md。
-   ========================================================================== */
+   ここを直接編集しない。正本を直したら、このコメントブロックを保ったまま
+   その後ろを下のコマンドの出力で置き換える:
 
-/* ==========================================================================
-   tokens.css — 答案用紙テーマの CSS 変数（正本）
-   --------------------------------------------------------------------------
-   方向性: 行政文書風ではなく「中高の小テスト用紙をポップに再現」。
-   黒板色の地にクリーム色の答案用紙が 1 枚。赤ペン・蛍光マーカー・得点スタンプ。
-   ダークモードは作らない（用紙の白地が主役なので反転させる意味がない）。
-   部品は theme.css 側。クラス名の契約は CONTRACT.md。
+     cat src/styles/tokens.css src/styles/theme.css
+
    ========================================================================== */
 
 /* ==========================================================================
@@ -504,9 +491,23 @@ body {
 .answer-hint {
   margin: calc(var(--space-2) * -1) 0 var(--space-4);
   font-family: var(--font-hand);
-  font-size: var(--fs-sm);
+  /* 用紙幅 720px で添え書きごと 1 行に収めるため --fs-sm より 1 段小さい */
+  font-size: var(--fs-xs);
   line-height: 1.6;
+  letter-spacing: 0;
   color: var(--color-pencil);
+}
+
+/* 「IME を英数に」の添え書きは物理キーボードの話。狭い画面では 1 行に
+   収まらないので落とす（スマホ縦ではこの下の規則で .answer-hint ごと消える）*/
+.answer-hint__mac {
+  margin-left: 0.25em;
+}
+
+@media (max-width: 560px) {
+  .answer-hint__mac {
+    display: none;
+  }
 }
 
 /* --------------------------------------------------------------------------
@@ -818,6 +819,35 @@ body {
   border: 0;
   border-radius: var(--radius-pill);
   cursor: pointer;
+}
+
+/* 画面幅で長短を切り替えるラベル。狭い画面では 1 行に収めて縦を節約する
+   （画面側は両方を書き、どちらを見せるかはここで決める） */
+.mode-switch__abbr {
+  display: none;
+}
+
+@media (max-width: 719px) {
+  .mode-switch {
+    display: flex;
+    width: 100%;
+  }
+
+  .mode-switch__item {
+    flex: 1 1 0;
+    justify-content: center;
+    padding: var(--space-2);
+    min-width: 0;
+    white-space: nowrap;
+  }
+
+  .mode-switch__full {
+    display: none;
+  }
+
+  .mode-switch__abbr {
+    display: inline;
+  }
 }
 
 .mode-switch__item.is-selected {
@@ -1278,4 +1308,13 @@ body {
   .board .layout__map {
     height: 20dvh;
   }
+}
+
+/* ランキング一覧: 結果がある都道府県はボタン全体を蛍光黄で塗る（ラベルの .marker を手がかりにする） */
+.pref-grid__item:has(> .marker) {
+  background-color: var(--color-marker-yellow);
+  border-color: color-mix(in srgb, var(--color-ink) 25%, var(--color-marker-yellow));
+}
+.pref-grid__item:has(> .marker) > .marker {
+  background: none;
 }

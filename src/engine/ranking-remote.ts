@@ -2,7 +2,7 @@
  * 共有ランキング API（infra/API.md）を叩く RankingStore。
  * 採点はサーバーが行うので、送るのは setId と各問の入力だけ（score / correct は送らない）。
  */
-import type { PrefectureStat, RankingRow, RankingStore, ResultEntry, SubmitResult } from './types.ts'
+import type { Mode, PrefectureStat, RankingRow, RankingStore, ResultEntry, SubmitResult } from './types.ts'
 
 /** 1 リクエストあたりの待ち時間。これを超えたら network 扱い */
 export const REMOTE_TIMEOUT_MS = 8000
@@ -53,6 +53,8 @@ export class RemoteRankingStore implements RankingStore {
       setId: entry.setId,
       nickname: entry.nickname,
       clientToken: entry.clientToken,
+      // 0 ＝ 制限なし。サーバーは ms の許容範囲の判定にこれを使う
+      timeLimitMs: entry.timeLimitMs ?? 0,
       answers: entry.answers.map((a) => ({
         questionId: a.questionId,
         input: a.input,
@@ -98,8 +100,10 @@ export class RemoteRankingStore implements RankingStore {
     return Array.isArray(parsed.prefectures) ? parsed.prefectures : []
   }
 
-  async listByPrefecture(prefCode: string, limit = 30): Promise<RankingRow[]> {
-    return this.listRows(`?prefCode=${encodeURIComponent(prefCode)}&limit=${String(limit)}`)
+  /** mode を渡すとサーバー側で科目を絞ってから上位を返す */
+  async listByPrefecture(prefCode: string, limit = 30, mode?: Mode): Promise<RankingRow[]> {
+    const modeQuery = mode === undefined ? '' : `&mode=${mode}`
+    return this.listRows(`?prefCode=${encodeURIComponent(prefCode)}&limit=${String(limit)}${modeQuery}`)
   }
 
   private async listRows(query: string): Promise<RankingRow[]> {

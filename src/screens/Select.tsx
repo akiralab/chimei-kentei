@@ -3,9 +3,10 @@ import type { BankMeta, Mode } from '../engine/types.ts'
 import { DATA_VERSION, loadMeta } from '../engine/bank.ts'
 import { SCOPE_NATIONWIDE, buildSetId, randomSeed, todaySeed } from '../engine/setId.ts'
 import { navigate, quizPath } from '../router.ts'
+import { TIME_LIMIT_CHOICES, useTimeLimit } from '../hooks/useTimeLimit.ts'
 import type { PrefectureCollection } from '../geo/load.ts'
 import { defaultGeoSource } from '../geo/load.ts'
-import JapanMap from '../components/JapanMap.tsx'
+import RegionPicker from '../components/RegionPicker.tsx'
 
 const CANDIDATE_LIMIT = 8
 
@@ -15,10 +16,11 @@ export default function Select() {
   const [scope, setScope] = useState<string>(SCOPE_NATIONWIDE)
   const [mode, setMode] = useState<Mode>('e')
   const [query, setQuery] = useState('')
-  // 地図は主、47 ボタンの一覧は折りたたみ。地図が読めなかったときだけ最初から開く
+  // 時間制限は端末の設定（既定は「制限なし」）。Quiz は出題開始時に readTimeLimit() で読み直す
+  const [timeLimitMs, setTimeLimitMs] = useTimeLimit()
+  // 地図（地方 → 都道府県の 2 段階）。読めなくても RegionPicker がボタングリッドで成立させる
   const [japan, setJapan] = useState<PrefectureCollection | null>(null)
   const [mapLoading, setMapLoading] = useState(true)
-  const [listOpen, setListOpen] = useState(false)
 
   useEffect(() => {
     let alive = true
@@ -72,11 +74,13 @@ export default function Select() {
 
   /** 地図で光らせる県。市区町村を選んでいるときはその所属県 */
   const mapSelected = nationwide ? undefined : scope.slice(0, 2)
-  const mapFailed = !mapLoading && japan === null
-  /** 地図が無ければ一覧が唯一の動線なので常に開く */
-  const showList = listOpen || mapFailed
 
   const scopeLabel = nationwide ? '全国' : (selectedCity?.name ?? selectedPref?.name ?? scope)
+  /** 「制限なし」→「なし」。見出しや切替で「制限: 制限なし」と重ならないように頭を落とす */
+  const shortLimit = (label: string) => label.replace(/^制限/, '')
+  const timeLimitLabel = shortLimit(
+    TIME_LIMIT_CHOICES.find((c) => c.value === timeLimitMs)?.label ?? TIME_LIMIT_CHOICES[0].label,
+  )
 
   const start = () => {
     if (blocked) return
@@ -117,64 +121,26 @@ export default function Select() {
       <div className="paper__header">
         <h1 className="paper__title">範囲・科目</h1>
         <p className="paper__subtitle">
-          いまの範囲: {scopeLabel} ／ 科目: {mode === 'e' ? 'easy（市区町村名）' : 'difficult（大字・町名）'}
+          いまの範囲: {scopeLabel} ／ 科目: {mode === 'e' ? 'easy（市区町村名）' : 'difficult（大字・町名）'} ／ 制限:{' '}
+          {timeLimitLabel}
         </p>
       </div>
 
-      <div className="jp-map">
-        {japan ? (
-          <JapanMap
-            collection={japan}
-            selected={mapSelected}
-            onSelect={(prefCode) => {
-              setScope(prefCode)
-              setQuery('')
-            }}
-          />
-        ) : (
-          <p className="map-note">{mapLoading ? '地図を読み込み中…' : '地図を読み込めませんでした。一覧から選んでください。'}</p>
-        )}
-      </div>
-
-      <div className="map-actions">
-        <button
-          type="button"
-          className={nationwide ? 'pref-grid__item is-selected' : 'pref-grid__item'}
-          onClick={() => {
-            setScope(SCOPE_NATIONWIDE)
-            setQuery('')
-          }}
-        >
-          全国
-        </button>
-        <button
-          type="button"
-          className="btn btn--ghost"
-          aria-expanded={showList}
-          onClick={() => setListOpen((open) => !open)}
-        >
-          一覧から選ぶ
-        </button>
-      </div>
-
-      {/* .paper の直下に置く（theme.css の `.paper > .pref-grid` が用紙内スクロールを担う） */}
-      {showList && (
-        <div className="pref-grid">
-          {meta.prefectures.map((p) => (
-            <button
-              key={p.code}
-              type="button"
-              className={scope === p.code ? 'pref-grid__item is-selected' : 'pref-grid__item'}
-              onClick={() => {
-                setScope(p.code)
-                setQuery('')
-              }}
-            >
-              {p.name}
-            </button>
-          ))}
-        </div>
-      )}
+      <RegionPicker
+        collection={japan}
+        prefectures={meta.prefectures.map((p) => ({ code: p.code, name: p.name }))}
+        selected={mapSelected}
+        loading={mapLoading}
+        nationwide={nationwide}
+        onNationwide={() => {
+          setScope(SCOPE_NATIONWIDE)
+          setQuery('')
+        }}
+        onSelect={(prefCode) => {
+          setScope(prefCode)
+          setQuery('')
+        }}
+      />
 
       <label className="field">
         <span className="field__label">市区町村で絞る</span>
@@ -210,21 +176,56 @@ export default function Select() {
         <button
           type="button"
           className={mode === 'e' ? 'mode-switch__item is-selected' : 'mode-switch__item'}
+          aria-label="easy（市区町村名）"
           onClick={() => setMode('e')}
         >
-          easy（市区町村名）
+          <span className="mode-switch__full" aria-hidden="true">
+            easy（市区町村名）
+          </span>
+          <span className="mode-switch__abbr" aria-hidden="true">
+            easy
+          </span>
         </button>
         <button
           type="button"
           className={mode === 'd' ? 'mode-switch__item is-selected' : 'mode-switch__item'}
+          aria-label="difficult（市区町村名 ＋ 大字・町名）"
           onClick={() => setMode('d')}
           disabled={nationwide}
         >
-          difficult（市区町村名 ＋ 大字・町名）
+          <span className="mode-switch__full" aria-hidden="true">
+            difficult（市区町村名 ＋ 大字・町名）
+          </span>
+          <span className="mode-switch__abbr" aria-hidden="true">
+            difficult
+          </span>
         </button>
       </div>
 
-      {nationwide && <p>全国 × difficult はこのデモでは選べません。都道府県か市区町村を選んでください。</p>}
+      {/* 時間制限。科目の切替と同じ見た目で 1 段下に並べる（既定は「制限なし」） */}
+      <div className="mode-switch">
+        {TIME_LIMIT_CHOICES.map((choice) => (
+          <button
+            key={choice.value}
+            type="button"
+            className={timeLimitMs === choice.value ? 'mode-switch__item is-selected' : 'mode-switch__item'}
+            aria-pressed={timeLimitMs === choice.value}
+            aria-label={`時間制限: ${shortLimit(choice.label)}`}
+            onClick={() => setTimeLimitMs(choice.value)}
+          >
+            <span className="mode-switch__full" aria-hidden="true">
+              時間制限: {shortLimit(choice.label)}
+            </span>
+            {/* 狭い画面でも「なし」単独だと何の設定か分からないので、短縮版は元のラベルを使う */}
+            <span className="mode-switch__abbr" aria-hidden="true">
+              {choice.label}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {/* 普段は出さない。全国のまま difficult が残っている（＝本当に始められない）ときだけ */}
+      {blocked && <p>全国 × difficult はこのデモでは選べません。都道府県か市区町村を選んでください。</p>}
 
       <p>
         <button type="button" className="btn btn--primary" onClick={start} disabled={blocked}>

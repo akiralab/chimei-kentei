@@ -4,9 +4,11 @@ import { buildQuestionSet } from '../engine/bank.ts'
 import { parseSetId } from '../engine/setId.ts'
 import { defaultStorage, getClientToken, isValidNickname } from '../engine/ranking.ts'
 import { defaultRankingStore, isRemoteRanking } from '../engine/ranking-factory.ts'
+import { appendWrongFromEntry } from '../engine/wrongList.ts'
 import { readNickname } from '../hooks/useNickname.ts'
 import { readAnswerSheet } from '../hooks/answerSheet.ts'
-import { COVER_PATH, SELECT_PATH, absoluteUrl, navigate, quizPath } from '../router.ts'
+import { readQuizTimeLimit, readTimeLimit } from '../hooks/useTimeLimit.ts'
+import { COVER_PATH, REVIEW_PATH, SELECT_PATH, absoluteUrl, navigate, quizPath } from '../router.ts'
 
 const KANJI_NUM = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十']
 const RANKING_LIMIT = 20
@@ -46,6 +48,8 @@ export default function Result({ setId }: { setId: string }) {
   const [shareUrl, setShareUrl] = useState<string | null>(null)
   const clientToken = useMemo(() => getClientToken(), [])
   const nickname = readNickname()
+  /** この回に使った時間制限。出題時の控えが無ければ今の設定で代用する */
+  const timeLimitMs = useMemo(() => readQuizTimeLimit(setId) ?? readTimeLimit(), [setId])
 
   const error = parsed ? loadError : `セットIDが読めません: ${setId}`
   const score = useMemo(() => (records ?? []).filter((r) => r.correct).length * 10, [records])
@@ -114,7 +118,7 @@ export default function Result({ setId }: { setId: string }) {
       return
     }
     setSubmitting(true)
-    const res = await store.submit({
+    const entry = {
       setId,
       nickname,
       score,
@@ -122,12 +126,16 @@ export default function Result({ setId }: { setId: string }) {
       answers: records,
       clientToken,
       createdAt: new Date().toISOString(),
-    })
+      timeLimitMs,
+    }
+    const res = await store.submit(entry)
     setSubmitting(false)
     if (res.ok) {
       storage.setItem(submittedKey(setId), res.entryId)
       setMyEntryId(res.entryId)
       setRegistered(true)
+      // 「間違えた問題」は登録した答案だけ記録する（練習の回は残さない）
+      if (set) appendWrongFromEntry(set, { ...entry, entryId: res.entryId })
       setNotice(`${res.rank} 位で登録しました。`)
       await loadRanking(res.entryId)
       return
@@ -188,7 +196,9 @@ export default function Result({ setId }: { setId: string }) {
           <span className="field__label">氏名</span>
           <span className="field__input">{nickname || '名無し'}</span>
         </span>
-        <span className="paper__subtitle">所要時間 {formatDuration(timeMs)}</span>
+        <span className="paper__subtitle">
+          所要時間 {formatDuration(timeMs)} ／ 制限 {timeLimitMs > 0 ? `${Math.round(timeLimitMs / 1000)}秒` : 'なし'}
+        </span>
       </div>
 
       <p className="stamp">
@@ -240,6 +250,11 @@ export default function Result({ setId }: { setId: string }) {
         <button type="button" className="btn btn--ghost" onClick={() => navigate(SELECT_PATH)}>
           もう一度（別の問題）
         </button>
+        {registered && (
+          <button type="button" className="btn btn--ghost" onClick={() => navigate(REVIEW_PATH)}>
+            間違えた問題を見る
+          </button>
+        )}
         <button type="button" className="btn btn--ghost" onClick={() => navigate(COVER_PATH)}>
           タイトルへ戻る
         </button>
@@ -268,7 +283,15 @@ export default function Result({ setId }: { setId: string }) {
                       {me && <span className="sr-only">（あなた）</span>}
                     </span>
                     <span className="ranking__score">{e.score}点</span>
-                    <span className="ranking__time">{formatDuration(e.timeMs)}</span>
+                    <span className="ranking__time">
+                      {formatDuration(e.timeMs)}
+                      {e.timeLimitMs !== undefined && e.timeLimitMs > 0 && (
+                        <>
+                          {' '}
+                          <span title="1 問あたりの制限つき">⏳{Math.round(e.timeLimitMs / 1000)}秒</span>
+                        </>
+                      )}
+                    </span>
                   </li>
                 )
               })}

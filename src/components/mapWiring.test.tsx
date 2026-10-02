@@ -3,7 +3,7 @@
  * 画面への組み込み（配線）の確認。App.flow.test.tsx は geo を 404 にしたまま通る設計なので、
  * 「地図データが実際に読める」経路はこちらで押さえる。
  *
- * - 範囲・科目: 日本地図が描かれ、47 ボタンの一覧は閉じている。地図クリックで scope が変わる
+ * - 範囲・科目: 地方 → 都道府県 の 2 段階で scope が変わる
  * - 範囲・科目: 「今日の10問」が選択中の範囲・科目を引き継ぐ（不具合報告の再発防止）
  * - 出題: 左パネルに県内地図が出て、解答後に情報カードの中身が出る
  */
@@ -72,26 +72,43 @@ afterEach(() => {
 })
 
 describe('範囲・科目 への組み込み', () => {
-  it('地図が読めたときは一覧（47 ボタン）を畳み、地図クリックで範囲が変わる', async () => {
+  it('地方 → 都道府県 の 2 段階で範囲が変わる', async () => {
     renderAt('#/select')
     await waitFor(() => {
       expect(document.querySelector('.jp-map__svg')).not.toBeNull()
     })
 
-    // 一覧（.pref-grid）は閉じている。地図の path 自身が role=button なので、
-    // 「千葉県 ボタンが無いこと」では判定できない
-    expect(document.querySelector('.pref-grid')).toBeNull()
+    // 段階 1。フィクスチャの 12・13 はどちらも関東なので、出る地方は関東だけ
+    expect(screen.getByText('地方をえらぶ')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '千葉県' })).toBeNull()
     expect(screen.getByRole('button', { name: '全国' })).toBeInTheDocument()
     expect(screen.getByLabelText('市区町村で絞る')).toBeInTheDocument()
 
-    // 地図の千葉県を押すと範囲が切り替わる
-    fireEvent.click(screen.getByRole('button', { name: '千葉県' }))
+    // 段階 2 へ
+    fireEvent.click(screen.getByRole('button', { name: '関東地方' }))
+    expect(screen.getByText('関東の都道府県をえらぶ')).toBeInTheDocument()
+
+    // 地図のチップでもボタングリッドでも選べる。ここはグリッド側を押す
+    fireEvent.click([...document.querySelectorAll('.jp-map__cell')].find((b) => b.textContent === '千葉県')!)
     expect(screen.getByText(/いまの範囲: 千葉県/)).toBeInTheDocument()
-    expect(document.querySelector('.jp-map__path--selected')).toHaveAttribute('data-pref-code', '12')
+    expect(document.querySelector('.jp-map__path--selected[data-pref-code="12"]')).not.toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: '始める' }))
     await settle()
     expect(window.location.hash).toMatch(new RegExp(`^#/q/${DATA_VERSION}-e-12-\\d{4}$`))
+  })
+
+  it('「地方を選び直す」で段階 1 に戻る', async () => {
+    renderAt('#/select')
+    await waitFor(() => {
+      expect(document.querySelector('.jp-map__svg')).not.toBeNull()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: '関東地方' }))
+    fireEvent.click(screen.getByRole('button', { name: '地方を選び直す' }))
+
+    expect(screen.getByText('地方をえらぶ')).toBeInTheDocument()
+    expect(document.querySelector('.jp-map__grid')).toBeNull()
   })
 
   /** 不具合報告「東京都を選んだのに山梨県が出た」の再発防止。原因は全国固定だった「今日の10問」 */
@@ -104,7 +121,8 @@ describe('範囲・科目 への組み込み', () => {
     // 既定（範囲未選択）は全国 easy
     expect(screen.getByRole('button', { name: '今日の10問（全国・easy）' })).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: '東京都' }))
+    fireEvent.click(screen.getByRole('button', { name: '関東地方' }))
+    fireEvent.click([...document.querySelectorAll('.jp-map__cell')].find((b) => b.textContent === '東京都')!)
     fireEvent.click(screen.getByRole('button', { name: '今日の10問（東京都・easy）' }))
     await settle()
     expect(window.location.hash).toBe(`#/q/${DATA_VERSION}-e-13-${todaySeed()}`)
@@ -116,22 +134,12 @@ describe('範囲・科目 への組み込み', () => {
       expect(document.querySelector('.jp-map__svg')).not.toBeNull()
     })
 
-    fireEvent.click(screen.getByRole('button', { name: '千葉県' }))
+    fireEvent.click(screen.getByRole('button', { name: '関東地方' }))
+    fireEvent.click([...document.querySelectorAll('.jp-map__cell')].find((b) => b.textContent === '千葉県')!)
     fireEvent.click(screen.getByRole('button', { name: /^difficult/ }))
     fireEvent.click(screen.getByRole('button', { name: '今日の10問（千葉県・difficult）' }))
     await settle()
     expect(window.location.hash).toBe(`#/q/${DATA_VERSION}-d-12-${todaySeed()}`)
-  })
-
-  it('「一覧から選ぶ」で 47 ボタンが開く', async () => {
-    renderAt('#/select')
-    await waitFor(() => {
-      expect(document.querySelector('.jp-map__svg')).not.toBeNull()
-    })
-
-    fireEvent.click(screen.getByRole('button', { name: '一覧から選ぶ' }))
-    // 地図の path と一覧のボタンで同名が 2 つになる
-    expect(screen.getAllByRole('button', { name: '東京都' })).toHaveLength(2)
   })
 })
 

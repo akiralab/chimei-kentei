@@ -1,6 +1,6 @@
 import { isValidNickname } from '../engine/ranking.ts'
 import { useNickname } from '../hooks/useNickname.ts'
-import { SELECT_PATH, navigate } from '../router.ts'
+import { RANKING_PATH, REVIEW_PATH, SELECT_PATH, navigate } from '../router.ts'
 
 /**
  * 表紙。「小テストが配られた瞬間」の 1 枚。
@@ -48,11 +48,12 @@ export default function Cover() {
         </button>
       </p>
 
-      {/* 順位表は別画面（担当が作成中）。ここはハッシュを張るだけで、
-          router が '#/ranking' を知るまでは表紙に留まる */}
       <p className="cover__sub-actions">
-        <a className="btn btn--ghost cover__ranking" href="#/ranking">
+        <a className="btn btn--ghost cover__ranking" href={RANKING_PATH}>
           ランキングを見る
+        </a>
+        <a className="btn btn--ghost" href={REVIEW_PATH}>
+          間違えた問題
         </a>
       </p>
 

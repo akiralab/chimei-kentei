@@ -200,63 +200,220 @@
 }
 
 /* --------------------------------------------------------------------------
-   3. .jp-map — 範囲・科目 画面の日本地図
-   スマホ(375x667)で 1 画面に収めるため画面高基準。広い画面では 420px まで。
+   3. .jp-map — 範囲・科目 画面の 2 段階ピッカー（RegionPicker）
+   --------------------------------------------------------------------------
+   段階 1（地方）→ 段階 2（都道府県）。狙いは精密さではなく **押しやすさ**。
+   - チップは HTML の <button>。最小 44px・1rem 以上を CSS で保証する
+     （SVG の <text> だと viewBox 倍率に引きずられてサイズを約束できない）
+   - 位置は JS がピクセルで決める（SVG の meet と同じ計算＋重なりほどき）。
+     CSS は見た目だけ持つ
+   - 地方色は用紙（クリーム）に載る淡いトーン 9 色。選択中は --color-marker-blue
    -------------------------------------------------------------------------- */
+
+:root {
+  --region-hokkaido: #cfe0f0;
+  --region-tohoku: #d4e7cf;
+  --region-kanto: #f7dcc6;
+  --region-hokuriku: #ded9ee;
+  --region-chubu: #f4ecc0;
+  --region-kinki: #f3d3d3;
+  --region-chugoku-shikoku: #c9e4df;
+  --region-kyushu: #ead3ea;
+  --region-okinawa: #f6d9e6;
+  --region-other: #ece7da;
+}
 
 .jp-map {
   margin: var(--space-1) 0;
-  padding: var(--space-2);
+  padding: var(--space-1) var(--space-2);
 }
 
-/* 日本は縦長なので、広い画面では台紙の方を絞って余白を減らす
-   （preserveAspectRatio=meet では高さが地図の大きさを決めるため、幅を広げても地図は大きくならない） */
+/* 段階 2 は 広い画面で「地図 ＋ ボタングリッド」を横並びにして縦を節約する */
+.jp-map__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* 段階 2 は縦に積むと「小さすぎる地図 ＋ 切れたグリッド」になるので、
+   スマホでも横並びにする。地図は位置を示す役、選ぶのはグリッド */
+.jp-map__body:has(> .jp-map__grid) {
+  display: grid;
+  grid-template-columns: 0.75fr 1.25fr;
+  /* stretch にすると「グリッドの中身の高さ」で行が伸びて max-height が効かなくなる */
+  align-items: start;
+}
+
 @media (min-width: 720px) {
-  .jp-map {
-    max-width: 26rem;
-    margin-inline: auto;
+  .jp-map__body:has(> .jp-map__grid) {
+    grid-template-columns: 1.1fr 1fr;
+    align-items: start;
+  }
+}
+
+.jp-map__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+  min-height: 30px;
+}
+
+/* 見出し行に同居する「全国」。.pref-grid__item と同じ見た目だが縦を詰めている */
+.jp-map__all {
+  min-height: 32px;
+  padding: var(--space-1) var(--space-4);
+  font-family: var(--font-hand);
+  font-size: var(--fs-md);
+  line-height: 1.2;
+  white-space: nowrap;
+  color: var(--color-ink);
+  background: color-mix(in srgb, var(--color-paper) 70%, #fff);
+  border: 1.5px solid var(--color-paper-line);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.jp-map__all:hover {
+  border-color: var(--color-pencil);
+}
+
+.jp-map__all--selected {
+  font-weight: 600;
+  background: var(--color-marker-blue);
+  border-color: var(--color-ink);
+  box-shadow: inset 0 0 0 1px var(--color-ink);
+}
+
+.jp-map__step {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  color: var(--color-pencil);
+}
+
+.jp-map__back.btn {
+  min-height: 34px;
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--fs-xs);
+}
+
+/* 地図とチップの重ね合わせ領域。高さはここで決め、SVG は中で meet で収まる */
+.jp-map__stage {
+  position: relative;
+  width: 100%;
+  /* 段階 1 は 9 個のチップ（44px）を 3 列 3 段に置ける高さが要る */
+  height: min(30dvh, 260px);
+}
+
+/* 段階 2 は下（広い画面では横）にボタングリッドが来るので少し低く */
+.jp-map__stage--zoom {
+  height: min(21dvh, 200px);
+}
+
+@media (min-width: 720px) and (min-height: 760px) {
+  .jp-map__stage {
+    height: 300px;
+  }
+
+  .jp-map__stage--zoom {
+    height: 260px;
+  }
+}
+
+/* 縦に余裕のない端末（375x667 など）は削る。他の行（科目切替・ボタン）を残すため */
+/* 縦に余裕のない端末（375x667 など）は削る。
+   段階 1 は 44px のチップ 3 段（約 145px）が下限なので、そこまでしか詰められない */
+@media (max-height: 720px) {
+  .jp-map__stage {
+    height: 22dvh;
+    min-height: 146px;
+  }
+
+  .jp-map__stage--zoom {
+    height: 21dvh;
+    min-height: 0;
+  }
+
+  .jp-map__body:has(> .jp-map__grid) .jp-map__grid {
+    max-height: 21dvh;
   }
 }
 
 .jp-map__svg {
   display: block;
   width: 100%;
-  height: min(26dvh, 240px);
+  height: 100%;
 }
 
-/* 縦に余裕のない端末（375x667 など）はさらに削る。他の行（科目切替・ボタン）を残すため */
-@media (max-height: 720px) {
-  .jp-map__svg {
-    height: 18dvh;
-  }
+/* 横並びのときはグリッドを地図と同じ高さに揃える（溢れたらグリッドの中でスクロール） */
+.jp-map__body:has(> .jp-map__grid) .jp-map__grid {
+  max-height: min(21dvh, 200px);
 }
 
 @media (min-width: 720px) and (min-height: 760px) {
-  .jp-map__svg {
-    height: min(38dvh, 420px);
+  .jp-map__body:has(> .jp-map__grid) .jp-map__grid {
+    max-height: 260px;
   }
 }
 
+@media (min-width: 720px) {
+  .jp-map__body:has(> .jp-map__grid) .jp-map__grid {
+    grid-template-columns: repeat(auto-fill, minmax(5.5rem, 1fr));
+  }
+}
+
+/* スマホの横並びは 2 列。セルの文字は少し詰める */
+@media (max-width: 719px) {
+  .jp-map__body:has(> .jp-map__grid) .jp-map__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .jp-map__cell {
+    font-size: var(--fs-md);
+  }
+}
+
+/* 地方ごとの塗り分け。輪郭は墨の 45%（map-muni と共通の指定が上にある） */
 .jp-map__path {
   cursor: pointer;
 }
 
-/* hover / focus は同じ見た目（マウスとキーボードで手応えを揃える） */
-.jp-map__path--active {
-  fill: var(--color-marker-blue);
-  stroke: var(--color-ink);
-  stroke-width: 1.5;
+.jp-map__path--hokkaido {
+  fill: var(--region-hokkaido);
 }
-
-/* path の outline はブラウザが bbox の矩形で描いてしまうので切る。
-   代わりに onFocus で --active が付く（塗り＋輪郭が変わる）ので指標は残る */
-.jp-map__path:focus-visible {
-  outline: none;
+.jp-map__path--tohoku {
+  fill: var(--region-tohoku);
+}
+.jp-map__path--kanto {
+  fill: var(--region-kanto);
+}
+.jp-map__path--hokuriku {
+  fill: var(--region-hokuriku);
+}
+.jp-map__path--chubu {
+  fill: var(--region-chubu);
+}
+.jp-map__path--kinki {
+  fill: var(--region-kinki);
+}
+.jp-map__path--chugoku-shikoku {
+  fill: var(--region-chugoku-shikoku);
+}
+.jp-map__path--kyushu {
+  fill: var(--region-kyushu);
+}
+.jp-map__path--okinawa {
+  fill: var(--region-okinawa);
+}
+.jp-map__path--other {
+  fill: var(--region-other);
 }
 
 /* 選択中。色だけに頼らないよう輪郭も濃くする */
 .jp-map__path--selected {
-  fill: var(--color-marker-pink);
+  fill: var(--color-marker-blue);
   stroke: var(--color-ink);
   stroke-width: 2;
 }
@@ -271,15 +428,131 @@
   vector-effect: non-scaling-stroke;
 }
 
-.jp-map__label {
-  font-family: var(--font-pen);
-  fill: var(--color-ink);
-  /* paint-order で縁取りを文字の下に回す（用紙色の縁 → 細い県の上でも読める） */
-  stroke: var(--color-paper);
-  paint-order: stroke;
-  text-anchor: middle;
-  dominant-baseline: middle;
-  pointer-events: none;
+/* ---- チップ（地方名 / 都道府県名）---------------------------------------
+   left/top は JS がピクセルで与える。translate(-50%,-50%) で中心合わせ */
+.jp-map__chip {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  min-width: 44px;
+  min-height: 44px;
+  padding: var(--space-1) var(--space-3);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-hand);
+  font-size: 1rem;
+  line-height: 1.2;
+  white-space: nowrap;
+  color: var(--color-ink);
+  background: var(--color-paper);
+  border: 1.5px solid var(--color-rule-strong);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-chip);
+  cursor: pointer;
+}
+
+/* 狭い画面は左右の padding を詰める（文字サイズは 1rem のまま落とさない）。
+   RegionPicker の CHIP_REGION_NARROW と対応 */
+@media (max-width: 719px) {
+  .jp-map__chip {
+    padding: var(--space-1) var(--space-2);
+  }
+}
+
+.jp-map__chip:hover {
+  background: color-mix(in srgb, var(--color-marker-blue) 35%, var(--color-paper));
+  border-color: var(--color-ink);
+}
+
+.jp-map__chip--selected {
+  font-weight: 600;
+  background: var(--color-marker-blue);
+  border-color: var(--color-ink);
+  box-shadow: inset 0 0 0 1px var(--color-ink);
+}
+
+/* チップの地色を地方色でほんのり染める（地図の塗りとの対応をつける） */
+.jp-map__chip--hokkaido {
+  background: color-mix(in srgb, var(--region-hokkaido) 55%, var(--color-paper));
+}
+.jp-map__chip--tohoku {
+  background: color-mix(in srgb, var(--region-tohoku) 55%, var(--color-paper));
+}
+.jp-map__chip--kanto {
+  background: color-mix(in srgb, var(--region-kanto) 55%, var(--color-paper));
+}
+.jp-map__chip--hokuriku {
+  background: color-mix(in srgb, var(--region-hokuriku) 55%, var(--color-paper));
+}
+.jp-map__chip--chubu {
+  background: color-mix(in srgb, var(--region-chubu) 55%, var(--color-paper));
+}
+.jp-map__chip--kinki {
+  background: color-mix(in srgb, var(--region-kinki) 55%, var(--color-paper));
+}
+.jp-map__chip--chugoku-shikoku {
+  background: color-mix(in srgb, var(--region-chugoku-shikoku) 55%, var(--color-paper));
+}
+.jp-map__chip--kyushu {
+  background: color-mix(in srgb, var(--region-kyushu) 55%, var(--color-paper));
+}
+.jp-map__chip--okinawa {
+  background: color-mix(in srgb, var(--region-okinawa) 55%, var(--color-paper));
+}
+
+/* 選択中は地方色より優先（同じ詳細度なので後に置く） */
+.jp-map__chip.jp-map__chip--selected {
+  background: var(--color-marker-blue);
+}
+
+/* 段階 2 は 1 枠に最大 9 県入るので、チップをひと回り小さくする（下のグリッドが保険） */
+.jp-map__stage--zoom .jp-map__chip {
+  min-width: 44px;
+  min-height: 36px;
+  padding: 2px var(--space-2);
+  font-size: var(--fs-md);
+}
+
+/* ---- 段階 2 のボタングリッド（地図と同じ選択ができる保険）---------------- */
+.jp-map__grid {
+  margin-top: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
+  gap: var(--space-2);
+  /* 1 画面に収めるため、長い地方はこの中だけでスクロールする */
+  max-height: 12dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.jp-map__cell {
+  min-height: 48px;
+  min-width: 0;
+  padding: var(--space-1) var(--space-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-hand);
+  font-size: var(--fs-lg);
+  line-height: 1.2;
+  white-space: nowrap;
+  color: var(--color-ink);
+  background: var(--color-paper);
+  border: 1.5px solid var(--color-paper-line);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.jp-map__cell:hover {
+  background: color-mix(in srgb, var(--color-marker-blue) 30%, var(--color-paper));
+  border-color: var(--color-pencil);
+}
+
+.jp-map__cell--selected {
+  font-weight: 600;
+  background: var(--color-marker-blue);
+  border-color: var(--color-ink);
+  box-shadow: inset 0 0 0 1px var(--color-ink);
 }
 
 /* --------------------------------------------------------------------------

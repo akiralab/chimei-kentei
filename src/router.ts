@@ -1,6 +1,6 @@
 /**
  * ハッシュルーティング。'#/' 表紙 / '#/select' 範囲・科目 / '#/q/{setId}' 出題 / '#/result/{setId}' 結果 /
- * '#/ranking' これまでのランキング / '#/ranking/{prefCode}' 都道府県の詳細。
+ * '#/ranking' これまでのランキング / '#/ranking/{prefCode}' 都道府県の詳細 / '#/review' 間違えた問題。
  * 不明なハッシュは表紙へ。
  */
 export type Route =
@@ -10,10 +10,12 @@ export type Route =
   | { name: 'result'; setId: string }
   | { name: 'ranking' }
   | { name: 'rankingPref'; prefCode: string }
+  | { name: 'review' }
 
 export const COVER_PATH = '#/'
 export const SELECT_PATH = '#/select'
 export const RANKING_PATH = '#/ranking'
+export const REVIEW_PATH = '#/review'
 
 /** prefCode は 2 桁（'00' は全国） */
 export function rankingPrefPath(prefCode: string): string {
@@ -34,6 +36,7 @@ export function parseHash(hash: string): Route {
   if (path === '/') return { name: 'cover' }
   if (path === '/select') return { name: 'select' }
   if (path === '/ranking') return { name: 'ranking' }
+  if (path === '/review') return { name: 'review' }
   const rp = /^\/ranking\/(\d{2})$/.exec(path)
   if (rp) return { name: 'rankingPref', prefCode: rp[1] }
   const q = /^\/q\/([^/?#]+)$/.exec(path)

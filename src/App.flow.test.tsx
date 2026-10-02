@@ -20,6 +20,8 @@ import { todaySeed } from './engine/setId.ts'
 import { makeDifficult, makeEasy } from './engine/__fixtures__/questions.ts'
 import { answerSheetKey } from './hooks/answerSheet.ts'
 import { NICKNAME_KEY } from './hooks/useNickname.ts'
+import { NO_TIME_LIMIT, TIME_LIMIT_KEY } from './hooks/useTimeLimit.ts'
+import { readWrongList } from './engine/wrongList.ts'
 import { quizPath, resultPath } from './router.ts'
 import App from './App.tsx'
 
@@ -173,6 +175,9 @@ beforeEach(() => {
   writeText.mockClear()
   localStorage.clear()
   sessionStorage.clear()
+  // 既定は「制限なし」だが、この通しテストの多くは 20 秒制限の挙動を見ている。
+  // 制限なしの経路は「時間制限」describe で個別に確かめる
+  localStorage.setItem(TIME_LIMIT_KEY, String(TIME_LIMIT_MS))
   goto('#/')
 })
 
@@ -264,9 +269,51 @@ describe('範囲・科目', () => {
   it('全国 × difficult は選べない（ボタン無効＋注意文）', async () => {
     await openSelect()
 
+    // 全国のあいだ difficult は押せない。注意文は普段出さず、
+    // 「都道府県で difficult → 全国に戻した」＝本当に始められない状態のときだけ出す
     expect(screen.getByRole('button', { name: /^difficult/ })).toBeDisabled()
+    expect(screen.queryByText(/全国 × difficult はこのデモでは選べません/)).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: '千葉県' }))
+    fireEvent.click(screen.getByRole('button', { name: /^difficult/ }))
+    fireEvent.click(screen.getByRole('button', { name: '全国' }))
+
     expect(screen.getByText(/全国 × difficult はこのデモでは選べません/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '始める' })).toBeDisabled()
     expect(hash()).toBe('#/select')
+  })
+
+  it('時間制限の既定は「なし」で、出題画面にタイマーが出ない', async () => {
+    // beforeEach はタイマー系テストのために 20 秒を入れているので、
+    // 「未設定のときの既定」を見るためにここで消してから開く
+    localStorage.removeItem(TIME_LIMIT_KEY)
+    await openSelect()
+
+    expect(screen.getByRole('button', { name: '時間制限: なし' })).toHaveClass('is-selected')
+    // 「時間制限: なし」ボタンとも当たるので、見出し行を名指しで見る
+    expect(el('.paper__subtitle').textContent).toContain('制限: なし')
+
+    fireEvent.click(screen.getByRole('button', { name: '千葉県' }))
+    fireEvent.click(screen.getByRole('button', { name: '始める' }))
+    await settle()
+
+    expect(document.querySelector('.timer')).toBeNull()
+    expect(document.querySelector('.timer__label')).toBeNull()
+  })
+
+  it('時間制限に「20秒」を選ぶと出題画面にタイマーが出る', async () => {
+    await openSelect()
+
+    fireEvent.click(screen.getByRole('button', { name: '時間制限: 20秒' }))
+    await settle()
+    expect(screen.getByRole('button', { name: '時間制限: 20秒' })).toHaveClass('is-selected')
+
+    fireEvent.click(screen.getByRole('button', { name: '千葉県' }))
+    fireEvent.click(screen.getByRole('button', { name: '始める' }))
+    await settle()
+
+    expect(document.querySelector('.timer')).not.toBeNull()
+    expect(el('.timer__label').textContent).toContain('のこり 20 秒')
   })
 
   it('都道府県を選べば difficult で始められる', async () => {
@@ -709,5 +756,120 @@ describe('もう一度', () => {
     expect(hash()).toMatch(new RegExp(`^#/q/${DATA_VERSION}-e-13-\\d{4}$`))
     expect(el('.q-number').textContent).toBe('問一 / 十')
     expect(el('.answer-input')).toHaveValue('')
+  })
+})
+
+// --------------------------------------------- 9. 時間制限なし（アプリの既定）
+
+describe('時間制限なし', () => {
+  beforeEach(() => {
+    localStorage.setItem(TIME_LIMIT_KEY, String(NO_TIME_LIMIT))
+  })
+
+  it('砂時計・残り秒・タイマーバーを出さず「時間制限なし」と出る', async () => {
+    await openQuiz(SET_ID)
+
+    expect(document.querySelector('.timer')).toBeNull()
+    expect(document.querySelector('.timer__label')).toBeNull()
+    expect(screen.getByText('時間制限なし')).toBeInTheDocument()
+    expect(el('.paper__header').textContent).toContain('制限: なし')
+  })
+
+  it('放置しても自動パスしない', async () => {
+    await openQuiz(SET_ID)
+
+    await settle(TIME_LIMIT_MS * 2)
+    expect(all('.mark')).toHaveLength(0)
+    expect(el('.q-number').textContent).toBe('問一 / 十')
+  })
+
+  it('パスは 20000 ではなく実測の経過時間で記録される', async () => {
+    await openQuiz(SET_ID)
+
+    await settle(3000)
+    fireEvent.click(screen.getByRole('button', { name: '解答' }))
+    await settle(FEEDBACK_MS)
+    for (let i = 1; i < EXPECTED.questions.length; i++) await answerOne(EXPECTED.questions[i].answer)
+
+    const records = JSON.parse(sessionStorage.getItem(answerSheetKey(SET_ID)) ?? '[]')
+    expect(records[0]).toMatchObject({ input: '', passed: true, correct: false })
+    expect(records[0].ms).toBeGreaterThanOrEqual(3000)
+    expect(records[0].ms).toBeLessThan(TIME_LIMIT_MS)
+  })
+
+  it('結果の帯に「制限 なし」が出る', async () => {
+    localStorage.setItem(NICKNAME_KEY, 'たろう')
+    await openQuiz(SET_ID)
+    for (const q of EXPECTED.questions) await answerOne(q.answer)
+    await settle()
+
+    expect(el('.paper__header').textContent).toContain('制限 なし')
+  })
+})
+
+// ------------------------------------------- 10. 間違えた問題（#/review）
+
+describe('間違えた問題', () => {
+  /** 1 問目だけ誤答して結果画面まで進む */
+  async function playWithOneWrong(): Promise<void> {
+    localStorage.setItem(NICKNAME_KEY, 'たろう')
+    await openQuiz(SET_ID)
+    await answerOne('でたらめ')
+    for (let i = 1; i < EXPECTED.questions.length; i++) await answerOne(EXPECTED.questions[i].answer)
+    await settle()
+  }
+
+  it('ランキングに登録すると誤答が記録され、#/review に出る', async () => {
+    await playWithOneWrong()
+    expect(hash()).toBe(resultPath(SET_ID))
+    // 登録するまでは記録しない
+    expect(readWrongList()).toHaveLength(0)
+
+    fireEvent.click(screen.getByRole('button', { name: 'ランキングに登録' }))
+    await settle()
+
+    const list = readWrongList()
+    expect(list).toHaveLength(1)
+    expect(list[0]).toMatchObject({
+      questionId: EXPECTED.questions[0].id,
+      input: 'でたらめ',
+      answer: EXPECTED.questions[0].answer,
+      prefCode: '12',
+      mode: 'e',
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: '間違えた問題を見る' }))
+    await settle()
+
+    expect(hash()).toBe('#/review')
+    expect(all('.review__row')).toHaveLength(1)
+    expect(el('.review__row').textContent).toContain(EXPECTED.questions[0].display)
+    expect(el('.review__row').textContent).toContain('でたらめ')
+  })
+
+  it('登録しなければ記録しない', async () => {
+    await playWithOneWrong()
+
+    fireEvent.click(screen.getByRole('button', { name: 'タイトルへ戻る' }))
+    await settle()
+
+    expect(hash()).toBe('#/')
+    expect(readWrongList()).toHaveLength(0)
+  })
+
+  it('表紙から「間違えた問題」へ行ける', async () => {
+    localStorage.setItem(NICKNAME_KEY, 'たろう')
+    renderApp()
+    await settle()
+
+    const link = screen.getByRole('link', { name: '間違えた問題' })
+    expect(link).toHaveAttribute('href', '#/review')
+
+    // jsdom は <a href="#..."> のクリックでハッシュを動かさないので、同じ遷移をルータ経由で起こす
+    goto(link.getAttribute('href') as string)
+    await settle()
+
+    expect(screen.getByRole('heading', { name: '間違えた問題' })).toBeInTheDocument()
+    expect(screen.getByText(/まだ記録がありません/)).toBeInTheDocument()
   })
 })

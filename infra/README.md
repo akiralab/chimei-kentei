@@ -25,10 +25,12 @@ DynamoDB  RankingTable（PAY_PER_REQUEST・PITR 有効）
      pk = pref#{prefCode}
      sk = entry#{createdAt}#{entryId}    … 都道府県インデックス（本体の写し）
      sk = player#{clientToken}           … 人数の印。attribute_not_exists(pk) で distinct を数える
-     pk = stats#pref, sk = {prefCode}    … カウンタ。entries は常に +1、players は印が新規のときだけ +1
+     sk = player#{mode}#{clientToken}    … 科目別の人数の印
+     pk = stats#pref, sk = {prefCode}    … 合計カウンタ。entries は常に +1、players は印が新規のときだけ +1
+     pk = stats#pref, sk = {prefCode}#{mode} … 科目別カウンタ（合計行と両立する）
 ```
 
-エンドポイントは 3 つ: `POST /results`（登録）、`GET /results?setId=…`（そのセットの順位表）、`GET /results?prefCode=…`（都道府県を横断した上位 30 件）、`GET /stats/prefectures`（都道府県ごとの件数・人数）。
+エンドポイントは 4 つ: `POST /results`（登録。任意の `timeLimitMs` つき）、`GET /results?setId=…`（そのセットの順位表）、`GET /results?prefCode=…&mode=e`（都道府県を横断した上位 30 件・科目はサーバー側で絞る）、`GET /stats/prefectures`（都道府県ごとの件数・人数を合計と科目別 `byMode` で返す）。
 登録時に `pref#{prefCode}` の索引と `stats#pref` のカウンタも更新する（本体の TransactWrite とは別リクエスト。失敗しても登録は 201 のまま）。
 
 採点をサーバーに寄せているので、クライアントは得点を申告できない（改ざんしても順位は変わらない）。

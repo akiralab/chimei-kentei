@@ -37,6 +37,15 @@ const ALLOWED = /[^ぁ-ゖー]/gu
 /** 末尾に残ったローマ字（まだかなになっていない打鍵） */
 const TRAILING_ROMAJI = /[A-Za-z]+$/u
 
+/** かな（ひらがな・カタカナ・長音・濁点）だけでできているか。踊り字も通す */
+const KANA_ONLY = /^[ぁ-ゖァ-ヺーゝゞヽヾ\u3099\u309A]*$/u
+
+/** 物理キーの code → ローマ字 1 文字。'\b' は 1 文字戻す、'' は無視 */
+const KEY_LETTER = /^Key([A-Z])$/
+
+/** 打鍵列の戻し記号（Backspace）*/
+const STROKE_BACK = '\b'
+
 export interface HiraganaParts {
   /** 確定したひらがな（＋「ー」）。これが入力欄の「値」 */
   kana: string
@@ -87,4 +96,39 @@ export function toHiraganaStrict(raw: string): string {
   // pending だけを「もう続きは来ない」前提で変換しなおす（IMEMode を外す）
   const flushed = keepHiraganaOnly(katakanaToHiragana(toKana(fold(pending))))
   return kana + flushed
+}
+
+
+/**
+ * 確定文字列が「かなだけ」か。日本語 IME が漢字に変換して確定したかどうかの判定に使う。
+ * 半角カタカナや濁点分離も NFKC で畳んでから見るので、`ｿｳｻ` も true。
+ */
+export function isKanaOnly(input: string): boolean {
+  return KANA_ONLY.test(fold(input))
+}
+
+/**
+ * 物理キーの `KeyboardEvent.code` をローマ字 1 文字へ。
+ *
+ * IME の変換中は `key` が 'Process' や undefined になるので使えないが、`code` は
+ * 押した物理キーをそのまま返す。JIS 配列でも US 配列でも英字キーの code は同じ
+ * （`KeyS` など）なので、配列を気にせずローマ字列を復元できる。
+ *
+ * 戻り値: ローマ字 1 文字 ／ `'\b'`（1 文字戻す）／ `''`（無視するキー）。
+ * スペース・変換・無変換・Enter・矢印などは '' を返して打鍵列に混ぜない。
+ */
+export function romajiFromKeyCode(code: string): string {
+  const letter = KEY_LETTER.exec(code)
+  if (letter) return letter[1].toLowerCase()
+  if (code === 'Minus') return '-' // 長音「ー」。toKana が '-' を 'ー' に直す
+  if (code === 'Backspace') return STROKE_BACK
+  return ''
+}
+
+/** 打鍵列（ローマ字）に 1 キー分を足す。Backspace は末尾を 1 文字削る */
+export function pushStroke(buffer: string, code: string): string {
+  const ch = romajiFromKeyCode(code)
+  if (ch === '') return buffer
+  if (ch === STROKE_BACK) return buffer.slice(0, -1)
+  return buffer + ch
 }

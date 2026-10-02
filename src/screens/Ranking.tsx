@@ -1,29 +1,25 @@
 /**
  * これまでのランキング。
  *
- * - `#/ranking` … 都道府県ごとの回答人数（＋全国）。地図か 47 ボタンの一覧から都道府県をえらぶ
- * - `#/ranking/{prefCode}` … その都道府県の上位 30 件。科目（easy / difficult）で絞り込める
+ * - `#/ranking` … 科目（easy / difficult）ごとに、都道府県の回答人数を一覧で見せる
+ * - `#/ranking/{prefCode}` … その都道府県・その科目の上位 30 件
  *
- * 保存先は Local（localStorage）か Remote（共有ランキング API）か。
- * どちらでも `RankingStore` の prefectureStats() / listByPrefecture() を呼ぶだけで、画面は同じ。
+ * 地図は置かない（範囲選択の主役なので、ここでは一覧だけにする）。
+ * 科目は localStorage（useRankingMode）でトップと詳細を引き継ぐ。
+ * 絞り込みはストア側（Remote なら API の `?mode=`）で行うので、画面は受け取った順に並べるだけ。
  */
 import { useEffect, useMemo, useState } from 'react'
 import type { BankMeta, Mode, PrefectureStat, RankingRow } from '../engine/types.ts'
 import { loadMeta } from '../engine/bank.ts'
 import { SCOPE_NATIONWIDE } from '../engine/setId.ts'
 import { defaultRankingStore } from '../engine/ranking-factory.ts'
-import type { PrefectureCollection } from '../geo/load.ts'
-import { defaultGeoSource } from '../geo/load.ts'
-import JapanMap from '../components/JapanMap.tsx'
+import { useRankingMode } from '../hooks/useRankingMode.ts'
 import { COVER_PATH, RANKING_PATH, SELECT_PATH, navigate, quizPath, rankingPrefPath } from '../router.ts'
 
 /** 都道府県の詳細で一度に見せる件数 */
 const PREF_LIMIT = 30
 
 const store = defaultRankingStore()
-
-/** 科目の絞り込み。'all' は絞り込まない */
-type ModeFilter = 'all' | Mode
 
 function formatDuration(ms: number): string {
   const total = Math.round(ms / 1000)
@@ -38,23 +34,25 @@ function formatDate(iso: string): string {
   return `${d.getFullYear()}-${m}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-function modeLabel(mode: Mode | undefined): string {
-  if (mode === 'e') return 'easy'
-  if (mode === 'd') return 'difficult'
-  return '—'
+function modeName(mode: Mode): string {
+  return mode === 'e' ? 'easy' : 'difficult'
+}
+
+/** その科目の件数・人数。byMode が無い古いデータは合計で代用する */
+function countOf(stat: PrefectureStat | undefined, mode: Mode): { entries: number; players: number } {
+  if (!stat) return { entries: 0, players: 0 }
+  return stat.byMode?.[mode] ?? { entries: stat.entries, players: stat.players }
 }
 
 export default function Ranking({ prefCode }: { prefCode?: string } = {}) {
+  const [mode, setMode] = useRankingMode()
   const [meta, setMeta] = useState<BankMeta | null>(null)
   const [stats, setStats] = useState<PrefectureStat[] | null>(null)
   const [rows, setRows] = useState<RankingRow[] | null>(null)
-  const [japan, setJapan] = useState<PrefectureCollection | null>(null)
-  const [mapLoading, setMapLoading] = useState(true)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [modeFilter, setModeFilter] = useState<ModeFilter>('all')
 
-  // 都道府県名・市区町村名の引き当てに使う（地図が無くても一覧は出せる）
+  // 都道府県名・市区町村名の引き当てに使う
   useEffect(() => {
     let alive = true
     loadMeta()
@@ -69,36 +67,17 @@ export default function Ranking({ prefCode }: { prefCode?: string } = {}) {
     }
   }, [])
 
-  // 地図データ。トップ画面でだけ使う
-  useEffect(() => {
-    if (prefCode !== undefined) return
-    let alive = true
-    defaultGeoSource()
-      .japan()
-      .then((fc) => {
-        if (!alive) return
-        setJapan(fc)
-        setMapLoading(false)
-      })
-      .catch(() => {
-        if (alive) setMapLoading(false)
-      })
-    return () => {
-      alive = false
-    }
-  }, [prefCode])
-
-  // ランキング本体。Remote だと失敗しうるので必ず error を見せられるようにする
-  // 初期状態が loading = true / error = null なので、ここで setState を先打ちしない
-  // （App が prefCode を key に渡すため、別の都道府県へ移ると作り直される）
+  // ランキング本体。詳細は科目が変わるたびに取り直す（絞り込みはストア側の仕事）
   useEffect(() => {
     let alive = true
-    const load = prefCode === undefined ? store.prefectureStats() : store.listByPrefecture(prefCode, PREF_LIMIT)
+    const load =
+      prefCode === undefined ? store.prefectureStats() : store.listByPrefecture(prefCode, PREF_LIMIT, mode)
     load
       .then((result) => {
         if (!alive) return
         if (prefCode === undefined) setStats(result as PrefectureStat[])
         else setRows(result as RankingRow[])
+        setError(null)
         setLoading(false)
       })
       .catch(() => {
@@ -109,7 +88,7 @@ export default function Ranking({ prefCode }: { prefCode?: string } = {}) {
     return () => {
       alive = false
     }
-  }, [prefCode])
+  }, [prefCode, mode])
 
   const statOf = useMemo(() => new Map((stats ?? []).map((s) => [s.prefCode, s])), [stats])
   const cityName = useMemo(() => new Map((meta?.cities ?? []).map((c) => [c.lgCode, c.name])), [meta])
@@ -125,6 +104,23 @@ export default function Ranking({ prefCode }: { prefCode?: string } = {}) {
 
   const titleOf = (code: string): string =>
     code === SCOPE_NATIONWIDE ? '全国' : (prefName.get(code) ?? `都道府県 ${code}`)
+
+  /** easy / difficult の切替。トップと詳細で同じものを出す */
+  const modeSwitch = (
+    <div className="mode-switch">
+      {(['e', 'd'] as Mode[]).map((m) => (
+        <button
+          key={m}
+          type="button"
+          className={mode === m ? 'mode-switch__item is-selected' : 'mode-switch__item'}
+          aria-pressed={mode === m}
+          onClick={() => setMode(m)}
+        >
+          {modeName(m)}
+        </button>
+      ))}
+    </div>
+  )
 
   const footer = (
     <p>
@@ -145,29 +141,17 @@ export default function Ranking({ prefCode }: { prefCode?: string } = {}) {
   // ------------------------------------------------------ 都道府県の詳細
 
   if (prefCode !== undefined) {
-    const shown = (rows ?? []).filter((r) => modeFilter === 'all' || r.mode === modeFilter)
+    const shown = rows ?? []
     return (
       <div className="paper">
         <div className="paper__header">
           <h1 className="paper__title">{titleOf(prefCode)}のランキング</h1>
           <p className="paper__subtitle">
-            上位 {PREF_LIMIT} 件まで ／ 得点の高い順（同点なら所要時間の短い順）
+            {modeName(mode)} ／ 上位 {PREF_LIMIT} 件まで ／ 得点の高い順（同点なら所要時間の短い順）
           </p>
         </div>
 
-        <div className="mode-switch">
-          {(['all', 'e', 'd'] as ModeFilter[]).map((f) => (
-            <button
-              key={f}
-              type="button"
-              className={modeFilter === f ? 'mode-switch__item is-selected' : 'mode-switch__item'}
-              aria-pressed={modeFilter === f}
-              onClick={() => setModeFilter(f)}
-            >
-              {f === 'all' ? 'すべて' : f === 'e' ? 'easy' : 'difficult'}
-            </button>
-          ))}
-        </div>
+        {modeSwitch}
 
         {loading && <p>読み込み中…</p>}
         {error && <p className="pen-comment">{error}</p>}
@@ -181,10 +165,19 @@ export default function Ranking({ prefCode }: { prefCode?: string } = {}) {
                 <span className="ranking__rank">{i + 1}</span>
                 <span className="ranking__name">{r.nickname}</span>
                 <span className="ranking__score">{r.score}点</span>
-                <span className="ranking__time">{formatDuration(r.timeMs)}</span>
+                <span className="ranking__time">
+                  {formatDuration(r.timeMs)}
+                  {r.timeLimitMs !== undefined && r.timeLimitMs > 0 && (
+                    <>
+                      {' '}
+                      <span title="1 問あたりの制限つき">⏳{Math.round(r.timeLimitMs / 1000)}秒</span>
+                    </>
+                  )}
+                </span>
                 {/* 4 列グリッドの 2 行目として全幅に置く（科目・範囲・登録日・挑戦リンク） */}
                 <span className="q-pref" style={{ gridColumn: '1 / -1', margin: 0 }}>
-                  {modeLabel(r.mode)} ／ {scopeLabel(r.scope)} ／ {formatDate(r.createdAt)}{' '}
+                  {r.mode === undefined ? '—' : modeName(r.mode)} ／ {scopeLabel(r.scope)} ／{' '}
+                  {formatDate(r.createdAt)}{' '}
                   <a className="btn btn--ghost" href={quizPath(r.setId)}>
                     この問題に挑戦
                   </a>
@@ -201,31 +194,45 @@ export default function Ranking({ prefCode }: { prefCode?: string } = {}) {
 
   // ------------------------------------------------------ トップ（都道府県ごとの人数）
 
-  const nationwide = statOf.get(SCOPE_NATIONWIDE)
-  const totalEntries = (stats ?? []).reduce((sum, s) => sum + s.entries, 0)
+  const nationwide = countOf(statOf.get(SCOPE_NATIONWIDE), mode)
+  const totalEntries = (stats ?? []).reduce((sum, s) => sum + countOf(s, mode).entries, 0)
   // 全国 → 47 都道府県（meta の順。meta が読めないときは実績のある県だけ）
   const listed: string[] = meta
     ? meta.prefectures.map((p) => p.code)
     : (stats ?? []).map((s) => s.prefCode).filter((c) => c !== SCOPE_NATIONWIDE)
+
+  /**
+   * 1 県分のボタン。登録がある県はラベルを蛍光マーカーで塗って見分けられるようにする
+   * （styles は別担当の持ち物なので、新しい修飾子を作らず既存の .marker を当てる）。
+   */
+  const prefButton = (code: string) => {
+    const count = countOf(statOf.get(code), mode)
+    const label = `${titleOf(code)} ${count.entries > 0 ? `${count.players}人` : '—'}`
+    return (
+      <li key={code}>
+        <button
+          type="button"
+          className="pref-grid__item"
+          disabled={count.entries === 0}
+          aria-label={`${titleOf(code)} ${count.players}人が回答（${modeName(mode)}）`}
+          onClick={() => navigate(rankingPrefPath(code))}
+        >
+          {count.entries > 0 ? <span className="marker marker--yellow">{label}</span> : label}
+        </button>
+      </li>
+    )
+  }
 
   return (
     <div className="paper">
       <div className="paper__header">
         <h1 className="paper__title">これまでのランキング</h1>
         <p className="paper__subtitle">
-          登録 {totalEntries} 件 ／ 都道府県をえらぶと上位 {PREF_LIMIT} 件が見られる
+          {modeName(mode)} ／ 登録 {totalEntries} 件 ／ 都道府県をえらぶと上位 {PREF_LIMIT} 件が見られる
         </p>
       </div>
 
-      <div className="jp-map">
-        {japan ? (
-          <JapanMap collection={japan} onSelect={(code) => navigate(rankingPrefPath(code))} />
-        ) : (
-          <p className="map-note">
-            {mapLoading ? '地図を読み込み中…' : '地図を読み込めませんでした。一覧から選んでください。'}
-          </p>
-        )}
-      </div>
+      {modeSwitch}
 
       {loading && <p>読み込み中…</p>}
       {error && <p className="pen-comment">{error}</p>}
@@ -236,29 +243,18 @@ export default function Ranking({ prefCode }: { prefCode?: string } = {}) {
             <button
               type="button"
               className="pref-grid__item"
-              disabled={!nationwide}
-              aria-label={`全国 ${nationwide?.players ?? 0}人が回答`}
+              disabled={nationwide.entries === 0}
+              aria-label={`全国 ${nationwide.players}人が回答（${modeName(mode)}）`}
               onClick={() => navigate(rankingPrefPath(SCOPE_NATIONWIDE))}
             >
-              全国 {nationwide ? `${nationwide.players}人` : '—'}
+              {nationwide.entries > 0 ? (
+                <span className="marker marker--yellow">全国 {nationwide.players}人</span>
+              ) : (
+                '全国 —'
+              )}
             </button>
           </li>
-          {listed.map((code) => {
-            const stat = statOf.get(code)
-            return (
-              <li key={code}>
-                <button
-                  type="button"
-                  className="pref-grid__item"
-                  disabled={!stat}
-                  aria-label={`${titleOf(code)} ${stat?.players ?? 0}人が回答`}
-                  onClick={() => navigate(rankingPrefPath(code))}
-                >
-                  {titleOf(code)} {stat ? `${stat.players}人` : '—'}
-                </button>
-              </li>
-            )
-          })}
+          {listed.map(prefButton)}
         </ol>
       )}
 

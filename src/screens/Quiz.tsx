@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { AnswerRecord, Question, QuestionSet } from '../engine/types.ts'
-import { QUESTIONS_PER_SET, TIME_LIMIT_MS } from '../engine/types.ts'
+import { QUESTIONS_PER_SET, UNLIMITED_MAX_MS } from '../engine/types.ts'
 import { buildQuestionSet } from '../engine/bank.ts'
 import { grade } from '../engine/grading.ts'
 import { SCOPE_NATIONWIDE, parseSetId } from '../engine/setId.ts'
 import { readNickname } from '../hooks/useNickname.ts'
 import { answerSheetKey, writeAnswerSheet } from '../hooks/answerSheet.ts'
+import { readTimeLimit, writeQuizTimeLimit } from '../hooks/useTimeLimit.ts'
 import { COVER_PATH, SELECT_PATH, navigate, resultPath } from '../router.ts'
 import MunicipalityMap from '../components/MunicipalityMap.tsx'
 import MunicipalityInfo from '../components/MunicipalityInfo.tsx'
@@ -47,7 +48,10 @@ export default function Quiz({ setId }: { setId: string }) {
   const [input, setInput] = useState('')
   const [records, setRecords] = useState<AnswerRecord[]>([])
   const [feedback, setFeedback] = useState<Feedback | null>(null)
-  const [remainMs, setRemainMs] = useState(TIME_LIMIT_MS)
+  /** その回の時間制限。0 ＝ 制限なし。出題中に設定を変えても揺れないよう 1 度だけ読む */
+  const timeLimitMs = useMemo(() => readTimeLimit(), [])
+  const limited = timeLimitMs > 0
+  const [remainMs, setRemainMs] = useState(timeLimitMs)
   /** 「タイトルへ戻る」を押した後。タイマーと結果への自動遷移を止めるだけのフラグ */
   const [exiting, setExiting] = useState(false)
   const startedAt = useRef(0)
@@ -75,13 +79,14 @@ export default function Quiz({ setId }: { setId: string }) {
   const total = set?.questions.length ?? QUESTIONS_PER_SET
   const question = set && index < total ? set.questions[index] : undefined
 
-  // 問ごとのカウントダウン。0 で自動パス
+  // 問ごとの計測開始。制限ありのときだけカウントダウンし、0 で自動パスする
   useEffect(() => {
     if (!question || feedback || exiting) return
     startedAt.current = Date.now()
     inputRef.current?.focus()
+    if (!limited) return
     const timer = setInterval(() => {
-      const left = TIME_LIMIT_MS - (Date.now() - startedAt.current)
+      const left = timeLimitMs - (Date.now() - startedAt.current)
       if (left > 0) {
         setRemainMs(left)
         return
@@ -90,12 +95,12 @@ export default function Quiz({ setId }: { setId: string }) {
       setRemainMs(0)
       setRecords((prev) => [
         ...prev,
-        { questionId: question.id, input: '', correct: false, ms: TIME_LIMIT_MS, passed: true },
+        { questionId: question.id, input: '', correct: false, ms: timeLimitMs, passed: true },
       ])
       setFeedback({ correct: false, answer: question.answer })
     }, 100)
     return () => clearInterval(timer)
-  }, [question, feedback, exiting])
+  }, [question, feedback, exiting, limited, timeLimitMs])
 
   // ○× を 1 秒見せてから次の問へ
   useEffect(() => {
@@ -103,25 +108,33 @@ export default function Quiz({ setId }: { setId: string }) {
     const t = setTimeout(() => {
       setFeedback(null)
       setInput('')
-      setRemainMs(TIME_LIMIT_MS)
+      setRemainMs(timeLimitMs)
       setIndex((i) => i + 1)
     }, FEEDBACK_MS)
     return () => clearTimeout(t)
-  }, [feedback])
+  }, [feedback, timeLimitMs])
 
   // 10 問終わったら答案を保存して結果へ
   useEffect(() => {
     if (!set || feedback || exiting) return
     if (index < set.questions.length || records.length < set.questions.length) return
     writeAnswerSheet(set.setId, records)
+    // 結果画面が「この回の条件」で ⏳ の印を出せるように控える
+    writeQuizTimeLimit(set.setId, timeLimitMs)
     navigate(resultPath(set.setId))
-  }, [set, index, records, feedback, exiting])
+  }, [set, index, records, feedback, exiting, timeLimitMs])
 
   const answerNow = () => {
     if (!question || feedback) return
     const passed = input.trim() === ''
     const correct = !passed && grade(input, question.answer)
-    const ms = passed ? TIME_LIMIT_MS : Math.min(Math.max(Date.now() - startedAt.current, 0), TIME_LIMIT_MS)
+    const elapsed = Math.max(Date.now() - startedAt.current, 0)
+    // 制限ありのパスは「使い切った」扱い（時間切れと同じ）。制限なしは実測をそのまま残す
+    const ms = limited
+      ? passed
+        ? timeLimitMs
+        : Math.min(elapsed, timeLimitMs)
+      : Math.min(elapsed, UNLIMITED_MAX_MS)
     setRecords((prev) => [...prev, { questionId: question.id, input: input.trim(), correct, ms, passed }])
     setFeedback({ correct, answer: question.answer })
   }
@@ -173,8 +186,8 @@ export default function Quiz({ setId }: { setId: string }) {
   }
 
   const note = prefNote(set, question)
-  const remainPct = Math.max(0, Math.min(100, (remainMs / TIME_LIMIT_MS) * 100))
-  const urgent = remainMs <= URGENT_MS
+  const remainPct = limited ? Math.max(0, Math.min(100, (remainMs / timeLimitMs) * 100)) : 100
+  const urgent = limited && remainMs <= URGENT_MS
 
   return (
     <div className="layout">
@@ -197,6 +210,7 @@ export default function Quiz({ setId }: { setId: string }) {
           <div className="paper__header">
             <span>範囲: {rangeLabel(set)}</span>
             <span>科目: {set.mode === 'e' ? 'easy（市区町村名）' : 'difficult（大字・町名）'}</span>
+            <span>制限: {limited ? `${Math.round(timeLimitMs / 1000)}秒` : 'なし'}</span>
             <span className="field">
               <span className="field__label">氏名</span>
               <span className="field__input">{nickname || '名無し'}</span>
@@ -244,13 +258,19 @@ export default function Quiz({ setId }: { setId: string }) {
             </p>
           )}
 
-          <div className={urgent ? 'timer__label is-urgent' : 'timer__label'}>
-            <span aria-hidden="true">⏳</span>
-            <span>のこり {Math.ceil(remainMs / 1000)} 秒</span>
-          </div>
-          <div className={urgent ? 'timer is-urgent' : 'timer'}>
-            <span className="timer__bar" style={{ width: `${remainPct}%` }} />
-          </div>
+          {limited ? (
+            <>
+              <div className={urgent ? 'timer__label is-urgent' : 'timer__label'}>
+                <span aria-hidden="true">⏳</span>
+                <span>のこり {Math.ceil(remainMs / 1000)} 秒</span>
+              </div>
+              <div className={urgent ? 'timer is-urgent' : 'timer'}>
+                <span className="timer__bar" style={{ width: `${remainPct}%` }} />
+              </div>
+            </>
+          ) : (
+            <p className="q-note">時間制限なし</p>
+          )}
 
           <p>
             <button type="button" className="btn btn--primary" onClick={answerNow} disabled={feedback !== null}>

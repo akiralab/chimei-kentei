@@ -80,6 +80,7 @@ function entryItem(over: Partial<EntryItem> & { entryId: string }): EntryItem {
     timeMs: 50_000,
     mode: 'e',
     scope: '12',
+    timeLimitMs: 0,
     ...over,
     createdAt,
   }
@@ -151,14 +152,13 @@ describe('POST /results', () => {
       createdAt: '2026-10-02T12:00:00.000Z',
       mode: 'e',
       scope: '12',
+      timeLimitMs: 0,
     })
   })
 
-  it('パスした問題は正解にしない', async () => {
+  it('パスした問題は正解にしない（制限なしのパスは実測の ms）', async () => {
     const handler = makeHandler(memoryDdb())
-    const answers = answersFor(10).map((a, i) =>
-      i < 2 ? { ...a, input: '', ms: 20_000, passed: true } : a,
-    )
+    const answers = answersFor(10).map((a, i) => (i < 2 ? { ...a, input: '', ms: 1234, passed: true } : a))
     const res = await handler(postEvent({ setId: SET_ID, nickname: 'たろう', clientToken: 'tok-a', answers }))
     expect(res.statusCode).toBe(201)
     expect((parse(res).entry as { score: number }).score).toBe(80)
@@ -219,12 +219,51 @@ describe('POST /results', () => {
     }
   })
 
-  it('ms が範囲外・passed=true で ms が 20000 でなければ 400', async () => {
+  it('制限なし（省略 / 0）は ms 0〜600000 を許し、passed の ms は縛らない', async () => {
     const handler = makeHandler(memoryDdb())
+    const slow = answersFor(10).map((a, i) => (i === 0 ? { ...a, ms: 120_000 } : a))
+    expect(
+      (await handler(postEvent({ setId: SET_ID, nickname: 'た', clientToken: 'x', answers: slow }))).statusCode,
+    ).toBe(201)
+
+    const freePass = answersFor(10).map((a, i) => (i === 0 ? { ...a, passed: true, ms: 100 } : a))
+    expect(
+      (
+        await handler(
+          postEvent({ setId: SET_ID, nickname: 'た', clientToken: 'y', timeLimitMs: 0, answers: freePass }),
+        )
+      ).statusCode,
+    ).toBe(201)
+
+    const tooSlow = answersFor(10).map((a, i) => (i === 0 ? { ...a, ms: 600_001 } : a))
+    expect(
+      (await handler(postEvent({ setId: SET_ID, nickname: 'た', clientToken: 'z', answers: tooSlow }))).statusCode,
+    ).toBe(400)
+  })
+
+  it('制限ありは ms が制限超過・passed の ms が制限と違えば 400', async () => {
+    const handler = makeHandler(memoryDdb())
+    const base = { setId: SET_ID, nickname: 'た', clientToken: 'x', timeLimitMs: 20_000 }
     const over = answersFor(10).map((a, i) => (i === 0 ? { ...a, ms: 20_001 } : a))
-    expect((await handler(postEvent({ setId: SET_ID, nickname: 'た', clientToken: 'x', answers: over }))).statusCode).toBe(400)
+    expect((await handler(postEvent({ ...base, answers: over }))).statusCode).toBe(400)
+
     const badPass = answersFor(10).map((a, i) => (i === 0 ? { ...a, passed: true, ms: 100 } : a))
-    expect((await handler(postEvent({ setId: SET_ID, nickname: 'た', clientToken: 'x', answers: badPass }))).statusCode).toBe(400)
+    expect((await handler(postEvent({ ...base, answers: badPass }))).statusCode).toBe(400)
+
+    const okPass = answersFor(10).map((a, i) => (i === 0 ? { ...a, input: '', passed: true, ms: 20_000 } : a))
+    const res = await handler(postEvent({ ...base, answers: okPass }))
+    expect(res.statusCode).toBe(201)
+    expect((parse(res).entry as { timeLimitMs: number }).timeLimitMs).toBe(20_000)
+  })
+
+  it('timeLimitMs が 0 でも 1000〜60000 でもなければ 400', async () => {
+    const handler = makeHandler(memoryDdb())
+    for (const timeLimitMs of [999, 60_001, -1, 1.5, '20000']) {
+      const res = await handler(
+        postEvent({ setId: SET_ID, nickname: 'た', clientToken: 'x', timeLimitMs, answers: answersFor(7) }),
+      )
+      expect(res.statusCode).toBe(400)
+    }
   })
 
   it('setId が読めない・版が違うなら 400', async () => {
@@ -305,6 +344,7 @@ describe('GET /results', () => {
       'scope',
       'score',
       'setId',
+      'timeLimitMs',
       'timeMs',
     ])
   })
@@ -412,6 +452,27 @@ describe('都道府県別の集計', () => {
     expect(ddb.items.get(`${STATS_PK}|12`)).toMatchObject({ entries: 1, players: 1 })
   })
 
+  it('科目別のカウンタとマーカーも一緒に増える', async () => {
+    const ddb = memoryDdb()
+    const handler = makeHandler(ddb)
+    expect((await post(handler, setIdOf('e', '12', '1234'), 'tok-a', 'たろう', 7)).statusCode).toBe(201)
+    expect((await post(handler, setIdOf('d', '120001', '1234'), 'tok-a', 'たろう', 5)).statusCode).toBe(201)
+
+    expect(ddb.items.get(`${STATS_PK}|12`)).toMatchObject({ entries: 2, players: 1 })
+    expect(ddb.items.get(`${STATS_PK}|12#e`)).toMatchObject({ entries: 1, players: 1 })
+    expect(ddb.items.get(`${STATS_PK}|12#d`)).toMatchObject({ entries: 1, players: 1 })
+    expect([...ddb.items.keys()]).toContain(`${prefPk('12')}|player#e#tok-a`)
+    expect([...ddb.items.keys()]).toContain(`${prefPk('12')}|player#d#tok-a`)
+  })
+
+  it('同じ科目の 2 セット目は科目別 players も増えない', async () => {
+    const ddb = memoryDdb()
+    const handler = makeHandler(ddb)
+    await post(handler, setIdOf('e', '12', '1234'), 'tok-a', 'たろう', 7)
+    await post(handler, setIdOf('e', '12', '5678'), 'tok-a', 'たろう', 9)
+    expect(ddb.items.get(`${STATS_PK}|12#e`)).toMatchObject({ entries: 2, players: 1 })
+  })
+
   it('同じ clientToken の 2 セット目は players が増えず entries だけ増える', async () => {
     const ddb = memoryDdb()
     const handler = makeHandler(ddb)
@@ -482,6 +543,23 @@ describe('GET /results?prefCode=', () => {
     expect((parse(await handler(getEvent({ prefCode: '13', limit: '5' }))).entries as unknown[]).length).toBe(5)
   })
 
+  it('mode を渡すとサーバー側で科目を絞る', async () => {
+    const mixed = [
+      ...seedRows,
+      { ...entryItem({ entryId: 'z', nickname: 'Z', score: 90, mode: 'd' as const, scope: '120001' }), pk: prefPk('12') },
+    ]
+    const handler = makeHandler(memoryDdb(mixed))
+    const easy = parse(await handler(getEvent({ prefCode: '12', mode: 'e' }))).entries as { nickname: string }[]
+    expect(easy.map((e) => e.nickname)).toEqual(['B', 'C', 'D', 'A'])
+
+    const hard = parse(await handler(getEvent({ prefCode: '12', mode: 'd' }))).entries as { nickname: string }[]
+    expect(hard.map((e) => e.nickname)).toEqual(['Z'])
+
+    // 省略すれば両方
+    expect((parse(await handler(getEvent({ prefCode: '12' }))).entries as unknown[]).length).toBe(5)
+    expect((await handler(getEvent({ prefCode: '12', mode: 'x' }))).statusCode).toBe(400)
+  })
+
   it('別の都道府県は混ざらない / prefCode が 2 桁でなければ 400', async () => {
     const handler = makeHandler(memoryDdb(seedRows))
     expect(parse(await handler(getEvent({ prefCode: '13' }))).entries).toEqual([])
@@ -498,18 +576,40 @@ describe('GET /stats/prefectures', () => {
     }
   }
 
-  it('prefCode 昇順で件数と人数を返す', async () => {
+  it('prefCode 昇順で合計と科目別の内訳を返す', async () => {
     const ddb = memoryDdb()
     await ddb.addStats('13', 5, 3)
+    await ddb.addStats('13#e', 4, 2)
+    await ddb.addStats('13#d', 1, 1)
     await ddb.addStats('00', 2, 2)
     await ddb.addStats('12', 1, 1)
     const handler = makeHandler(ddb)
     const res = await handler(statsEvent())
     expect(res.statusCode).toBe(200)
     expect(parse(res).prefectures).toEqual([
-      { prefCode: '00', entries: 2, players: 2 },
-      { prefCode: '12', entries: 1, players: 1 },
-      { prefCode: '13', entries: 5, players: 3 },
+      { prefCode: '00', entries: 2, players: 2, byMode: { e: { entries: 0, players: 0 }, d: { entries: 0, players: 0 } } },
+      { prefCode: '12', entries: 1, players: 1, byMode: { e: { entries: 0, players: 0 }, d: { entries: 0, players: 0 } } },
+      {
+        prefCode: '13',
+        entries: 5,
+        players: 3,
+        byMode: { e: { entries: 4, players: 2 }, d: { entries: 1, players: 1 } },
+      },
+    ])
+  })
+
+  it('合計行が無く科目別だけでも、合計を足し上げて返す', async () => {
+    const ddb = memoryDdb()
+    await ddb.addStats('12#e', 3, 2)
+    await ddb.addStats('12#d', 2, 1)
+    const handler = makeHandler(ddb)
+    expect(parse(await handler(statsEvent())).prefectures).toEqual([
+      {
+        prefCode: '12',
+        entries: 5,
+        players: 3,
+        byMode: { e: { entries: 3, players: 2 }, d: { entries: 2, players: 1 } },
+      },
     ])
   })
 

@@ -4,7 +4,7 @@
  * 例外（拗音・促音・撥音・長音）を主に固定する。
  */
 import { describe, expect, it } from 'vitest'
-import { splitHiragana, toHiraganaStrict } from './hiragana.ts'
+import { isKanaOnly, pushStroke, romajiFromKeyCode, splitHiragana, toHiraganaStrict } from './hiragana.ts'
 
 describe('toHiraganaStrict — ローマ字', () => {
   it('素直なローマ字をひらがなにする', () => {
@@ -85,5 +85,62 @@ describe('splitHiragana — 打ちかけのローマ字', () => {
   it('確定しているときは pending が空', () => {
     expect(splitHiragana('sousa')).toEqual({ kana: 'そうさ', pending: '' })
     expect(splitHiragana('')).toEqual({ kana: '', pending: '' })
+  })
+})
+
+describe('isKanaOnly — IME が漢字に変換して確定したかの判定', () => {
+  it('かな・長音・濁点だけなら true', () => {
+    expect(isKanaOnly('そうさ')).toBe(true)
+    expect(isKanaOnly('ソウサ')).toBe(true)
+    expect(isKanaOnly('ｿｳｻ')).toBe(true)
+    expect(isKanaOnly('くまーた')).toBe(true)
+    expect(isKanaOnly('')).toBe(true)
+  })
+
+  it('漢字・英数・記号が混じれば false', () => {
+    expect(isKanaOnly('匝瑳')).toBe(false)
+    expect(isKanaOnly('はつかいち市')).toBe(false)
+    expect(isKanaOnly('sousa')).toBe(false)
+    expect(isKanaOnly('そうさ！')).toBe(false)
+  })
+})
+
+describe('romajiFromKeyCode / pushStroke — 打鍵列の復元', () => {
+  it('英字キーは配列によらず小文字のローマ字になる', () => {
+    expect(romajiFromKeyCode('KeyS')).toBe('s')
+    expect(romajiFromKeyCode('KeyA')).toBe('a')
+  })
+
+  it('Minus は長音の素（-）', () => {
+    expect(romajiFromKeyCode('Minus')).toBe('-')
+  })
+
+  it('変換・スペース・Enter・矢印・数字は無視する', () => {
+    for (const code of ['Space', 'Enter', 'Convert', 'NonConvert', 'ArrowLeft', 'Digit1', 'ShiftLeft', '']) {
+      expect(romajiFromKeyCode(code)).toBe('')
+    }
+  })
+
+  it('打鍵列を積んで Backspace で戻せる', () => {
+    let buf = ''
+    for (const code of ['KeyS', 'KeyO', 'KeyU', 'KeyS', 'KeyA']) buf = pushStroke(buf, code)
+    expect(buf).toBe('sousa')
+    expect(toHiraganaStrict(buf)).toBe('そうさ')
+
+    for (const code of ['Backspace', 'Backspace', 'KeyK', 'KeyI']) buf = pushStroke(buf, code)
+    expect(buf).toBe('souki')
+    expect(toHiraganaStrict(buf)).toBe('そうき')
+  })
+
+  it('空の打鍵列への Backspace・無視キーは何も変えない', () => {
+    expect(pushStroke('', 'Backspace')).toBe('')
+    expect(pushStroke('sou', 'Space')).toBe('sou')
+    expect(pushStroke('sou', '')).toBe('sou')
+  })
+
+  it('Minus を挟むと長音になる', () => {
+    let buf = ''
+    for (const code of ['KeyK', 'KeyU', 'KeyM', 'KeyA', 'Minus', 'KeyT', 'KeyA']) buf = pushStroke(buf, code)
+    expect(toHiraganaStrict(buf)).toBe('くまーた')
   })
 })

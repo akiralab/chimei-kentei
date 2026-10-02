@@ -12,6 +12,17 @@
 ライセンスは [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/deed.ja)。
 元データの前処理（読みの正規化・対応表化）は別リポジトリ `abr-data` で行い、本リポジトリの `data/build_questions.py` が問題バンク（`public/questions/`）を生成する。
 
+## 時間制限（既定は「なし」）
+
+1 問あたりの制限は端末ごとの設定（localStorage `timeLimitMs`）。**既定は 0 ＝ 制限なし**で、砂時計も残り秒も出さず経過時間だけ測る。20 秒（`20000`）を選ぶと従来どおり 0 で自動パスになる。
+
+- **制限なしと 20 秒は同じ順位表に載る。**並びは得点が主で、所要時間は同点のときのタイブレークにしか効かない。
+- 制限ありの行には順位表で「⏳20秒」の印が付く（どちらの条件で解いたかが分かる）。
+
+## 間違えた問題
+
+**ランキングに登録した答案**の誤答（パス・時間切れを含む）だけを端末内（localStorage `wrong:list`・最大 500 件）に残し、`#/review` で新しい順に見られる。練習のつもりで登録しなかった回は記録しない。同じ問題は最後に間違えたときの入力で上書きする。
+
 ## 共有ランキング
 
 同じセットIDで解いた人の順位表。**保存先はビルド時の環境変数 `VITE_RANKING_API` で切り替わる。**
@@ -21,8 +32,9 @@
 | 未設定（既定） | `localStorage`（`LocalRankingStore`） | その端末のその人だけ |
 | API のベース URL | AWS の共有ランキング API（`RemoteRankingStore`） | 同じセットIDを解いた全員 |
 
-- 得点は**サーバーが再採点する**。クライアントが送るのは セットID と各問の入力（`input` / `ms` / `passed`）だけで、点数を申告できない。
+- 得点は**サーバーが再採点する**。クライアントが送るのは セットID と各問の入力（`input` / `ms` / `passed`）と時間制限（`timeLimitMs`）だけで、点数を申告できない。
 - 1 セット 1 登録（セットID × 端末トークン）。登録すると自分の `entryId` を `localStorage['submitted:{setId}']` に残し、順位表の自分の行（`.is-me`）をそれで見分ける。
+- 「これまでのランキング」は `#/ranking`（easy / difficult を切り替えて都道府県ごとの回答人数。登録がある県は色が付く）と `#/ranking/{prefCode}`（その科目の上位 30 件）。科目の絞り込みはストア側（Remote なら API の `?mode=`）で行う。
 - API の契約は [`infra/API.md`](infra/API.md)、構成とデプロイ手順は [`infra/README.md`](infra/README.md)。
 - GitHub Actions では repository variable `VITE_RANKING_API` を build に渡す（未設定なら空文字 → ローカルランキング）。
 
@@ -49,7 +61,7 @@ VITE_RANKING_API=https://xxxx.execute-api.ap-northeast-1.amazonaws.com npm run d
 
 - 解答欄に入るのは**ひらがなと長音記号「ー」だけ**。ローマ字で打つと逐次ひらがなになる（`monzen` → 「もんぜん」。打ちかけの子音は `もんぜn` のように画面にだけ残り、Enter / フォーカス外れで確定する）。
 - カタカナ・半角カタカナ・全角英数はひらがなへ畳み、漢字・記号・空白は取り除く（`src/components/hiragana.ts`）。
-- **IME の変換は不要**。日本語 IME が無い端末でもそのまま Enter で解答できる。IME 変換中（未確定文字列）は一切書き換えず、確定した瞬間に正規化する。
+- **IME で漢字に変換されても読みに戻す。** Web から IME は無効化できないので、macOS のライブ変換などで「匝瑳」と確定されても解答は「そうさ」になる。変換中の `keydown` の `code`（物理キー）から打鍵列 `sousa` を組み直すのが主経路で、貼り付けなど打鍵の痕跡が無い場合は `compositionupdate` が最後に「全部かな」だった文字列を使う。かなのまま確定したとき（フリック入力・かな入力）は確定文字列をそのまま使う。変換中の未確定文字列は書き換えない。
 
 ## 構成
 

@@ -13,8 +13,13 @@ import type { BankSource } from '../../../src/engine/bank.ts'
 import { DATA_VERSION, buildQuestionSet, createFetchSource } from '../../../src/engine/bank.ts'
 import { grade } from '../../../src/engine/grading.ts'
 import { SCOPE_NATIONWIDE, parseSetId } from '../../../src/engine/setId.ts'
-import type { Mode, PrefectureStat, Question, RankingRow } from '../../../src/engine/types.ts'
-import { QUESTIONS_PER_SET, TIME_LIMIT_MS } from '../../../src/engine/types.ts'
+import type { Mode, ModeCount, PrefectureStat, Question, RankingRow } from '../../../src/engine/types.ts'
+import {
+  QUESTIONS_PER_SET,
+  TIME_LIMIT_MAX_MS,
+  TIME_LIMIT_MIN_MS,
+  UNLIMITED_MAX_MS,
+} from '../../../src/engine/types.ts'
 
 // ---------------------------------------------------------------- 入出力の型
 
@@ -60,16 +65,24 @@ export interface EntryItem {
   mode: Mode
   /** '00' = 全国、2 桁 = 都道府県、6 桁 = 市区町村 */
   scope: string
+  /** その回の時間制限。0 ＝ 制限なし */
+  timeLimitMs: number
 }
 
-/** pk = `pref#{prefCode}`、sk = `player#{clientToken}`。人数（players）を数えるための印 */
+/**
+ * pk = `pref#{prefCode}`、sk = `player#{clientToken}`（合計）または `player#{mode}#{clientToken}`（科目別）。
+ * 人数（players）の distinct を数えるための印
+ */
 export interface MarkerItem {
   pk: string
   sk: string
   createdAt: string
 }
 
-/** pk = `stats#pref`、sk = prefCode。件数と人数のカウンタ */
+/**
+ * pk = `stats#pref`、sk = `{prefCode}`（合計）または `{prefCode}#{mode}`（科目別）。件数と人数のカウンタ。
+ * 合計行は既存データとそのまま両立する（科目別の行が後から足される形）。
+ */
 export interface StatItem {
   pk: string
   sk: string
@@ -87,8 +100,8 @@ export interface DdbPort {
   putIndexEntry(item: EntryItem): Promise<void>
   /** 無ければ書いて true、既にあれば false（players の印） */
   putMarkerIfAbsent(item: MarkerItem): Promise<boolean>
-  /** `stats#pref` の prefCode 行に ADD で加算する */
-  addStats(prefCode: string, entries: number, players: number): Promise<void>
+  /** `stats#pref` の sk 行（`{prefCode}` か `{prefCode}#{mode}`）に ADD で加算する */
+  addStats(statKey: string, entries: number, players: number): Promise<void>
   /** `stats#pref` を全件 */
   listStats(): Promise<StatItem[]>
 }
@@ -126,8 +139,23 @@ export function prefPk(prefCode: string): string {
   return `pref#${prefCode}`
 }
 
-/** 都道府県別カウンタの pk。sk が prefCode */
+/** 都道府県別カウンタの pk。sk は `{prefCode}` か `{prefCode}#{mode}` */
 export const STATS_PK = 'stats#pref'
+
+/** 科目別カウンタの sk */
+export function statKeyOf(prefCode: string, mode: Mode): string {
+  return `${prefCode}#${mode}`
+}
+
+const MODES: Mode[] = ['e', 'd']
+
+function isMode(v: string): v is Mode {
+  return v === 'e' || v === 'd'
+}
+
+function emptyByMode(): Record<Mode, ModeCount> {
+  return { e: { entries: 0, players: 0 }, d: { entries: 0, players: 0 } }
+}
 
 /** setId の scope が属する都道府県コード。全国（'00'）はそのまま '00' */
 export function prefCodeOfScope(scope: string): string {
@@ -220,6 +248,7 @@ export function toRow(item: EntryItem): RankingRow {
     createdAt: item.createdAt,
     mode: item.mode,
     scope: item.scope,
+    timeLimitMs: item.timeLimitMs ?? 0,
   }
 }
 
@@ -236,6 +265,8 @@ interface SubmitBody {
   setId: string
   nickname: string
   clientToken: string
+  /** 0 ＝ 制限なし（省略時も 0）。1000〜60000 なら制限あり */
+  timeLimitMs: number
   answers: AnswerInput[]
 }
 
@@ -246,7 +277,7 @@ function isObject(v: unknown): v is Record<string, unknown> {
 /** 検証に落ちたら detail（日本語）を返す。通れば null */
 function validateSubmitBody(raw: unknown): { body: SubmitBody } | { detail: string } {
   if (!isObject(raw)) return { detail: 'JSON オブジェクトではありません。' }
-  const { setId, nickname, clientToken, answers } = raw
+  const { setId, nickname, clientToken, answers, timeLimitMs } = raw
   if (typeof setId !== 'string' || setId === '') return { detail: 'setId がありません。' }
   if (typeof nickname !== 'string') return { detail: 'nickname がありません。' }
   if (typeof clientToken !== 'string' || clientToken === '' || clientToken.length > 128) {
@@ -255,6 +286,18 @@ function validateSubmitBody(raw: unknown): { body: SubmitBody } | { detail: stri
   const trimmed = nickname.trim()
   const len = [...trimmed].length
   if (len < 1 || len > NICKNAME_MAX) return { detail: `nickname は 1〜${NICKNAME_MAX} 文字です。` }
+  // 省略 ＝ 0 ＝ 制限なし（旧クライアントの「20 秒固定」という後方互換は持たない）
+  let limit = 0
+  if (timeLimitMs !== undefined && timeLimitMs !== null) {
+    if (typeof timeLimitMs !== 'number' || !Number.isInteger(timeLimitMs)) {
+      return { detail: 'timeLimitMs が整数ではありません。' }
+    }
+    if (timeLimitMs !== 0 && (timeLimitMs < TIME_LIMIT_MIN_MS || timeLimitMs > TIME_LIMIT_MAX_MS)) {
+      return { detail: `timeLimitMs は 0 か ${TIME_LIMIT_MIN_MS}〜${TIME_LIMIT_MAX_MS} です。` }
+    }
+    limit = timeLimitMs
+  }
+  const msMax = limit > 0 ? limit : UNLIMITED_MAX_MS
   if (!Array.isArray(answers)) return { detail: 'answers が配列ではありません。' }
   if (answers.length !== QUESTIONS_PER_SET) return { detail: `answers は ${QUESTIONS_PER_SET} 件です。` }
   const checked: AnswerInput[] = []
@@ -264,13 +307,14 @@ function validateSubmitBody(raw: unknown): { body: SubmitBody } | { detail: stri
     if (typeof questionId !== 'string' || questionId === '') return { detail: 'questionId がありません。' }
     if (typeof input !== 'string' || input.length > INPUT_MAX) return { detail: 'input が不正です。' }
     if (typeof passed !== 'boolean') return { detail: 'passed が真偽値ではありません。' }
-    if (typeof ms !== 'number' || !Number.isFinite(ms) || ms < 0 || ms > TIME_LIMIT_MS) {
-      return { detail: `ms は 0〜${TIME_LIMIT_MS} です。` }
+    if (typeof ms !== 'number' || !Number.isFinite(ms) || ms < 0 || ms > msMax) {
+      return { detail: `ms は 0〜${msMax} です。` }
     }
-    if (passed && ms !== TIME_LIMIT_MS) return { detail: `passed=true の ms は ${TIME_LIMIT_MS} です。` }
+    // 制限ありのパスは「使い切った」扱い。制限なしは実測なので縛らない
+    if (limit > 0 && passed && ms !== limit) return { detail: `passed=true の ms は ${limit} です。` }
     checked.push({ questionId, input, ms: Math.round(ms), passed })
   }
-  return { body: { setId, nickname: trimmed, clientToken, answers: checked } }
+  return { body: { setId, nickname: trimmed, clientToken, timeLimitMs: limit, answers: checked } }
 }
 
 /** answers の questionId 集合が問題セットと一致するか */
@@ -307,6 +351,13 @@ export function createHandler(deps: HandlerDeps): (event: HttpApiEvent) => Promi
         createdAt: item.createdAt,
       })
       await deps.ddb.addStats(prefCode, 1, firstTime ? 1 : 0)
+      // 科目別も同じやり方で数える（合計行とは別の sk なので既存データと両立する）
+      const firstInMode = await deps.ddb.putMarkerIfAbsent({
+        pk,
+        sk: `player#${item.mode}#${clientToken}`,
+        createdAt: item.createdAt,
+      })
+      await deps.ddb.addStats(statKeyOf(prefCode, item.mode), 1, firstInMode ? 1 : 0)
     } catch (e: unknown) {
       console.error('[ranking-api] 都道府県インデックスの更新に失敗', e instanceof Error ? e.stack : e)
     }
@@ -369,6 +420,7 @@ export function createHandler(deps: HandlerDeps): (event: HttpApiEvent) => Promi
       createdAt,
       mode: parsed.mode,
       scope: parsed.scope,
+      timeLimitMs: body.timeLimitMs,
     }
     const reservation: ReservationItem = {
       pk,
@@ -392,6 +444,9 @@ export function createHandler(deps: HandlerDeps): (event: HttpApiEvent) => Promi
     const qs = event.queryStringParameters ?? {}
     const prefCode = qs.prefCode ?? ''
     const setId = qs.setId ?? ''
+    const modeParam = qs.mode ?? ''
+    if (modeParam !== '' && !isMode(modeParam)) return invalid(`mode が読めません: ${modeParam}`, cors)
+    const mode = modeParam === '' ? undefined : modeParam
 
     // limit の既定は setId 引き 20 / 都道府県引き 30
     const defaultLimit = prefCode === '' ? DEFAULT_LIMIT : DEFAULT_PREF_LIMIT
@@ -410,15 +465,44 @@ export function createHandler(deps: HandlerDeps): (event: HttpApiEvent) => Promi
       if (!parseSetId(setId)) return invalid(`setId が読めません: ${setId}`, cors)
       pk = setPk(setId)
     }
-    const rows = (await deps.ddb.listEntries(pk)).sort(compareRows).slice(0, limit).map(toRow)
+    const found = await deps.ddb.listEntries(pk)
+    // 科目の絞り込みはサーバー側で行う（クライアントは受け取った順に並べるだけ）
+    const filtered = mode === undefined ? found : found.filter((e) => e.mode === mode)
+    const rows = filtered.sort(compareRows).slice(0, limit).map(toRow)
     return json(200, { entries: rows }, cors)
   }
 
-  /** GET /stats/prefectures。全国（scope '00'）は prefCode '00' の 1 件として返る */
+  /**
+   * GET /stats/prefectures。全国（scope '00'）は prefCode '00' の 1 件として返る。
+   * `sk = {prefCode}` の行を合計、`sk = {prefCode}#{mode}` の行を byMode に畳む。
+   */
   async function handleStats(cors: Record<string, string>): Promise<HttpApiResult> {
-    const prefectures: PrefectureStat[] = (await deps.ddb.listStats())
-      .map((s) => ({ prefCode: s.sk, entries: s.entries ?? 0, players: s.players ?? 0 }))
-      .filter((s) => s.entries > 0)
+    const totals = new Map<string, ModeCount>()
+    const byMode = new Map<string, Record<Mode, ModeCount>>()
+    for (const item of await deps.ddb.listStats()) {
+      const count: ModeCount = { entries: item.entries ?? 0, players: item.players ?? 0 }
+      const [prefCode, modePart] = item.sk.split('#')
+      if (modePart === undefined) {
+        totals.set(prefCode, count)
+        continue
+      }
+      if (!isMode(modePart)) continue
+      const hit = byMode.get(prefCode) ?? emptyByMode()
+      hit[modePart] = count
+      byMode.set(prefCode, hit)
+    }
+    // 合計行が無い（科目別だけある）ケースも拾えるように、両方のキーを見る
+    const codes = new Set<string>([...totals.keys(), ...byMode.keys()])
+    const prefectures: PrefectureStat[] = [...codes]
+      .map((prefCode) => {
+        const per = byMode.get(prefCode) ?? emptyByMode()
+        const total = totals.get(prefCode) ?? {
+          entries: MODES.reduce((sum, m) => sum + per[m].entries, 0),
+          players: MODES.reduce((sum, m) => sum + per[m].players, 0),
+        }
+        return { prefCode, entries: total.entries, players: total.players, byMode: per }
+      })
+      .filter((s) => s.entries > 0 || MODES.some((m) => s.byMode[m].entries > 0))
       .sort((a, b) => (a.prefCode < b.prefCode ? -1 : 1))
     return json(200, { prefectures }, cors)
   }

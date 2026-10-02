@@ -67,6 +67,8 @@ export interface ResultEntry {
   createdAt: string // ISO 8601
   /** 登録後にストアが付与する ID。自分の行の判定に使う */
   entryId?: string
+  /** その回の時間制限。0 または省略 ＝ 制限なし、20000 ＝ 20 秒 */
+  timeLimitMs?: number
 }
 
 export type SubmitResult =
@@ -81,13 +83,20 @@ export interface RankingStore {
   list(setId: string, limit?: number): Promise<RankingRow[]>
   /** 都道府県ごとの登録件数・人数。「これまでのランキング」のトップ画面で使う */
   prefectureStats(): Promise<PrefectureStat[]>
-  /** ある都道府県の上位 limit 件（既定 30）。list と同じ並び */
-  listByPrefecture(prefCode: string, limit?: number): Promise<RankingRow[]>
+  /** ある都道府県の上位 limit 件（既定 30）。list と同じ並び。mode を渡すとその科目だけ */
+  listByPrefecture(prefCode: string, limit?: number, mode?: Mode): Promise<RankingRow[]>
 }
 
 export const QUESTIONS_PER_SET = 10
+/** 「20 秒」を選んだときの 1 問の持ち時間 */
 export const TIME_LIMIT_MS = 20_000
 export const MIN_POOL_FOR_SCOPE = 20
+
+/** 時間制限の設定として許す下限・上限（0 ＝ 制限なしは別扱い） */
+export const TIME_LIMIT_MIN_MS = 1_000
+export const TIME_LIMIT_MAX_MS = 60_000
+/** 制限なしのとき 1 問に認める所要時間の上限（サーバー側の検証用） */
+export const UNLIMITED_MAX_MS = 600_000
 
 // ---------------------------------------------------------------------------
 // 地図・統計（v1）。出典: 総務省統計局 e-Stat 境界データ（2020 年国勢調査・小地域）を市区町村に集約
@@ -136,6 +145,16 @@ export interface RankingRow {
   mode?: Mode
   /** '00' = 全国、2 桁 = 都道府県、6 桁 = 市区町村 */
   scope?: string
+  /** その回の時間制限。0 または省略 ＝ 制限なし。順位表の ⏳ 印に使う */
+  timeLimitMs?: number
+}
+
+/** 件数と人数の組。科目別の内訳に使う */
+export interface ModeCount {
+  /** 登録された答案の件数 */
+  entries: number
+  /** 登録した端末の数（clientToken の distinct） */
+  players: number
 }
 
 /**
@@ -144,8 +163,10 @@ export interface RankingRow {
  */
 export interface PrefectureStat {
   prefCode: string
-  /** 登録された答案の件数 */
+  /** 登録された答案の件数（easy ＋ difficult の合計） */
   entries: number
-  /** 登録した端末の数（clientToken の distinct） */
+  /** 登録した端末の数（clientToken の distinct・科目をまたいだ合計） */
   players: number
+  /** 科目別の内訳。古いデータには無いので任意 */
+  byMode?: Record<Mode, ModeCount>
 }

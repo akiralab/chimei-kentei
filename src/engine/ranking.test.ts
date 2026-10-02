@@ -143,14 +143,43 @@ describe('LocalRankingStore の都道府県集計', () => {
     await store.submit(entry({ setId: 'abr20260925-e-00-1234', clientToken: 'a', nickname: 'A', score: 50 }))
   }
 
-  it('entries は答案数・players は clientToken の distinct 数', async () => {
+  it('entries は答案数・players は clientToken の distinct 数。科目別の内訳も出す', async () => {
     const store = new LocalRankingStore(createMemoryStorage())
     await seed(store)
     expect(await store.prefectureStats()).toEqual([
-      { prefCode: '00', entries: 1, players: 1 }, // 全国
-      { prefCode: '12', entries: 3, players: 2 }, // 市区町村スコープも 12 に集まる
-      { prefCode: '13', entries: 1, players: 1 },
+      {
+        prefCode: '00', // 全国
+        entries: 1,
+        players: 1,
+        byMode: { e: { entries: 1, players: 1 }, d: { entries: 0, players: 0 } },
+      },
+      {
+        prefCode: '12', // 市区町村スコープ（difficult）も 12 に集まる
+        entries: 3,
+        players: 2,
+        byMode: { e: { entries: 2, players: 1 }, d: { entries: 1, players: 1 } },
+      },
+      {
+        prefCode: '13',
+        entries: 1,
+        players: 1,
+        byMode: { e: { entries: 1, players: 1 }, d: { entries: 0, players: 0 } },
+      },
     ])
+  })
+
+  it('listByPrefecture は mode で絞れる', async () => {
+    const store = new LocalRankingStore(createMemoryStorage())
+    await seed(store)
+    expect((await store.listByPrefecture('12', 30, 'e')).map((r) => r.score)).toEqual([100, 80])
+    expect((await store.listByPrefecture('12', 30, 'd')).map((r) => r.score)).toEqual([60])
+    expect(await store.listByPrefecture('12', 30)).toHaveLength(3)
+  })
+
+  it('timeLimitMs は保存して list で返す', async () => {
+    const store = new LocalRankingStore(createMemoryStorage())
+    await store.submit(entry({ clientToken: 'x', timeLimitMs: 20_000 }))
+    expect((await store.list(SET_ID))[0].timeLimitMs).toBe(20_000)
   })
 
   it('listByPrefecture はその都道府県の全セットを横断して並べる', async () => {

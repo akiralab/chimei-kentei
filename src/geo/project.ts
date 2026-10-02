@@ -52,7 +52,12 @@ export interface ProjectedCollection<P> {
   /** viewBox の幅・高さ。文字サイズなど viewBox 単位の寸法を決めるのに使う */
   width: number
   height: number
+  /** viewBox の原点（左上）。画面座標へ直すときに使う */
+  x: number
+  y: number
   paths: ProjectedPath<P>[]
+  /** 任意の [経度, 緯度] を同じ投影の viewBox 座標へ。投影できなければ null（ラベル位置の算出用） */
+  project: (lonLat: [number, number]) => [number, number] | null
 }
 
 // --------------------------------------------------------------- 巻き直し
@@ -199,6 +204,41 @@ export function mainCluster<P>(
   return { ...collection, features: kept }
 }
 
+/**
+ * **各 feature の最大ポリゴンだけ** を残した FeatureCollection。fit の対象に使う。
+ *
+ * 東京都には小笠原・伊豆諸島が、鹿児島県には奄美が、長崎県には五島・対馬が
+ * 同じ feature の MultiPolygon として入っている。これを fit に含めると
+ * 地図が南や西へ引っ張られ、本体が隅の小さな染みになる（関東を開くと
+ * 東京の島に引かれて 80px ほどに縮んでいた）。
+ * 描画は全ポリゴンのまま、**fit だけ本体に寄せる** のがここの役目。
+ */
+export function mainPolygons<P>(collection: FeatureCollection<Geometry, P>): FeatureCollection<Geometry, P> {
+  const features: Feature<Geometry, P>[] = []
+  for (const feature of collection.features) {
+    const g = feature.geometry
+    if (g?.type !== 'MultiPolygon') {
+      features.push(feature as Feature<Geometry, P>)
+      continue
+    }
+    let best: Position[][] | null = null
+    let bestArea = -Infinity
+    for (const poly of g.coordinates) {
+      const area = Math.abs(signedArea(poly[0]))
+      if (area > bestArea) {
+        bestArea = area
+        best = poly
+      }
+    }
+    features.push(
+      best ?
+        ({ ...feature, geometry: { type: 'Polygon', coordinates: best } } as Feature<Geometry, P>)
+      : (feature as Feature<Geometry, P>),
+    )
+  }
+  return { ...collection, features }
+}
+
 /** 面積が最大のポリゴン 1 枚だけの FeatureCollection（沖縄本島など「主島」に寄せる用） */
 export function largestPolygon<P>(
   collection: FeatureCollection<Geometry, P>,
@@ -279,5 +319,10 @@ export function projectCollection<P>(
   }
   if (paths.length === 0) return null
 
-  return { viewBox: `${x0 - pad} ${y0 - pad} ${width} ${height}`, width, height, paths }
+  const project = (lonLat: [number, number]): [number, number] | null => {
+    const point = projection(lonLat)
+    return point && Number.isFinite(point[0]) && Number.isFinite(point[1]) ? [point[0], point[1]] : null
+  }
+
+  return { viewBox: `${x0 - pad} ${y0 - pad} ${width} ${height}`, width, height, x: x0 - pad, y: y0 - pad, paths, project }
 }
