@@ -1,5 +1,6 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from 'vitest'
-import { parseHash, quizPath, resultPath } from './router.ts'
+import { COVER_PATH, SELECT_PATH, hasNavigated, navigate, parseHash, quizPath, resetNavigated, resultPath } from './router.ts'
 
 describe('parseHash', () => {
   it('表紙', () => {
@@ -30,5 +31,21 @@ describe('parseHash', () => {
     const setId = 'abr20260925-e-00-20261002'
     expect(parseHash(quizPath(setId))).toEqual({ name: 'quiz', setId })
     expect(parseHash(resultPath(setId))).toEqual({ name: 'result', setId })
+  })
+})
+
+describe('ハッシュ遷移の記録', () => {
+  it('読み込み直後は未遷移。navigate() で立ち、resetNavigated() で戻る', () => {
+    resetNavigated()
+    expect(hasNavigated()).toBe(false)
+
+    navigate(SELECT_PATH)
+    expect(hasNavigated()).toBe(true)
+
+    // 同じハッシュへの navigate（hashchange が飛ばない経路）でも遷移として数える
+    resetNavigated()
+    location.hash = COVER_PATH
+    navigate(COVER_PATH)
+    expect(hasNavigated()).toBe(true)
   })
 })

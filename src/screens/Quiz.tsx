@@ -4,13 +4,14 @@ import { QUESTIONS_PER_SET, UNLIMITED_MAX_MS } from '../engine/types.ts'
 import { buildQuestionSet } from '../engine/bank.ts'
 import { grade } from '../engine/grading.ts'
 import { SCOPE_NATIONWIDE, parseSetId } from '../engine/setId.ts'
-import { readNickname } from '../hooks/useNickname.ts'
+import { useNickname } from '../hooks/useNickname.ts'
 import { answerSheetKey, writeAnswerSheet } from '../hooks/answerSheet.ts'
 import { readTimeLimit, writeQuizTimeLimit } from '../hooks/useTimeLimit.ts'
 import { COVER_PATH, SELECT_PATH, navigate, resultPath } from '../router.ts'
 import MunicipalityMap from '../components/MunicipalityMap.tsx'
 import MunicipalityInfo from '../components/MunicipalityInfo.tsx'
 import HiraganaInput from '../components/HiraganaInput.tsx'
+import Challenge from './Challenge.tsx'
 
 const KANJI_NUM = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十']
 const FEEDBACK_MS = 1000
@@ -40,7 +41,11 @@ interface Feedback {
   answer: string
 }
 
-export default function Quiz({ setId }: { setId: string }) {
+/**
+ * direct … 共有リンク（`#/q/{setId}`）を直接開いて着地した場合に true。
+ * このときだけ出題の前に挑戦状（Challenge）を 1 枚挟み、「はじめる」まで計測を始めない。
+ */
+export default function Quiz({ setId, direct = false }: { setId: string; direct?: boolean }) {
   const parsed = useMemo(() => parseSetId(setId), [setId])
   const [set, setSet] = useState<QuestionSet | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -48,15 +53,22 @@ export default function Quiz({ setId }: { setId: string }) {
   const [input, setInput] = useState('')
   const [records, setRecords] = useState<AnswerRecord[]>([])
   const [feedback, setFeedback] = useState<Feedback | null>(null)
-  /** その回の時間制限。0 ＝ 制限なし。出題中に設定を変えても揺れないよう 1 度だけ読む */
-  const timeLimitMs = useMemo(() => readTimeLimit(), [])
+  /**
+   * その回の時間制限。0 ＝ 制限なし。出題中に設定を変えても揺れないよう、
+   * 開始時（挑戦状なら「はじめる」を押した時点）に 1 度だけ読む
+   */
+  const [timeLimitMs, setTimeLimitMs] = useState(() => readTimeLimit())
   const limited = timeLimitMs > 0
   const [remainMs, setRemainMs] = useState(timeLimitMs)
+  /** 挑戦状の「はじめる」を押したか。direct でないときは最初から出題 */
+  const [started, setStarted] = useState(false)
+  /** 挑戦状を出しているあいだ。砂時計も問ごとの計測も動かさない */
+  const pending = direct && !started
   /** 「タイトルへ戻る」を押した後。タイマーと結果への自動遷移を止めるだけのフラグ */
   const [exiting, setExiting] = useState(false)
   const startedAt = useRef(0)
   const inputRef = useRef<HTMLInputElement | null>(null)
-  const nickname = readNickname()
+  const [nickname, setNickname] = useNickname()
 
   const error = parsed ? loadError : `セットIDが読めません: ${setId}`
 
@@ -81,7 +93,7 @@ export default function Quiz({ setId }: { setId: string }) {
 
   // 問ごとの計測開始。制限ありのときだけカウントダウンし、0 で自動パスする
   useEffect(() => {
-    if (!question || feedback || exiting) return
+    if (!question || feedback || exiting || pending) return
     startedAt.current = Date.now()
     inputRef.current?.focus()
     if (!limited) return
@@ -100,7 +112,7 @@ export default function Quiz({ setId }: { setId: string }) {
       setFeedback({ correct: false, answer: question.answer })
     }, 100)
     return () => clearInterval(timer)
-  }, [question, feedback, exiting, limited, timeLimitMs])
+  }, [question, feedback, exiting, pending, limited, timeLimitMs])
 
   // ○× を 1 秒見せてから次の問へ
   useEffect(() => {
@@ -173,6 +185,26 @@ export default function Quiz({ setId }: { setId: string }) {
         <h1 className="paper__title">地名読み検定</h1>
         <p>問題を用意しています…</p>
       </div>
+    )
+  }
+
+  if (pending) {
+    return (
+      <Challenge
+        rangeLabel={rangeLabel(set)}
+        mode={set.mode}
+        total={set.questions.length}
+        widened={set.widened}
+        nickname={nickname}
+        onNicknameChange={setNickname}
+        onStart={() => {
+          // 制限は挑戦状で変えられるので、開始の瞬間の設定を読み直す
+          const ms = readTimeLimit()
+          setTimeLimitMs(ms)
+          setRemainMs(ms)
+          setStarted(true)
+        }}
+      />
     )
   }
 

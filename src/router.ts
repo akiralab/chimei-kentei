@@ -50,8 +50,25 @@ export function currentRoute(): Route {
   return parseHash(typeof location === 'undefined' ? '' : location.hash)
 }
 
+/**
+ * ページ読み込み後にアプリ自身が navigate() でハッシュを動かしたか。
+ * 共有リンク（`#/q/{setId}`）を直接開いた直後だけ false なので、
+ * 出題画面が「着地」なのかアプリ内から来たのかを判定できる。
+ */
+let navigatedByApp = false
+
+export function hasNavigated(): boolean {
+  return navigatedByApp
+}
+
+/** 「ページを読み込んだ直後」の状態へ戻す（着地の経路を再現するテスト用） */
+export function resetNavigated(): void {
+  navigatedByApp = false
+}
+
 /** path は '#/select' のようにハッシュ付きで渡す */
 export function navigate(path: string): void {
+  navigatedByApp = true
   const next = path.startsWith('#') ? path : `#${path}`
   if (location.hash === next) {
     // 同じハッシュだと hashchange が飛ばないので手動で通知する
