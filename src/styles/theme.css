@@ -146,15 +146,11 @@ body {
 /* ボタンの並び（画面側は .btn を <p> か <div> で包む）は用紙の底に貼り付ける。
    一覧が長くて用紙が動いても、主ボタンは必ず押せる位置に残る */
 .paper > :is(p, div):has(> .btn) {
-  position: sticky;
-  bottom: 0;
-  z-index: 1;
+  /* 以前は sticky + 用紙色の影で底に貼り付けていたが、影が次の行の文字を隠す
+     （「空欄のまま解答すると…」が欠ける）ため通常フローに戻した。
+     用紙が収まらないときは .paper 自身の内側スクロールで届く */
   padding-block: var(--space-2);
   margin-bottom: 0;
-  background: var(--color-paper);
-  /* sticky の基準は用紙の padding box なので、下の余白から次の行が覗く。
-     用紙色の実線影で下側の余白ごと塗りつぶす */
-  box-shadow: 0 var(--space-6) 0 var(--color-paper);
 }
 
 /* 用紙の左に綴じ代（薄い縦線）。装飾なので小さい画面では出さない */
@@ -1070,6 +1066,9 @@ body {
   }
 
   .paper__header {
+    /* 低い画面では用紙の内側スクロールが起きうる。sticky のままだと
+       スクロール後に最初の行（問一など）が帯の下に隠れるので通常フローに戻す */
+    position: static;
     padding-bottom: var(--space-2);
     margin-bottom: var(--space-3);
   }
