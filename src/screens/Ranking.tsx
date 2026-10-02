@@ -1,7 +1,7 @@
 /**
  * これまでのランキング。
  *
- * - `#/ranking` … 科目（easy / difficult）ごとに、都道府県の回答人数を一覧で見せる
+ * - `#/ranking` … 出題の種類（市区町村名 / 市区町村名＋町名）ごとに、都道府県の回答人数を一覧で見せる
  * - `#/ranking/{prefCode}` … その都道府県・その科目の上位 30 件
  *
  * 地図は置かない（範囲選択の主役なので、ここでは一覧だけにする）。
@@ -10,6 +10,7 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 import type { BankMeta, Mode, PrefectureStat, RankingRow } from '../engine/types.ts'
+import { modeName } from '../engine/modes.ts'
 import { loadMeta } from '../engine/bank.ts'
 import { SCOPE_NATIONWIDE } from '../engine/setId.ts'
 import { defaultRankingStore } from '../engine/ranking-factory.ts'
@@ -32,10 +33,6 @@ function formatDate(iso: string): string {
   if (Number.isNaN(d.getTime())) return iso
   const m = String(d.getMonth() + 1).padStart(2, '0')
   return `${d.getFullYear()}-${m}-${String(d.getDate()).padStart(2, '0')}`
-}
-
-function modeName(mode: Mode): string {
-  return mode === 'e' ? 'easy' : 'difficult'
 }
 
 /** その科目の件数・人数。byMode が無い古いデータは合計で代用する */
@@ -105,7 +102,7 @@ export default function Ranking({ prefCode }: { prefCode?: string } = {}) {
   const titleOf = (code: string): string =>
     code === SCOPE_NATIONWIDE ? '全国' : (prefName.get(code) ?? `都道府県 ${code}`)
 
-  /** easy / difficult の切替。トップと詳細で同じものを出す */
+  /** 出題の種類の切替。トップと詳細で同じものを出す */
   const modeSwitch = (
     <div className="mode-switch">
       {(['e', 'd'] as Mode[]).map((m) => (

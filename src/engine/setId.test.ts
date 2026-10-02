@@ -5,7 +5,7 @@ describe('buildSetId / parseSetId', () => {
   it('組み立てと分解が往復する', () => {
     const id = buildSetId('abr20260925', 'e', '12', '1234')
     expect(id).toBe('abr20260925-e-12-1234')
-    expect(parseSetId(id)).toEqual({ dataVersion: 'abr20260925', mode: 'e', scope: '12', seed: '1234' })
+    expect(parseSetId(id)).toEqual({ dataVersion: 'abr20260925', mode: 'e', scope: '12', seed: '1234', all: false })
   })
 
   it('全国 scope と 6 桁 scope、8 桁 seed も通る', () => {
@@ -14,6 +14,7 @@ describe('buildSetId / parseSetId', () => {
       mode: 'd',
       scope: '122165',
       seed: '20261002',
+      all: false,
     })
     expect(parseSetId('abr20260925-e-00-0007')?.scope).toBe('00')
   })

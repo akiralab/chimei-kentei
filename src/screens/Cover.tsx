@@ -9,7 +9,7 @@ import { RANKING_PATH, REVIEW_PATH, SELECT_PATH, navigate, quizPath } from '../r
  * スクロールさせない前提なので、要素は 5 つ（見出し・吹き出し・氏名欄・注記・ボタン）に絞る。
  * 装飾（赤ペンの丸・鉛筆・ゴム印）は .cover__prop で、画像を持たず CSS と絵文字だけで描く。
  *
- * ボタンは 2 つとも主ボタン。「今日の10問」は全員が同じ 10 問（全国・easy・日付シード）を解くので、
+ * ボタンは 2 つとも主ボタン。「今日の10問」は全員が同じ 10 問（全国・市区町村名・日付シード）を解くので、
  * 範囲選択を経由せず表紙から 1 タップで始められるようにする。
  */
 export default function Cover() {
@@ -58,7 +58,7 @@ export default function Cover() {
           はじめる
         </button>
         <button type="button" className="btn btn--primary cover__today" onClick={startToday} disabled={!ready}>
-          今日の10問（全国・easy）
+          今日の10問（全国）
         </button>
       </p>
 

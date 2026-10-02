@@ -87,7 +87,7 @@ describe('トップ（都道府県ごとの人数）', () => {
     render(<Ranking />)
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: '千葉県 1人が回答（easy）' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: '千葉県 1人が回答（市区町村名）' })).toBeInTheDocument()
     })
     expect(document.querySelector('.jp-map')).toBeNull()
     expect(document.querySelector('.jp-map__svg')).toBeNull()
@@ -99,40 +99,40 @@ describe('トップ（都道府県ごとの人数）', () => {
     render(<Ranking />)
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: '千葉県 1人が回答（easy）' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: '千葉県 1人が回答（市区町村名）' })).toBeInTheDocument()
     })
-    expect(screen.getByRole('button', { name: '全国 1人が回答（easy）' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '東京都 1人が回答（easy）' })).toBeInTheDocument()
-    expect(screen.getByText(/easy ／ 登録 3 件/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '全国 1人が回答（市区町村名）' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '東京都 1人が回答（市区町村名）' })).toBeInTheDocument()
+    expect(screen.getByText(/市区町村名 ／ 登録 3 件/)).toBeInTheDocument()
   })
 
   it('difficult に切り替えると集計と色分けが切り替わる', async () => {
     installFetchMock()
     render(<Ranking />)
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: '千葉県 1人が回答（easy）' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: '千葉県 1人が回答（市区町村名）' })).toBeInTheDocument()
     })
 
-    fireEvent.click(screen.getByRole('button', { name: 'difficult' }))
+    fireEvent.click(screen.getByRole('button', { name: '市区町村名＋町名' }))
 
     // difficult は千葉県だけ 1 件（tok-b）。東京都・全国は 0 件で押せない
-    expect(screen.getByRole('button', { name: '千葉県 1人が回答（difficult）' })).toBeEnabled()
-    expect(screen.getByRole('button', { name: '東京都 0人が回答（difficult）' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: '全国 0人が回答（difficult）' })).toBeDisabled()
-    expect(screen.getByText(/difficult ／ 登録 1 件/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '千葉県 1人が回答（市区町村名＋町名）' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: '東京都 0人が回答（市区町村名＋町名）' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '全国 0人が回答（市区町村名＋町名）' })).toBeDisabled()
+    expect(screen.getByText(/市区町村名＋町名 ／ 登録 1 件/)).toBeInTheDocument()
   })
 
   it('登録がある都道府県だけラベルを蛍光マーカーで塗る', async () => {
     installFetchMock()
     render(<Ranking />)
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: '千葉県 1人が回答（easy）' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: '千葉県 1人が回答（市区町村名）' })).toBeInTheDocument()
     })
 
     const marked = [...document.querySelectorAll<HTMLElement>('.pref-grid__item .marker--yellow')]
     expect(marked.map((m) => m.textContent)).toEqual(['全国 1人', '千葉県 1人', '東京都 1人'])
     // 0 件の県は塗らず、押せない
-    expect(screen.getByRole('button', { name: '千葉県 1人が回答（easy）' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: '千葉県 1人が回答（市区町村名）' })).toBeEnabled()
   })
 
   it('都道府県のボタンで #/ranking/{prefCode} へ移る', async () => {
@@ -140,9 +140,9 @@ describe('トップ（都道府県ごとの人数）', () => {
     render(<Ranking />)
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: '千葉県 1人が回答（easy）' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: '千葉県 1人が回答（市区町村名）' })).toBeInTheDocument()
     })
-    fireEvent.click(screen.getByRole('button', { name: '千葉県 1人が回答（easy）' }))
+    fireEvent.click(screen.getByRole('button', { name: '千葉県 1人が回答（市区町村名）' }))
     expect(hash()).toBe('#/ranking/12')
   })
 
@@ -150,10 +150,10 @@ describe('トップ（都道府県ごとの人数）', () => {
     installFetchMock()
     render(<Ranking />)
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: '千葉県 1人が回答（easy）' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: '千葉県 1人が回答（市区町村名）' })).toBeInTheDocument()
     })
 
-    fireEvent.click(screen.getByRole('button', { name: 'difficult' }))
+    fireEvent.click(screen.getByRole('button', { name: '市区町村名＋町名' }))
     expect(localStorage.getItem(RANKING_MODE_KEY)).toBe('d')
 
     cleanup()
@@ -161,7 +161,7 @@ describe('トップ（都道府県ごとの人数）', () => {
     await waitFor(() => {
       expect(rows()).toHaveLength(1)
     })
-    expect(rows()[0].textContent).toContain('difficult')
+    expect(rows()[0].textContent).toContain('市区町村名＋町名')
   })
 
   it('登録の無い都道府県のボタンは押せない', async () => {
@@ -171,9 +171,9 @@ describe('トップ（都道府県ごとの人数）', () => {
     render(<Ranking />)
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: '東京都 1人が回答（easy）' })).toBeEnabled()
+      expect(screen.getByRole('button', { name: '東京都 1人が回答（市区町村名）' })).toBeEnabled()
     })
-    expect(screen.getByRole('button', { name: '千葉県 0人が回答（easy）' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '千葉県 0人が回答（市区町村名）' })).toBeDisabled()
   })
 })
 
@@ -197,7 +197,7 @@ describe('都道府県の詳細', () => {
     })
     expect(rows().map((r) => r.querySelector('.ranking__name')?.textContent)).toEqual(['はなこ', 'たろう'])
     expect(rows()[0].textContent).toContain('100点')
-    expect(rows()[0].textContent).toContain('easy')
+    expect(rows()[0].textContent).toContain('市区町村名')
     expect(rows()[0].textContent).toContain('千葉県')
     expect(rows()[0].textContent).toContain('2026-10-02')
 
@@ -214,15 +214,15 @@ describe('都道府県の詳細', () => {
       expect(rows()).toHaveLength(2)
     })
 
-    fireEvent.click(screen.getByRole('button', { name: 'difficult' }))
+    fireEvent.click(screen.getByRole('button', { name: '市区町村名＋町名' }))
     await waitFor(() => {
       expect(rows()).toHaveLength(1)
     })
     expect(rows()[0].textContent).toContain('じろう')
-    expect(rows()[0].textContent).toContain('difficult')
+    expect(rows()[0].textContent).toContain('市区町村名＋町名')
     expect(rows()[0].textContent).toContain(EASY_12[0].display)
 
-    fireEvent.click(screen.getByRole('button', { name: 'easy' }))
+    fireEvent.click(screen.getByRole('button', { name: '市区町村名' }))
     await waitFor(() => {
       expect(rows()).toHaveLength(2)
     })

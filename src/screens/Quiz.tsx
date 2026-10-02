@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { AnswerRecord, Question, QuestionSet } from '../engine/types.ts'
 import { QUESTIONS_PER_SET, UNLIMITED_MAX_MS } from '../engine/types.ts'
-import { buildQuestionSet } from '../engine/bank.ts'
+import { buildQuestionSet, defaultSource } from '../engine/bank.ts'
+import { modeName } from '../engine/modes.ts'
 import { grade } from '../engine/grading.ts'
 import { SCOPE_NATIONWIDE, parseSetId } from '../engine/setId.ts'
 import { useNickname } from '../hooks/useNickname.ts'
@@ -17,7 +18,9 @@ const KANJI_NUM = ['一', '二', '三', '四', '五', '六', '七', '八', '九'
 const FEEDBACK_MS = 1000
 const URGENT_MS = 5000
 
-function kanjiNumber(n: number): string {
+/** 問番号。10 問までは漢数字（問三 / 十）、全市区町村名のように多いときは算用数字（問12 / 54） */
+function questionNumber(n: number, total: number): string {
+  if (total > KANJI_NUM.length) return String(n)
   return KANJI_NUM[n - 1] ?? String(n)
 }
 
@@ -29,7 +32,7 @@ function rangeLabel(set: QuestionSet): string {
   return first.city ?? first.pref
 }
 
-/** 添え書き。difficult は常に所属自治体、easy は全国のときだけ都道府県 */
+/** 添え書き。町名（'d'）は常に所属自治体、市区町村名（'e'）は全国のときだけ都道府県 */
 function prefNote(set: QuestionSet, q: Question): string | null {
   if (set.mode === 'd') return q.city ?? q.pref
   if (set.scope === SCOPE_NATIONWIDE) return q.pref
@@ -76,7 +79,7 @@ export default function Quiz({ setId, direct = false }: { setId: string; direct?
   useEffect(() => {
     if (!parsed) return
     let alive = true
-    buildQuestionSet(parsed.mode, parsed.scope, parsed.seed)
+    buildQuestionSet(parsed.mode, parsed.scope, parsed.seed, defaultSource(), parsed.all)
       .then((s) => {
         if (alive) setSet(s)
       })
@@ -194,6 +197,7 @@ export default function Quiz({ setId, direct = false }: { setId: string; direct?
         rangeLabel={rangeLabel(set)}
         mode={set.mode}
         total={set.questions.length}
+        all={set.all}
         widened={set.widened}
         nickname={nickname}
         onNicknameChange={setNickname}
@@ -241,7 +245,7 @@ export default function Quiz({ setId, direct = false }: { setId: string; direct?
 
           <div className="paper__header">
             <span>範囲: {rangeLabel(set)}</span>
-            <span>科目: {set.mode === 'e' ? 'easy（市区町村名）' : 'difficult（大字・町名）'}</span>
+            <span>科目: {modeName(set.mode)}</span>
             <span>制限: {limited ? `${Math.round(timeLimitMs / 1000)}秒` : 'なし'}</span>
             <span className="field">
               <span className="field__label">氏名</span>
@@ -256,7 +260,7 @@ export default function Quiz({ setId, direct = false }: { setId: string; direct?
           </div>
 
           <div className="q-number">
-            問{kanjiNumber(index + 1)} / {kanjiNumber(set.questions.length)}
+            問{questionNumber(index + 1, set.questions.length)} / {questionNumber(set.questions.length, set.questions.length)}
           </div>
           <p className="q-prompt">次の地名の読みを書け。</p>
 

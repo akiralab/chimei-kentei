@@ -1,4 +1,5 @@
 import type { Mode } from '../engine/types.ts'
+import { modeName } from '../engine/modes.ts'
 import { isValidNickname } from '../engine/ranking.ts'
 import { TIME_LIMIT_CHOICES, useTimeLimit } from '../hooks/useTimeLimit.ts'
 
@@ -13,6 +14,7 @@ export default function Challenge({
   rangeLabel,
   mode,
   total,
+  all,
   widened,
   nickname,
   onNicknameChange,
@@ -21,6 +23,8 @@ export default function Challenge({
   rangeLabel: string
   mode: Mode
   total: number
+  /** 全市区町村名（その都道府県の市区町村を全部） */
+  all: boolean
   widened: boolean
   nickname: string
   onNicknameChange: (value: string) => void
@@ -49,8 +53,8 @@ export default function Challenge({
         <h1 className="paper__title cover__title">挑戦状</h1>
         <p className="paper__subtitle cover__subtitle">地名読み検定 ― この地名、読めますか</p>
         <p className="paper__subtitle">
-          範囲: {rangeLabel} ／ 科目: {mode === 'e' ? 'easy（市区町村名）' : 'difficult（大字・町名）'} ／ 全 {total}{' '}
-          問 ／ 制限: {timeLimitLabel}
+          範囲: {rangeLabel} ／ 科目: {modeName(mode)} ／ 問題数: {all ? `全市区町村名（${total} 問）` : `${total} 問`} ／
+          制限: {timeLimitLabel}
         </p>
       </div>
 

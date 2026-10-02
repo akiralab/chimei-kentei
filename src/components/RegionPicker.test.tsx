@@ -160,3 +160,16 @@ describe('RegionPicker', () => {
     expect(screen.getByText('関東の都道府県をえらぶ')).toBeInTheDocument()
   })
 })
+
+describe('選択中の都道府県の添え書き', () => {
+  it('selected と selectedNote が揃うと見出し行に「千葉県 全54市町村」が出る', () => {
+    renderPicker({ selected: '12', selectedNote: '全54市町村' })
+    // 県名と件数は別の span（狭い画面では県名を CSS で隠す）なので、要素のテキスト全体で見る
+    expect(document.querySelector('.jp-map__note')?.textContent).toBe('千葉県 全54市町村')
+  })
+
+  it('全国（selected なし）のときは出ない', () => {
+    renderPicker({ selectedNote: '全54市町村', nationwide: true, onNationwide: vi.fn() })
+    expect(document.querySelector('.jp-map__note')).toBeNull()
+  })
+})

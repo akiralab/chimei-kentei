@@ -3,7 +3,10 @@
  * 設計の正本: 地名読み検定-アプリ設計.md §4〜§6
  */
 
-/** 'e' = easy（市区町村名） / 'd' = difficult（市区町村名 ＋ 大字・町名） */
+/**
+ * 'e' = 市区町村名だけ / 'd' = 市区町村名 ＋ 大字・町名。
+ * 難易度ではなく出題する地名の種類。画面の表示名は modes.ts（easy / difficult とは呼ばない）
+ */
 export type Mode = 'e' | 'd'
 
 /** 問題バンク 1 件。easy.json / difficult/{prefCode}.json の要素 */
@@ -32,12 +35,12 @@ export interface BankMeta {
   generatedAt: string // ISO 8601
   source: string // 出典の一文
   prefectures: { code: string; name: string; easyCount: number; difficultCount: number }[]
-  /** 市区町村の検索用一覧（easy の自治体と同じ集合） */
+  /** 市区町村の一覧（全 1,741 件）。easy.json は r2 以降かなだけの名前を除くので、こちらの方が多い */
   cities: { lgCode: string; prefCode: string; name: string; kana: string }[]
 }
 
 export interface QuestionSet {
-  setId: string // `${dataVersion}-${mode}-${scope}-${seed}`
+  setId: string // `${dataVersion}-${mode}-${scope}-${seed}`（全市区町村名なら末尾に `-all`）
   dataVersion: string
   mode: Mode
   /** '00' = 全国、2 桁 = 都道府県、6 桁 = 市区町村 */
@@ -45,7 +48,9 @@ export interface QuestionSet {
   seed: string
   /** 範囲が狭すぎて都道府県へ広げたとき true */
   widened: boolean
-  questions: Question[] // 10 件・出題順
+  /** 全市区町村名: その都道府県の市区町村を全部（かなだけの名前も含む）。順位表の対象外 */
+  all: boolean
+  questions: Question[] // 出題順。all でなければ QUESTIONS_PER_SET 件
 }
 
 export interface AnswerRecord {

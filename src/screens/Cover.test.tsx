@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * 表紙。氏名が入るまで主ボタンは押せず、「今日の10問」は全国・easy・日付シードの
+ * 表紙。氏名が入るまで主ボタンは押せず、「今日の10問」は全国・市区町村名・日付シードの
  * 共通セット（誰が・どの端末で押しても同じ setId）へ 1 タップで入る。
  */
 import '@testing-library/jest-dom/vitest'
@@ -22,7 +22,7 @@ function startBtn(): HTMLElement {
 }
 
 function todayBtn(): HTMLElement {
-  return screen.getByRole('button', { name: '今日の10問（全国・easy）' })
+  return screen.getByRole('button', { name: '今日の10問（全国）' })
 }
 
 function typeNickname(value: string): void {
@@ -51,7 +51,7 @@ describe('表紙のボタン', () => {
     expect(startBtn().className).toContain('btn--primary')
   })
 
-  it('氏名を入れると「今日の10問」で全国・easy・日付シードの出題へ移る', () => {
+  it('氏名を入れると「今日の10問」で全国・市区町村名・日付シードの出題へ移る', () => {
     render(<Cover />)
     typeNickname('たろう')
     expect(todayBtn()).toBeEnabled()
