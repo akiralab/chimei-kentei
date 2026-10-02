@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import type { ResultEntry } from './types.ts'
+import type { RankingRow, ResultEntry } from './types.ts'
 import {
   CLIENT_TOKEN_KEY,
   LocalRankingStore,
   createMemoryStorage,
   getClientToken,
   isValidNickname,
+  provisionalRank,
   rankingKey,
 } from './ranking.ts'
 
@@ -222,5 +223,58 @@ describe('LocalRankingStore の都道府県集計', () => {
     })
     await store.submit(entry())
     expect(await store.prefectureStats()).toEqual([])
+  })
+})
+
+describe('provisionalRank', () => {
+  function row(over: Partial<RankingRow> & { entryId: string }): RankingRow {
+    return {
+      setId: SET_ID,
+      nickname: over.entryId,
+      score: 80,
+      timeMs: 50_000,
+      createdAt: '2026-10-02T00:00:00.000Z',
+      ...over,
+    }
+  }
+
+  const me = { score: 80, timeMs: 30_000, createdAt: '2026-10-02T09:00:00.000Z' }
+
+  it('登録が無ければ 1 位', () => {
+    expect(provisionalRank([], me)).toBe(1)
+  })
+
+  it('得点の高い行の下、低い行の上に入る', () => {
+    const rows = [row({ entryId: 'a', score: 100 }), row({ entryId: 'b', score: 60 })]
+    expect(provisionalRank(rows, me)).toBe(2)
+  })
+
+  it('同点なら所要時間の短いほうが上', () => {
+    const rows = [row({ entryId: 'a', score: 80, timeMs: 20_000 }), row({ entryId: 'b', score: 80, timeMs: 40_000 })]
+    expect(provisionalRank(rows, me)).toBe(2)
+  })
+
+  it('同点・同時間なら後から登録する自分が下（compareEntries と同じ）', () => {
+    const rows = [row({ entryId: 'a', score: 80, timeMs: 30_000, createdAt: '2026-10-02T08:00:00.000Z' })]
+    expect(provisionalRank(rows, me)).toBe(2)
+    // 自分のほうが先に登録していた並びなら上
+    expect(provisionalRank(rows, { ...me, createdAt: '2026-10-02T07:00:00.000Z' })).toBe(1)
+  })
+
+  it('並び替えていない rows でも同じ順位になる', () => {
+    const rows = [row({ entryId: 'b', score: 60 }), row({ entryId: 'a', score: 100 })]
+    expect(provisionalRank(rows, me)).toBe(2)
+  })
+
+  it('limit に届かない行数なら、全員に負けても正確な最下位を返す', () => {
+    const rows = [row({ entryId: 'a', score: 100 }), row({ entryId: 'b', score: 90 })]
+    expect(provisionalRank(rows, me, 20)).toBe(3)
+  })
+
+  it('limit 件すべてに負けたら limit + 1（「その順位以下」の下限）', () => {
+    const rows = Array.from({ length: 20 }, (_, i) => row({ entryId: `e${String(i)}`, score: 100 }))
+    expect(provisionalRank(rows, me, 20)).toBe(21)
+    // limit より多く渡されても limit + 1 で止める
+    expect(provisionalRank([...rows, row({ entryId: 'x', score: 100 })], me, 20)).toBe(21)
   })
 })

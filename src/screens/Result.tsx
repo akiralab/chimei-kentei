@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { QuestionSet, RankingRow } from '../engine/types.ts'
 import { buildQuestionSet } from '../engine/bank.ts'
 import { parseSetId } from '../engine/setId.ts'
-import { defaultStorage, getClientToken, isValidNickname } from '../engine/ranking.ts'
+import { defaultStorage, getClientToken, isValidNickname, provisionalRank } from '../engine/ranking.ts'
 import { defaultRankingStore, isRemoteRanking } from '../engine/ranking-factory.ts'
 import { appendWrongFromEntry } from '../engine/wrongList.ts'
 import { readNickname } from '../hooks/useNickname.ts'
@@ -20,6 +20,18 @@ function kanjiNumber(n: number): string {
 function formatDuration(ms: number): string {
   const total = Math.round(ms / 1000)
   return `${Math.floor(total / 60)}分${String(total % 60).padStart(2, '0')}秒`
+}
+
+/**
+ * seed が 8 桁（`YYYYMMDD`）なら「今日の10問」のセット。`YYYY-MM-DD` に整形して返す。
+ * それ以外（4 桁の乱数など）は null。月日の体裁が崩れている 8 桁も日付扱いしない。
+ */
+function dateFromSeed(seed: string): string | null {
+  if (seed.length !== 8) return null
+  const month = Number(seed.slice(4, 6))
+  const day = Number(seed.slice(6, 8))
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null
+  return `${seed.slice(0, 4)}-${seed.slice(4, 6)}-${seed.slice(6, 8)}`
 }
 
 // VITE_RANKING_API があれば共有ランキング（Remote）、無ければ端末内（Local）
@@ -41,6 +53,8 @@ export default function Result({ setId }: { setId: string }) {
   const [myEntryId, setMyEntryId] = useState<string | null>(() => storage.getItem(submittedKey(setId)))
   const [registered, setRegistered] = useState(() => storage.getItem(submittedKey(setId)) !== null)
   const [myRank, setMyRank] = useState<number | null>(null)
+  /** 未登録のときの仮の順位。capped ＝ 上位 RANKING_LIMIT 件の外なので「以下」と濁す */
+  const [provisional, setProvisional] = useState<{ rank: number; capped: boolean } | null>(null)
   const [loadingRanking, setLoadingRanking] = useState(false)
   const [rankingError, setRankingError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -54,6 +68,12 @@ export default function Result({ setId }: { setId: string }) {
   const error = parsed ? loadError : `セットIDが読めません: ${setId}`
   const score = useMemo(() => (records ?? []).filter((r) => r.correct).length * 10, [records])
   const timeMs = useMemo(() => (records ?? []).reduce((sum, r) => sum + r.ms, 0), [records])
+
+  /** 「今日の10問」（seed が日付）なら見出しに日付を出す */
+  const rankingTitle = useMemo(() => {
+    const date = parsed === null ? null : dateFromSeed(parsed.seed)
+    return date === null ? 'この問題の順位表' : `今日の10問（${date}）の順位表`
+  }, [parsed])
 
   // 答案が無ければ範囲選択へ戻す
   useEffect(() => {
@@ -87,6 +107,13 @@ export default function Result({ setId }: { setId: string }) {
         setEntries(rows)
         const i = entryId === null ? -1 : rows.findIndex((r) => r.entryId === entryId)
         setMyRank(i < 0 ? null : i + 1)
+        if (entryId === null) {
+          // 未登録。いまの得点・時間ならどこに入るかを示す（同点・同時間なら後から来る自分が下）
+          const rank = provisionalRank(rows, { score, timeMs, createdAt: new Date().toISOString() }, RANKING_LIMIT)
+          setProvisional({ rank, capped: rows.length >= RANKING_LIMIT && rank > rows.length })
+        } else {
+          setProvisional(null)
+        }
       } catch {
         if (!alive()) return
         setRankingError('ランキングに接続できませんでした。')
@@ -94,22 +121,23 @@ export default function Result({ setId }: { setId: string }) {
         if (alive()) setLoadingRanking(false)
       }
     },
-    [setId],
+    [setId, score, timeMs],
   )
 
-  // 既に登録済み（localStorage に entryId がある）なら最初から順位表を出す
+  // 登録の有無にかかわらず、画面を開いた時点で順位表を出す。
+  // 未登録なら「登録すると N 位」を示し、登録を迷っている人も比べられるようにする
   useEffect(() => {
+    if (!parsed || records === null) return
     const saved = storage.getItem(submittedKey(setId))
-    if (saved === null) return
     let alive = true
     void (async () => {
-      setNotice('この問題にはすでに登録済みです。')
+      if (saved !== null) setNotice('この問題にはすでに登録済みです。')
       await loadRanking(saved, () => alive)
     })()
     return () => {
       alive = false
     }
-  }, [setId, loadRanking])
+  }, [setId, parsed, records, loadRanking])
 
   const register = async () => {
     if (!records || registered || submitting) return
@@ -265,7 +293,15 @@ export default function Result({ setId }: { setId: string }) {
 
       {entries && (
         <>
-          <h3 className="paper__section">この問題の順位表{myRank !== null && <> ／ あなたは {myRank} 位</>}</h3>
+          <h3 className="paper__section">
+            {rankingTitle}
+            {myRank !== null && <> ／ あなたは {myRank} 位</>}
+          </h3>
+          {!registered && provisional !== null && (
+            <p className="pen-comment">
+              登録すると {provisional.rank} 位{provisional.capped && '以下'}です。
+            </p>
+          )}
           {entries.length === 0 ? (
             <p>まだ登録がありません。</p>
           ) : (

@@ -105,6 +105,29 @@ export function compareEntries(a: ResultEntry | RankingRow, b: ResultEntry | Ran
   return a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0
 }
 
+/** 順位の比較に要る最小の情報。まだ登録していない答案を表すのに使う */
+export interface ScorableEntry {
+  score: number
+  timeMs: number
+  createdAt: string
+}
+
+/**
+ * まだ登録していない答案が、いまの上位 rows に混ざると何位になるか（1 始まり）。
+ * 並びの規則は compareEntries と同じ（得点降順 → 所要時間昇順 → 登録順）なので、
+ * 同点・同時間なら後から来た entry が下に付く。
+ *
+ * rows は上位 limit 件しか無いため、全員に負けたときは
+ * `Math.min(rows.length, limit) + 1` を返す。rows が limit 件に達しているなら
+ * これは「その順位以下」の下限であって、正確な順位ではない。
+ */
+export function provisionalRank(rows: readonly RankingRow[], entry: ScorableEntry, limit = 20): number {
+  const me: RankingRow = { entryId: '', setId: '', nickname: '', ...entry }
+  const sorted = [...rows].sort(compareEntries)
+  const i = sorted.findIndex((r) => compareEntries(me, r) < 0)
+  return i < 0 ? Math.min(sorted.length, limit) + 1 : i + 1
+}
+
 /** 保存済みエントリを公開用の 1 行へ。answers と clientToken は落とし、科目・範囲は setId から導く */
 export function toRow(entry: ResultEntry): RankingRow {
   const parsed = parseSetId(entry.setId)
