@@ -37,9 +37,15 @@ describe('buildSetId / parseSetId', () => {
 })
 
 describe('todaySeed / randomSeed', () => {
-  it('todaySeed はローカル時刻の YYYYMMDD', () => {
-    expect(todaySeed(new Date(2026, 9, 2, 8, 30))).toBe('20261002')
-    expect(todaySeed(new Date(2026, 0, 1, 0, 0))).toBe('20260101')
+  it('todaySeed は JST の暦日の YYYYMMDD', () => {
+    expect(todaySeed(new Date('2026-10-01T23:30:00Z'))).toBe('20261002')
+    expect(todaySeed(new Date('2025-12-31T15:00:00Z'))).toBe('20260101')
+  })
+
+  it('todaySeed は端末のタイムゾーンによらず JST の 0 時で切り替わる', () => {
+    // UTC 15:00 以降は JST では翌日
+    expect(todaySeed(new Date('2026-10-02T15:30:00Z'))).toBe('20261003')
+    expect(todaySeed(new Date('2026-10-02T14:59:00Z'))).toBe('20261002')
   })
 
   it('randomSeed は 4 桁の数字文字列（先頭 0 もあり）', () => {

@@ -1,11 +1,16 @@
+import { DATA_VERSION } from '../engine/bank.ts'
 import { isValidNickname } from '../engine/ranking.ts'
+import { SCOPE_NATIONWIDE, buildSetId, todaySeed } from '../engine/setId.ts'
 import { useNickname } from '../hooks/useNickname.ts'
-import { RANKING_PATH, REVIEW_PATH, SELECT_PATH, navigate } from '../router.ts'
+import { RANKING_PATH, REVIEW_PATH, SELECT_PATH, navigate, quizPath } from '../router.ts'
 
 /**
  * 表紙。「小テストが配られた瞬間」の 1 枚。
  * スクロールさせない前提なので、要素は 5 つ（見出し・吹き出し・氏名欄・注記・ボタン）に絞る。
  * 装飾（赤ペンの丸・鉛筆・ゴム印）は .cover__prop で、画像を持たず CSS と絵文字だけで描く。
+ *
+ * ボタンは 2 つとも主ボタン。「今日の10問」は全員が同じ 10 問（全国・easy・日付シード）を解くので、
+ * 範囲選択を経由せず表紙から 1 タップで始められるようにする。
  */
 export default function Cover() {
   const [nickname, setNickname] = useNickname()
@@ -15,6 +20,12 @@ export default function Cover() {
     if (!ready) return
     setNickname(nickname.trim())
     navigate(SELECT_PATH)
+  }
+
+  const startToday = () => {
+    if (!ready) return
+    setNickname(nickname.trim())
+    navigate(quizPath(buildSetId(DATA_VERSION, 'e', SCOPE_NATIONWIDE, todaySeed())))
   }
 
   return (
@@ -45,6 +56,9 @@ export default function Cover() {
       <p className="cover__actions">
         <button type="button" className="btn btn--primary cover__start" onClick={start} disabled={!ready}>
           はじめる
+        </button>
+        <button type="button" className="btn btn--primary cover__today" onClick={startToday} disabled={!ready}>
+          今日の10問（全国・easy）
         </button>
       </p>
 

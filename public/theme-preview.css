@@ -1090,7 +1090,12 @@ body {
   color: var(--color-pencil);
 }
 
+/* 主ボタンは 2 つ（「はじめる」と「今日の10問」）。狭い画面では縦に積む */
 .cover__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2) var(--space-3);
   margin: var(--space-2) 0 0;
 }
 
@@ -1127,6 +1132,14 @@ body {
 
 .cover__start:disabled {
   animation: none;
+}
+
+/* もう 1 つの主ボタン。ラベルが長いので字と左右の余白だけ詰める（高さは「はじめる」と同じ）*/
+.cover__today {
+  min-height: 56px;
+  padding: var(--space-3) var(--space-5);
+  font-size: var(--fs-lg);
+  box-shadow: 0 4px 0 var(--color-ink);
 }
 
 @keyframes cover-float {
