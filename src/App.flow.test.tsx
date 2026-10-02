@@ -16,7 +16,6 @@ import type { BankMeta, Question, QuestionSet } from './engine/types.ts'
 import { TIME_LIMIT_MS } from './engine/types.ts'
 import type { BankSource } from './engine/bank.ts'
 import { DATA_VERSION, buildQuestionSet } from './engine/bank.ts'
-import { todaySeed } from './engine/setId.ts'
 import { makeDifficult, makeEasy } from './engine/__fixtures__/questions.ts'
 import { answerSheetKey } from './hooks/answerSheet.ts'
 import { NICKNAME_KEY } from './hooks/useNickname.ts'
@@ -43,7 +42,7 @@ function kanaizeAnswers(questions: Question[]): Question[] {
   return questions.map((q) => ({ ...q, answer: q.answer.replace(/\d/g, (d) => KANA_DIGITS[Number(d)]) }))
 }
 
-// 千葉県は easy 15 件・大字 30 件、東京都は easy 14 件。どちらも「今日の10問」に足りる
+// 千葉県は easy 15 件・大字 30 件、東京都は easy 14 件。どちらも 10 問に足りる
 const EASY_12 = kanaizeAnswers(makeEasy('12', '千葉県', 15))
 const EASY_13 = kanaizeAnswers(makeEasy('13', '東京都', 14))
 const EASY_ALL: Question[] = [...EASY_12, ...EASY_13]
@@ -256,14 +255,11 @@ describe('範囲・科目', () => {
     expect(hash()).toMatch(new RegExp(`^#/q/${DATA_VERSION}-e-12-\\d{4}$`))
   })
 
-  it('「今日の10問」は（範囲未選択なら）全国 × easy × 日付シード', async () => {
+  // 範囲・科目ごとの日替わりは全員が同じ問題にならないので廃止。日替わりは表紙の「今日の10問（全国・easy）」だけ
+  it('「今日の10問」のボタンは置かない', async () => {
     await openSelect()
 
-    // ボタン名に範囲と科目が入るので前方一致で拾う（例「今日の10問（全国・easy）」）
-    fireEvent.click(screen.getByRole('button', { name: /^今日の10問/ }))
-    await settle()
-
-    expect(hash()).toBe(`#/q/${DATA_VERSION}-e-00-${todaySeed()}`)
+    expect(screen.queryByRole('button', { name: /^今日の10問/ })).toBeNull()
   })
 
   it('全国のままでも difficult を押せるが、都道府県を選ぶまで「始める」は無効で案内文が出る', async () => {

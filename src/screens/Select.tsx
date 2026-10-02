@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { BankMeta, Mode } from '../engine/types.ts'
 import { DATA_VERSION, loadMeta } from '../engine/bank.ts'
-import { SCOPE_NATIONWIDE, buildSetId, randomSeed, todaySeed } from '../engine/setId.ts'
+import { SCOPE_NATIONWIDE, buildSetId, randomSeed } from '../engine/setId.ts'
 import { navigate, quizPath } from '../router.ts'
 import { TIME_LIMIT_CHOICES, useTimeLimit } from '../hooks/useTimeLimit.ts'
 import type { PrefectureCollection } from '../geo/load.ts'
@@ -76,16 +76,6 @@ export default function Select() {
   const start = () => {
     if (blocked) return
     navigate(quizPath(buildSetId(DATA_VERSION, mode, scope, randomSeed())))
-  }
-
-  /**
-   * 「今日の10問」は **いま選んでいる範囲・科目** で日付シードのセットを作る。
-   * 以前は全国 easy 固定だったので「東京都を選んだのに山梨県が出た」と見える不具合報告になった。
-   * 全国 × difficult だけは母集団を組めないので easy に落とす。
-   */
-  const todayMode: Mode = blocked ? 'e' : mode
-  const startToday = () => {
-    navigate(quizPath(buildSetId(DATA_VERSION, todayMode, scope, todaySeed())))
   }
 
   if (error) {
@@ -183,9 +173,6 @@ export default function Select() {
             行を足すと 1 画面に収まらなくなるので、案内はボタンのラベルに出す */}
         <button type="button" className="btn btn--primary" onClick={start} disabled={blocked}>
           {blocked ? '都道府県を選ぶと始められます' : '始める'}
-        </button>
-        <button type="button" className="btn btn--ghost" onClick={startToday}>
-          今日の10問（{scopeLabel}・{todayMode === 'e' ? 'easy' : 'difficult'}）
         </button>
       </p>
     </div>
