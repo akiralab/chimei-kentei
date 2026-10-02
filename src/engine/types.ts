@@ -65,14 +65,20 @@ export interface ResultEntry {
   answers: AnswerRecord[]
   clientToken: string
   createdAt: string // ISO 8601
+  /** 登録後にストアが付与する ID。自分の行の判定に使う */
+  entryId?: string
 }
 
-export type SubmitResult = { ok: true; rank: number } | { ok: false; reason: 'already_submitted' | 'invalid' }
+export type SubmitResult =
+  | { ok: true; rank: number; entryId: string }
+  | { ok: false; reason: 'already_submitted' | 'invalid' | 'network' }
 
+/** ランキングの保存先。Local（localStorage）と Remote（infra/API.md）が同じ契約を実装する */
 export interface RankingStore {
+  /** entry.score / correct はサーバー側では信用せず再採点する。answers の input / ms / passed だけが入力 */
   submit(entry: ResultEntry): Promise<SubmitResult>
-  /** 得点降順 → 所要時間昇順 → 登録順。上位 limit 件 */
-  list(setId: string, limit?: number): Promise<ResultEntry[]>
+  /** 得点降順 → 所要時間昇順 → 登録順。上位 limit 件（既定 20） */
+  list(setId: string, limit?: number): Promise<RankingRow[]>
 }
 
 export const QUESTIONS_PER_SET = 10
