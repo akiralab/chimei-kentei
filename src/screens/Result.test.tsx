@@ -221,3 +221,46 @@ describe('ランキングに届かないとき', () => {
     spy.mockRestore()
   })
 })
+
+describe('全市区町村名（練習）', () => {
+  /** 千葉県の全市区町村名。フィクスチャの千葉県は 25 件 */
+  const SET_ALL = `${DATA_VERSION}-e-12-0417-all`
+
+  function answerAll(correct: number, total: number): AnswerRecord[] {
+    return Array.from({ length: total }, (_, i) => ({
+      questionId: `q${String(i)}`,
+      input: 'あ',
+      correct: i < correct,
+      ms: 2_000,
+      passed: false,
+    }))
+  }
+
+  it('得点は正答率、順位表と登録ボタンは出さず、練習である旨を出す', async () => {
+    writeAnswerSheet(SET_ALL, answerAll(20, 25))
+    putThree(SET_ALL)
+    render(<Result setId={SET_ALL} />)
+
+    await waitFor(() => {
+      expect(document.querySelectorAll('.review__row')).toHaveLength(25)
+    })
+    expect(document.querySelector('.stamp__num')?.textContent).toBe('80')
+    expect(document.querySelector('.paper__subtitle')?.textContent).toContain('正解 20 / 25 問')
+    expect(screen.queryByRole('button', { name: 'ランキングに登録' })).toBeNull()
+    expect(penComments()).toContain('順位表には載りません')
+    expect(rows()).toHaveLength(0)
+    expect(screen.queryByText(/登録すると/)).toBeNull()
+    // 共有ともう一度は使える
+    expect(screen.getByRole('button', { name: 'この問題で挑ませる' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'もう一度（別の問題）' })).toBeInTheDocument()
+  })
+
+  it('10 問のセットでは従来どおり正答数 × 10 点で、正解数も添える', async () => {
+    render(<Result setId={SET} />)
+    await waitFor(() => {
+      expect(document.querySelector('.stamp__num')?.textContent).toBe('80')
+    })
+    expect(document.querySelector('.paper__subtitle')?.textContent).toContain('正解 8 / 10 問')
+    expect(screen.getByRole('button', { name: 'ランキングに登録' })).toBeInTheDocument()
+  })
+})

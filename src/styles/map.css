@@ -293,6 +293,25 @@
   color: var(--color-pencil);
 }
 
+/* 見出し行の余白に出す「千葉県 全54市町村」。選んだ県と同じ青で塗る */
+.jp-map__note {
+  margin-right: auto;
+  padding: 1px var(--space-2);
+  font-family: var(--font-hand);
+  font-size: var(--fs-sm);
+  line-height: 1.4;
+  white-space: nowrap;
+  color: var(--color-ink);
+  background: var(--color-marker-blue);
+  border-radius: var(--radius-sm);
+}
+
+@media (max-width: 719px) {
+  .jp-map__note-name {
+    display: none;
+  }
+}
+
 .jp-map__back.btn {
   min-height: 34px;
   padding: var(--space-1) var(--space-3);

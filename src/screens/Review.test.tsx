@@ -80,9 +80,10 @@ describe('記録があるとき', () => {
 
     // difficult は所属市区町村まで、日付も出す
     expect(rows()[0].textContent).toContain('東京都・大阪市淀川区')
-    expect(rows()[0].textContent).toContain('difficult')
+    expect(rows()[0].textContent).toContain('市区町村名＋町名')
     expect(rows()[0].textContent).toContain('2026-10-03')
-    expect(rows()[1].textContent).toContain('easy')
+    expect(rows()[1].textContent).toContain('市区町村名')
+    expect(rows()[1].textContent).not.toContain('＋町名')
     expect(screen.getByText(/2 問（新しい順）/)).toBeInTheDocument()
   })
 

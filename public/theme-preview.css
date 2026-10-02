@@ -793,7 +793,7 @@ body {
 }
 
 /* --------------------------------------------------------------------------
-   13. .mode-switch — easy / difficult
+   13. .mode-switch — 科目（市区町村名 / 町名も）・問題数・時間制限の切替
    -------------------------------------------------------------------------- */
 
 .mode-switch {
@@ -854,6 +854,31 @@ body {
   color: var(--color-ink);
   background: var(--color-paper);
   box-shadow: var(--shadow-chip);
+}
+
+/* 無効な選択肢（例: 全国のままの「全市区町村名」）。押せないことを色で示す */
+.mode-switch__item:disabled {
+  color: color-mix(in srgb, var(--color-pencil) 45%, var(--color-paper-edge));
+  cursor: not-allowed;
+}
+
+/* 2 つの切替を 1 行に並べる（問題数 ＋ 時間制限）。縦を 1 段ぶん節約して 1 画面に収める */
+.switch-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+}
+
+@media (max-width: 719px) {
+  .switch-row {
+    flex-wrap: nowrap;
+  }
+
+  .switch-row > .mode-switch {
+    flex: 1 1 0;
+    width: auto;
+    min-width: 0;
+  }
 }
 
 /* --------------------------------------------------------------------------

@@ -22,7 +22,7 @@
 | `.marker` / `.marker--yellow` / `.marker--pink` / `.marker--blue` | 蛍光マーカーの塗り |
 | `.btn` / `.btn--primary` / `.btn--ghost` | ボタン |
 | `.pref-grid` / `.pref-grid__item` / `.is-selected` | 都道府県の選択グリッド |
-| `.mode-switch` / `.mode-switch__item` / `.is-selected` | easy / difficult の切替 |
+| `.mode-switch` / `.mode-switch__item` / `.is-selected` | 科目（市区町村名 / 町名も）・問題数・時間制限の切替。`.switch-row` で 2 つを 1 行に並べられる |
 | `.review` / `.review__row` | 答案の見直し（1 行 1 問） |
 | `.ranking` / `.ranking__row` / `.is-me` | 順位表 |
 | `.footer-credit` | 出典表記 |

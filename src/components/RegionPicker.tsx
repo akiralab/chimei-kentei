@@ -35,6 +35,8 @@ interface Props {
   prefectures: PrefOption[]
   /** 選択中の都道府県コード。全国なら undefined */
   selected?: string
+  /** 選択中の都道府県の添え書き（例「全54市町村」）。見出し行の余白に出す */
+  selectedNote?: string
   onSelect: (prefCode: string, name: string) => void
   /** 「全国」が選ばれているか。見出し行に全国ボタンを同居させて 1 行ぶん節約する */
   nationwide?: boolean
@@ -168,6 +170,7 @@ export default function RegionPicker({
   collection,
   prefectures,
   selected,
+  selectedNote,
   onSelect,
   nationwide,
   onNationwide,
@@ -299,6 +302,13 @@ export default function RegionPicker({
       {/* 見出し・全国・戻る を 1 行に詰める（縦を 1 行ぶん節約して 1 画面に収める） */}
       <div className="jp-map__head">
         <p className="jp-map__step">{activeRegion ? `${activeRegion.name}の都道府県をえらぶ` : '地方をえらぶ'}</p>
+        {selected && selectedNote && (
+          <span className="jp-map__note">
+            {/* 県名は広い画面だけ。狭い画面は選んだセルが光っているので件数だけで足りる */}
+            <span className="jp-map__note-name">{nameOf.get(selected) ?? selected} </span>
+            {selectedNote}
+          </span>
+        )}
         {activeRegion ?
           <button type="button" className="btn btn--ghost jp-map__back" onClick={() => setRegionId(null)}>
             地方を選び直す

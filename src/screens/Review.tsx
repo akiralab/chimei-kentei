@@ -6,6 +6,7 @@
  */
 import { useMemo, useState } from 'react'
 import type { WrongItem } from '../engine/wrongList.ts'
+import { modeName } from '../engine/modes.ts'
 import { clearWrongList, newestFirst, readWrongList } from '../engine/wrongList.ts'
 import { COVER_PATH, SELECT_PATH, navigate } from '../router.ts'
 
@@ -19,7 +20,7 @@ function formatDate(iso: string): string {
   return `${d.getFullYear()}-${m}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-/** 都道府県／市区町村の添え書き。difficult は所属自治体まで出す */
+/** 都道府県／市区町村の添え書き。町名（'d'）は所属自治体まで出す */
 function placeLabel(item: WrongItem): string {
   return item.city === undefined || item.city === '' ? item.pref : `${item.pref}・${item.city}`
 }
@@ -103,7 +104,7 @@ export default function Review() {
                   </span>
                   {/* 4 列グリッドの 2 行目として全幅に置く（場所と日付） */}
                   <span className="q-pref" style={{ gridColumn: '1 / -1', margin: 0 }}>
-                    {placeLabel(item)} ／ {item.mode === 'e' ? 'easy' : 'difficult'} ／ {formatDate(item.at)}
+                    {placeLabel(item)} ／ {modeName(item.mode)} ／ {formatDate(item.at)}
                   </span>
                 </li>
               ))}

@@ -255,7 +255,7 @@ describe('範囲・科目', () => {
     expect(hash()).toMatch(new RegExp(`^#/q/${DATA_VERSION}-e-12-\\d{4}$`))
   })
 
-  // 範囲・科目ごとの日替わりは全員が同じ問題にならないので廃止。日替わりは表紙の「今日の10問（全国・easy）」だけ
+  // 範囲・科目ごとの日替わりは全員が同じ問題にならないので廃止。日替わりは表紙の「今日の10問（全国）」だけ
   it('「今日の10問」のボタンは置かない', async () => {
     await openSelect()
 
@@ -267,7 +267,7 @@ describe('範囲・科目', () => {
 
     // 科目の切替は最初から押せる（押せないと操作が詰まる）。
     // 全国のままでは「始める」が無効になり、ボタンのラベルが案内に変わる（行は増やさない）
-    const difficult = screen.getByRole('button', { name: /^difficult/ })
+    const difficult = screen.getByRole('button', { name: '市区町村名＋町名' })
     expect(difficult).toBeEnabled()
     expect(screen.getByRole('button', { name: '始める' })).toBeEnabled()
 
@@ -321,13 +321,44 @@ describe('範囲・科目', () => {
     await openSelect()
 
     fireEvent.click(screen.getByRole('button', { name: '千葉県' }))
-    fireEvent.click(screen.getByRole('button', { name: /^difficult/ }))
+    fireEvent.click(screen.getByRole('button', { name: '市区町村名＋町名' }))
     fireEvent.click(screen.getByRole('button', { name: '始める' }))
     await settle()
 
     expect(hash()).toMatch(new RegExp(`^#/q/${DATA_VERSION}-d-12-\\d{4}$`))
   })
 
+  it('都道府県を選ぶと「全15市町村」が出て、全市区町村名で始めると -all のセットになる', async () => {
+    await openSelect()
+
+    // 全国のあいだは「全市区町村名」を選べない（都道府県ごとの出題なので）
+    expect(screen.getByRole('button', { name: '問題数: 全市区町村名' })).toBeDisabled()
+    expect(screen.queryByText(/全15市町村/)).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: '千葉県' }))
+    // フィクスチャの千葉県は meta.cities が 15 件。見出し行の余白に件数が出る
+    expect(el('.jp-map__note').textContent).toBe('千葉県 全15市町村')
+    const allButton = screen.getByRole('button', { name: '問題数: 全市区町村名（15 問）' })
+    expect(allButton).toBeEnabled()
+    fireEvent.click(allButton)
+    expect(allButton).toHaveAttribute('aria-pressed', 'true')
+    expect(el('.paper__subtitle').textContent).toContain('問題数: 全 15 問')
+
+    // 町名を含める科目に切り替えると 10 問に戻る（全市区町村名は市区町村名だけの機能）
+    fireEvent.click(screen.getByRole('button', { name: '市区町村名＋町名' }))
+    expect(screen.getByRole('button', { name: '問題数: 10 問' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: '問題数: 全市区町村名（15 問）' })).toBeDisabled()
+
+    fireEvent.click(screen.getByRole('button', { name: '市区町村名' }))
+    fireEvent.click(screen.getByRole('button', { name: '問題数: 全市区町村名（15 問）' }))
+    fireEvent.click(screen.getByRole('button', { name: '始める' }))
+    await settle()
+
+    expect(hash()).toMatch(new RegExp(`^#/q/${DATA_VERSION}-e-12-\\d{4}-all$`))
+    // 10 問を超えるので問番号は算用数字（fake timers なので waitFor ではなく settle で流す）
+    await settle()
+    expect(el('.q-number').textContent).toBe('問1 / 15')
+  })
 })
 
 // -------------------------------------------------------------------- 3. 出題
@@ -649,7 +680,7 @@ describe('出題の表示', () => {
   it('difficult は所属自治体を添え書きし、接尾辞［市］を出さない', async () => {
     await openQuiz(`${DATA_VERSION}-d-120001-1234`)
 
-    expect(el('.paper__header').textContent).toContain('科目: difficult')
+    expect(el('.paper__header').textContent).toContain('科目: 市区町村名＋町名')
     expect(el('.q-pref').textContent).toBe('千市1')
     expect(document.querySelector('.q-suffix')).toBeNull()
   })
@@ -901,8 +932,8 @@ describe('共有リンクの着地', () => {
 
     const text = el('.paper').textContent ?? ''
     expect(text).toContain('範囲: 千葉県')
-    expect(text).toContain('科目: easy（市区町村名）')
-    expect(text).toContain('全 10 問')
+    expect(text).toContain('科目: 市区町村名')
+    expect(text).toContain('問題数: 10 問')
     expect(text).toContain('制限: 20秒')
   })
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { QuestionSet, RankingRow } from '../engine/types.ts'
-import { buildQuestionSet } from '../engine/bank.ts'
+import { buildQuestionSet, defaultSource } from '../engine/bank.ts'
 import { parseSetId } from '../engine/setId.ts'
 import { defaultStorage, getClientToken, isValidNickname, provisionalRank } from '../engine/ranking.ts'
 import { defaultRankingStore, isRemoteRanking } from '../engine/ranking-factory.ts'
@@ -13,7 +13,9 @@ import { COVER_PATH, REVIEW_PATH, SELECT_PATH, absoluteUrl, navigate, quizPath }
 const KANJI_NUM = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十']
 const RANKING_LIMIT = 20
 
-function kanjiNumber(n: number): string {
+/** 問番号。10 問までは漢数字、全市区町村名のように多いときは算用数字（Quiz と同じ） */
+function questionNumber(n: number, total: number): string {
+  if (total > KANJI_NUM.length) return String(n)
   return KANJI_NUM[n - 1] ?? String(n)
 }
 
@@ -66,7 +68,15 @@ export default function Result({ setId }: { setId: string }) {
   const timeLimitMs = useMemo(() => readQuizTimeLimit(setId) ?? readTimeLimit(), [setId])
 
   const error = parsed ? loadError : `セットIDが読めません: ${setId}`
-  const score = useMemo(() => (records ?? []).filter((r) => r.correct).length * 10, [records])
+  /** 全市区町村名（練習）。順位表には載せず、得点は正答率で出す */
+  const practice = parsed?.all === true
+  const total = records?.length ?? 0
+  const correct = useMemo(() => (records ?? []).filter((r) => r.correct).length, [records])
+  /** 10 問なら正答数 × 10。全市区町村名は問題数が県ごとに違うので 100 点満点の正答率 */
+  const score = useMemo(
+    () => (practice ? (total === 0 ? 0 : Math.round((correct / total) * 100)) : correct * 10),
+    [practice, correct, total],
+  )
   const timeMs = useMemo(() => (records ?? []).reduce((sum, r) => sum + r.ms, 0), [records])
 
   /** 「今日の10問」（seed が日付）なら見出しに日付を出す */
@@ -84,7 +94,7 @@ export default function Result({ setId }: { setId: string }) {
   useEffect(() => {
     if (!parsed) return
     let alive = true
-    buildQuestionSet(parsed.mode, parsed.scope, parsed.seed)
+    buildQuestionSet(parsed.mode, parsed.scope, parsed.seed, defaultSource(), parsed.all)
       .then((s) => {
         if (alive) setSet(s)
       })
@@ -125,9 +135,10 @@ export default function Result({ setId }: { setId: string }) {
   )
 
   // 登録の有無にかかわらず、画面を開いた時点で順位表を出す。
-  // 未登録なら「登録すると N 位」を示し、登録を迷っている人も比べられるようにする
+  // 未登録なら「登録すると N 位」を示し、登録を迷っている人も比べられるようにする。
+  // 全市区町村名（練習）は順位表の対象外なので取りに行かない
   useEffect(() => {
-    if (!parsed || records === null) return
+    if (!parsed || records === null || parsed.all) return
     const saved = storage.getItem(submittedKey(setId))
     let alive = true
     void (async () => {
@@ -140,7 +151,7 @@ export default function Result({ setId }: { setId: string }) {
   }, [setId, parsed, records, loadRanking])
 
   const register = async () => {
-    if (!records || registered || submitting) return
+    if (!records || registered || submitting || practice) return
     if (!isValidNickname(nickname)) {
       setNotice('氏名（ニックネーム）が未記入です。表紙で記入してください。')
       return
@@ -225,7 +236,8 @@ export default function Result({ setId }: { setId: string }) {
           <span className="field__input">{nickname || '名無し'}</span>
         </span>
         <span className="paper__subtitle">
-          所要時間 {formatDuration(timeMs)} ／ 制限 {timeLimitMs > 0 ? `${Math.round(timeLimitMs / 1000)}秒` : 'なし'}
+          正解 {correct} / {total} 問 ／ 所要時間 {formatDuration(timeMs)} ／ 制限{' '}
+          {timeLimitMs > 0 ? `${Math.round(timeLimitMs / 1000)}秒` : 'なし'}
         </span>
       </div>
 
@@ -248,7 +260,7 @@ export default function Result({ setId }: { setId: string }) {
               </span>
               <span className="review__q">
                 <span className="sr-only">
-                  問{kanjiNumber(i + 1)}は{r.correct ? '正解' : '誤り'}。出題{' '}
+                  問{questionNumber(i + 1, records.length)}は{r.correct ? '正解' : '誤り'}。出題{' '}
                 </span>
                 {q?.display ?? r.questionId}
                 {suffix && <span className="q-suffix">［{suffix}］</span>}
@@ -262,16 +274,19 @@ export default function Result({ setId }: { setId: string }) {
 
       {notice && <p className="pen-comment">{notice}</p>}
       {shareUrl && <p className="review__mine">{shareUrl}</p>}
+      {practice && <p className="pen-comment">全市区町村名は練習なので、順位表には載りません。</p>}
 
       <p>
-        <button
-          type="button"
-          className="btn btn--primary"
-          disabled={registered || submitting}
-          onClick={() => void register()}
-        >
-          ランキングに登録
-        </button>
+        {!practice && (
+          <button
+            type="button"
+            className="btn btn--primary"
+            disabled={registered || submitting}
+            onClick={() => void register()}
+          >
+            ランキングに登録
+          </button>
+        )}
         <button type="button" className="btn" onClick={() => void share()}>
           この問題で挑ませる
         </button>
