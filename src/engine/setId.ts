@@ -59,11 +59,16 @@ export function parseSetId(str: string): ParsedSetId | null {
   return { dataVersion, mode, scope, seed }
 }
 
-/** ローカル時刻の 'YYYYMMDD' */
+/**
+ * JST（Asia/Tokyo）の暦日の 'YYYYMMDD'。
+ * 「今日の10問」は全員が同じ 10 問を解く前提なので、端末のタイムゾーンで
+ * 日付が前後しないよう JST 固定にする（UTC+9 のオフセットを足して UTC 日付を読む）。
+ */
 export function todaySeed(date: Date = new Date()): string {
-  const y = String(date.getFullYear()).padStart(4, '0')
-  const m = String(date.getMonth() + 1).padStart(2, '0')
-  const d = String(date.getDate()).padStart(2, '0')
+  const jst = new Date(date.getTime() + 9 * 60 * 60 * 1000)
+  const y = String(jst.getUTCFullYear()).padStart(4, '0')
+  const m = String(jst.getUTCMonth() + 1).padStart(2, '0')
+  const d = String(jst.getUTCDate()).padStart(2, '0')
   return `${y}${m}${d}`
 }
 
