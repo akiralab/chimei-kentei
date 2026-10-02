@@ -7,12 +7,13 @@ import Ranking from './screens/Ranking.tsx'
 import Review from './screens/Review.tsx'
 
 export default function App() {
-  const route = useHashRoute()
+  // navigated が false なら「ページを開いた直後の画面」＝共有リンクからの着地（出題なら挑戦状を挟む）
+  const { route, navigated } = useHashRoute()
   return (
     <div className="board">
       {route.name === 'cover' && <Cover />}
       {route.name === 'select' && <Select />}
-      {route.name === 'quiz' && <Quiz key={route.setId} setId={route.setId} />}
+      {route.name === 'quiz' && <Quiz key={route.setId} setId={route.setId} direct={!navigated} />}
       {route.name === 'result' && <Result key={route.setId} setId={route.setId} />}
       {route.name === 'ranking' && <Ranking />}
       {route.name === 'rankingPref' && <Ranking key={route.prefCode} prefCode={route.prefCode} />}

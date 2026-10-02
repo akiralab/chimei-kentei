@@ -22,7 +22,7 @@ import { answerSheetKey } from './hooks/answerSheet.ts'
 import { NICKNAME_KEY } from './hooks/useNickname.ts'
 import { NO_TIME_LIMIT, TIME_LIMIT_KEY } from './hooks/useTimeLimit.ts'
 import { readWrongList } from './engine/wrongList.ts'
-import { quizPath, resultPath } from './router.ts'
+import { quizPath, resetNavigated, resultPath } from './router.ts'
 import App from './App.tsx'
 
 /** Quiz.tsx の ○× を見せる時間。同値を保つ */
@@ -871,5 +871,143 @@ describe('間違えた問題', () => {
 
     expect(screen.getByRole('heading', { name: '間違えた問題' })).toBeInTheDocument()
     expect(screen.getByText(/まだ記録がありません/)).toBeInTheDocument()
+  })
+})
+
+// ----------------------------------------- 11. 共有リンクの着地（挑戦状）
+
+describe('共有リンクの着地', () => {
+  /**
+   * ページ読み込み直後と同じ状態を作る。ハッシュ遷移を 1 度も起こさずに出題 URL のまま
+   * App を載せるので、Quiz は「直接開かれた」と見て挑戦状を描く。
+   * （jsdom では location.hash への代入が hashchange を飛ばすので、history.replaceState を使う）
+   */
+  async function landOnQuiz(setId: string): Promise<void> {
+    // beforeEach の goto('#/') が積んだ hashchange を先に流し切ってから読み込み直後へ戻す
+    await settle()
+    resetNavigated()
+    history.replaceState(null, '', quizPath(setId))
+    renderApp()
+    await settle()
+  }
+
+  function startButton(): HTMLElement {
+    return screen.getByRole('button', { name: 'はじめる' })
+  }
+
+  function nameInput(): HTMLElement {
+    return screen.getByLabelText('氏名')
+  }
+
+  it('出題の前に挑戦状が出る。砂時計も問一も出ていない', async () => {
+    await landOnQuiz(SET_ID)
+
+    expect(screen.getByRole('heading', { name: '挑戦状' })).toBeInTheDocument()
+    expect(document.querySelector('.q-number')).toBeNull()
+    expect(document.querySelector('.timer')).toBeNull()
+    expect(document.querySelector('.answer-input')).toBeNull()
+  })
+
+  it('範囲・科目・問題数・制限時間が書かれている', async () => {
+    await landOnQuiz(SET_ID)
+
+    const text = el('.paper').textContent ?? ''
+    expect(text).toContain('範囲: 千葉県')
+    expect(text).toContain('科目: easy（市区町村名）')
+    expect(text).toContain('全 10 問')
+    expect(text).toContain('制限: 20秒')
+  })
+
+  it('氏名が未記入では始められず、放置しても砂時計は進まない', async () => {
+    await landOnQuiz(SET_ID)
+    expect(startButton()).toBeDisabled()
+
+    fireEvent.click(startButton())
+    await settle(TIME_LIMIT_MS * 2)
+
+    // 計測が始まっていないので自動パスも起きない
+    expect(screen.getByRole('heading', { name: '挑戦状' })).toBeInTheDocument()
+    expect(all('.mark')).toHaveLength(0)
+    expect(document.querySelector('.q-number')).toBeNull()
+  })
+
+  it('前回の名前があれば氏名欄に復元される', async () => {
+    localStorage.setItem(NICKNAME_KEY, 'はなこ')
+    await landOnQuiz(SET_ID)
+
+    expect(nameInput()).toHaveValue('はなこ')
+    expect(startButton()).toBeEnabled()
+  })
+
+  it('氏名を入れて「はじめる」で問一が出て、そこから計測が始まる', async () => {
+    await landOnQuiz(SET_ID)
+
+    fireEvent.change(nameInput(), { target: { value: 'たろう' } })
+    fireEvent.click(startButton())
+    await settle()
+
+    expect(el('.q-number').textContent).toBe('問一 / 十')
+    expect(el('.q-kanji').textContent).toContain(EXPECTED.questions[0].display)
+    expect(el('.timer__label').textContent).toContain('のこり 20 秒')
+    expect(el('.paper__header').textContent).toContain('たろう')
+    expect(localStorage.getItem(NICKNAME_KEY)).toBe('たろう')
+
+    // 自動パスは「はじめる」から 20 秒後。着地していた時間は数えない
+    await settle(TIME_LIMIT_MS - 100)
+    expect(all('.mark--wrong')).toHaveLength(0)
+    await settle(100)
+    expect(all('.mark--wrong')).toHaveLength(1)
+  })
+
+  it('挑戦状で制限を「なし」に変えて始めると砂時計が出ない', async () => {
+    await landOnQuiz(SET_ID)
+
+    fireEvent.change(nameInput(), { target: { value: 'たろう' } })
+    fireEvent.click(screen.getByRole('button', { name: '時間制限: なし' }))
+    fireEvent.click(startButton())
+    await settle()
+
+    expect(document.querySelector('.timer')).toBeNull()
+    expect(el('.paper__header').textContent).toContain('制限: なし')
+  })
+
+  it('着地から 10 問解くと結果へ進み、入力した氏名で登録できる', async () => {
+    await landOnQuiz(SET_ID)
+
+    fireEvent.change(nameInput(), { target: { value: 'はなこ' } })
+    fireEvent.click(startButton())
+    await settle()
+
+    for (const q of EXPECTED.questions) await answerOne(q.answer)
+    await settle()
+
+    expect(hash()).toBe(resultPath(SET_ID))
+    fireEvent.click(screen.getByRole('button', { name: 'ランキングに登録' }))
+    await settle()
+
+    expect(all('.ranking__row')[0].textContent).toContain('はなこ')
+  })
+
+  it('壊れた setId を直接開いたときは挑戦状ではなく出題エラー', async () => {
+    await landOnQuiz('こわれた')
+
+    expect(screen.getByText(/セットIDが読めません/)).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: '挑戦状' })).toBeNull()
+  })
+
+  it('アプリ内の「始める」から来たときは挑戦状を挟まない', async () => {
+    renderApp()
+    await settle()
+
+    // 表紙 → 範囲・科目 → 出題
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'たろう' } })
+    fireEvent.click(screen.getByRole('button', { name: 'はじめる' }))
+    await settle()
+    fireEvent.click(screen.getByRole('button', { name: '千葉県' }))
+    fireEvent.click(screen.getByRole('button', { name: '始める' }))
+    await settle()
+
+    expect(screen.queryByRole('heading', { name: '挑戦状' })).toBeNull()
+    expect(el('.q-number').textContent).toBe('問一 / 十')
   })
 })
