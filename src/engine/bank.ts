@@ -7,8 +7,12 @@ import { MIN_POOL_FOR_SCOPE, QUESTIONS_PER_SET } from './types.ts'
 import { SCOPE_NATIONWIDE, buildSetId } from './setId.ts'
 import { sampleQuestions } from './sampler.ts'
 
-/** 問題バンクの版。public/questions/{DATA_VERSION}/ に対応する */
-export const DATA_VERSION = 'abr20260925'
+/**
+ * 問題バンクの版。public/questions/{DATA_VERSION}/ に対応する。
+ * r2 = easy から「幹に漢字が 1 字も無い」市区町村 41 件を除いた版。
+ * 版を上げる手順（旧版を残す・Lambda の再デプロイ）は data/README.md の「版の扱い」。
+ */
+export const DATA_VERSION = 'abr20260925r2'
 
 export interface BankSource {
   meta(): Promise<BankMeta>

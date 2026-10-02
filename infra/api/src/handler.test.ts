@@ -4,7 +4,7 @@
  */
 import { beforeEach, describe, expect, it } from 'vitest'
 import { fixtureSource } from '../../../src/engine/__fixtures__/questions.ts'
-import { buildQuestionSet } from '../../../src/engine/bank.ts'
+import { DATA_VERSION, buildQuestionSet } from '../../../src/engine/bank.ts'
 import type { QuestionSet } from '../../../src/engine/types.ts'
 import type {
   DdbPort,
@@ -17,7 +17,7 @@ import type {
 } from './handler.ts'
 import { STATS_PK, createHandler, prefPk, setPk } from './handler.ts'
 
-const SET_ID = 'abr20260925-e-12-1234'
+const SET_ID = `${DATA_VERSION}-e-12-1234`
 const ORIGIN = 'https://akiralab.github.io'
 
 /** pk|sk → item のメモリ実装。条件付き書き込みと ADD の加算だけを再現する */
@@ -268,7 +268,7 @@ describe('POST /results', () => {
 
   it('setId が読めない・版が違うなら 400', async () => {
     const handler = makeHandler(memoryDdb())
-    for (const setId of ['こわれた', 'abr20260925-e-12-12', 'abr20991231-e-12-1234']) {
+    for (const setId of ['こわれた', `${DATA_VERSION}-e-12-12`, 'abr20991231-e-12-1234']) {
       const res = await handler(postEvent({ setId, nickname: 'た', clientToken: 'x', answers: answersFor(7) }))
       expect(res.statusCode).toBe(400)
     }
@@ -416,7 +416,7 @@ describe('CORS', () => {
 describe('都道府県別の集計', () => {
   /** scope が異なる setId で投稿するためのヘルパー。seed は 4 桁 */
   function setIdOf(mode: 'e' | 'd', scope: string, seed: string): string {
-    return `abr20260925-${mode}-${scope}-${seed}`
+    return `${DATA_VERSION}-${mode}-${scope}-${seed}`
   }
 
   async function post(

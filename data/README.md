@@ -1,11 +1,13 @@
 # 問題バンク生成（data/build_questions.py）
 
 デジタル庁 アドレス・ベース・レジストリ 全国 町字マスター 2026-09-25 版（CC BY 4.0）を加工して
-`public/questions/abr20260925/` に問題バンク JSON を書き出す。外部ライブラリ不使用（標準ライブラリのみ）。
+`public/questions/abr20260925r2/` に問題バンク JSON を書き出す。外部ライブラリ不使用（標準ライブラリのみ）。
+出力先の版は `build_questions.py` の `DATA_VERSION`（→ [版の扱い](#版の扱い)）。
 
 ```sh
 npm run build:questions                      # = python3 data/build_questions.py
 python3 data/build_questions.py --abr-dir <dir> --out-dir <dir>   # 入出力を差し替える場合
+python3 -m unittest discover -s data -p 'test_*.py'               # 前処理ルールの単体テスト
 ```
 
 ## 入力（`~/workspace/abr-data/processed/`）
@@ -15,9 +17,12 @@ python3 data/build_questions.py --abr-dir <dir> --out-dir <dir>   # 入出力を
 
 ## 出力（型は `src/engine/types.ts` の `Question` / `BankMeta`。`ensure_ascii=False`・インデントなし・キー順は宣言順）
 
-- `easy.json` … 市区町村 1,741 件（id 昇順）
+- `easy.json` … 市区町村 **1,700 件**（id 昇順）。全 1,741 件から、ルール e で幹に漢字が 1 字も無い 41 件を除いたもの。
+  都道府県別の最小は 富山県・福井県・香川県の各 15 件（1 セット 10 問に対して十分）
 - `difficult/{prefCode}.json` … 大字・町 107,681 件を 47 都道府県に分割（id 昇順。最小 沖縄県 665／最大 愛知県 6,743）
-- `meta.json` … dataVersion / generatedAt / source / prefectures[47] / cities[1,741]
+- `meta.json` … dataVersion / generatedAt / source / prefectures[47] / cities[1,741]。
+  `prefectures[].easyCount` は**除外後**の件数。`cities` は**除外前の全 1,741 件**を残す
+  （範囲選択の市区町村検索と difficult の絞り込みに使うため。easy の出題集合とは一致しない）
 
 ## 前処理ルール（設計 §4）
 
@@ -26,11 +31,49 @@ python3 data/build_questions.py --abr-dir <dir> --out-dir <dir>   # 入出力を
 - **b** 末尾 1 文字（市区町村）を `suffix` に分離し、読みからも シ/ク/チョウ|マチ/ソン|ムラ を外す。剥がせなければ例外で停止。
 - **c** difficult は `level=='大字・町'` かつ `n_readings=='1'` かつ `kana_small_suspect=='False'` の行のみ。
 - **d** 先頭の冠「大字」「字」を外す。読みが オオアザ/アザ のどちらで始まっても外す（どちらでもない 368 件は漢字のみ）。
-- **e** 幹が漢字（々・〆 を含む）のみで構成される行だけ残す（数字・カナ・記号を含む 11,987 件を除外）。
-  ほか複数読み 596 件・`kana_small_suspect` 5,672 件・空 1 件を除外（`level=='大字・町'` 127,894 → ルール c 通過 121,626）。
+- **e** 「漢字」は `々`・`〆` を含む（`KANJI_CLASS`）。difficult と easy で要求が違う。
+  - difficult … 幹が**漢字のみ**で構成される行だけ残す（数字・カナ・記号を含む 11,987 件を除外）。
+    ほか複数読み 596 件・`kana_small_suspect` 5,672 件・空 1 件を除外（`level=='大字・町'` 127,894 → ルール c 通過 121,626）。
+  - easy … 幹に**漢字が 1 字以上**あるものだけ残す（`has_kanji()`）。「せたな」「ニセコ」「つくばみらい」のように
+    かなだけで書かれた 41 件は、読む問題にならず見ただけで得点できてしまうので除外する（Issue #14）。
+    「鎌ケ谷」「ふじみ野」「南アルプス」のように漢字とかなが混ざるものは読みとして成立するので残す。
 - **f** 丁目は対応表で分離済みのため何もしない。**g** `status_flg` は対応表に無いため何もしない。
 - 同一 `lgCode`・同一 `display` の重複は、`answer` が一致すれば 1 件に集約（1,715 件を除外）。
   `answer` が割れて正解を一意にできない 115 display（242 行）はキーごと全件落とす。
+
+## 版の扱い
+
+`DATA_VERSION`（= 出力ディレクトリ名 = `setId` の先頭）は、**出題内容が変わったら必ず上げる**。
+`setId` は `{dataVersion}-{mode}-{scope}-{seed}` で、クライアントと API はこの seed から
+問題バンクの並びに依存して 10 問を抽出する。版を据え置いたまま母集団を変えると、
+既存の共有リンク・順位表が「同じ setId なのに違う 10 問」を指すことになる。
+
+| 版 | 出力先 | 中身 |
+|---|---|---|
+| `abr20260925` | `public/questions/abr20260925/` | 初版。easy 1,741 件 |
+| `abr20260925r2` | `public/questions/abr20260925r2/`（現行） | easy 1,700 件（ルール e を easy にも適用し 41 件を除外）。difficult と `meta.cities` は初版と同一 |
+
+**旧版のディレクトリは削除も変更もしない。** 旧 setId の順位表を閲覧専用で残すため（Issue #11）と、
+API（Lambda）が旧版を読んでいる移行期間のため。difficult の JSON は内容が同一なので
+git の blob は初版と共有され、リポジトリは重くならない。
+
+### 版を上げたときの手順（順序が大事）
+
+`DATA_VERSION` は 2 か所にあり、**必ず同じ値**にする。
+
+1. `data/build_questions.py` の `DATA_VERSION`
+2. `src/engine/bank.ts` の `DATA_VERSION`（クライアントと Lambda が共有する）
+
+そのうえで:
+
+1. `npm run build:questions` で新しい版のディレクトリを生成する（旧版はそのまま置く）
+2. マージ → GitHub Pages のデプロイ（新しい版の JSON が公開される）
+3. **`npm run deploy:api` で Lambda を更新する**（`infra/README.md` の「デプロイ」）
+
+3 を忘れると、Lambda は旧版の `DATA_VERSION` を同梱したままなので、新しい版の setId で登録しようとすると
+「この版では再現できない setId です」で 400 になる。**2 と 3 のあいだは共有ランキングへの登録ができない。**
+なお、クライアントの `buildQuestionSet` は setId に書かれた版を見ず常に現行の `DATA_VERSION` で再導出するので、
+旧 setId の共有リンクを開くと新しい版で 10 問が引き直され、結果画面と登録は新しい setId で行われる。
 
 ---
 
@@ -61,7 +104,8 @@ cd data && uv run python build_geo.py --prefs 1,42 --out-dir /tmp/geo   # 一部
 | `public/geo/japan.json` | 都道府県ポリゴン 47 件 | 188 KB |
 | `public/geo/municipalities.json` | `Record<lgCode, MunicipalityStats>` 1,741 件 | 326 KB |
 
-市区町村は **1,741 件**で、問題バンクの `easy.json`（1,741 件）と `lgCode`・`name` が完全一致する。
+市区町村は **1,741 件**で、問題バンクの `meta.json` の `cities`（1,741 件）と `lgCode`・`name` が完全一致する
+（`easy.json` はルール e で 41 件を除いた 1,700 件なので、こちらと数は合わない）。
 人口合計 126,146,076 人・世帯合計 55,830,132 世帯・面積合計 372,761.2 km²。
 
 ## 水面調査区（HCODE=8154）は除外する
@@ -124,6 +168,6 @@ GEOS は潰せない辺を残すので、関東 10 県だけでも 26,000 頂点
 
 - 3 種のファイルがすべて JSON としてパースでき、`properties` のキーが契約どおり（`lgCode`/`prefCode`/`name`、
   都道府県は `prefCode`/`name`、統計は 9 キー）
-- `pref/*.json` の Feature 合計 1,741 ＝ `municipalities.json` の件数 ＝ `easy.json` の `lgCode` 種類数、かつ 3 者の `lgCode` 集合と `name` が一致
+- `pref/*.json` の Feature 合計 1,741 ＝ `municipalities.json` の件数 ＝ `meta.json` の `cities` の件数、かつ 3 者の `lgCode` 集合と `name` が一致
 - 全ポリゴンが `is_valid`、`centroid` が日本の範囲内
 - `japan.json` の各県ポリゴンが主要な離島の代表点を含む
