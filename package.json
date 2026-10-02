@@ -9,6 +9,7 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "test": "vitest",
+    "build:og": "node og/render.mjs",
     "build:questions": "python3 data/build_questions.py",
     "build:api": "esbuild infra/api/src/handler.ts --bundle --platform=node --target=node22 --format=esm --outfile=infra/api/dist/handler.mjs --external:@aws-sdk/*",
     "deploy:api": "bash infra/deploy.sh"
