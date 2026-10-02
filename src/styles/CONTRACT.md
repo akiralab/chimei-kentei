@@ -53,3 +53,58 @@
 - フォントは `index.html` の `<link>` で Google Fonts から読み込む（design 側が追加）
 - `src/main.tsx` が `./styles/tokens.css` と `./styles/theme.css` を import する（ui 側が追加）
 - ダークモード対応は不要。正誤は色と記号（○×）の両方で示す
+
+## v1 追加（担当分け）
+
+- `src/styles/map.css`（地図・2 カラム。クラス接頭辞 `.layout*` `.map*` `.jp-map*` `.info-card*`）は **地図 UI 担当**が所有し、`theme.css` には書かない。
+- `src/styles/tokens.css` / `theme.css` / `index.html` のフォント指定は **タイポグラフィ担当**が所有する。
+- `src/components/HiraganaInput.tsx` は **入力担当**が所有し、クラスは既存の `.answer-input` を使う（必要な修飾子は `.answer-input--ime` のように接尾）。
+
+## v1 追加（2026-10-02 / タイポグラフィ・入力担当）
+
+### 書体
+
+| 変数 | 書体 | 役割 |
+|---|---|---|
+| `--font-display` | **Mochiy Pop One** | 見出し・ボタン・問番号・順位。**Dela Gothic One から変更** |
+| `--font-stamp` | Dela Gothic One | 得点スタンプの数字（`.stamp__num`）だけに残した |
+
+Dela Gothic One は字幅を詰めた極太デザインで、1.4rem 前後の漢字（範囲・結果・匝瑳）が墨だまりになって読めなかった。Mochiy Pop One は同程度にポップで、画線が均一・フトコロが開いているため小さくしても潰れない。`index.html` と `public/theme-preview.html` の Google Fonts `<link>` は 5 書体（Dela Gothic One / Klee One / Mochiy Pop One / Shippori Mincho B1 / Yusei Magic）。
+
+### 文字サイズの約束
+
+- `.paper__title` … 375px で約 1.83rem、1024px 以上で 2.4rem（`--fs-title`）
+- `.q-number` / `.paper__section` … 375px で約 1.41rem、1024px 以上で 1.75rem（`--fs-xl`）
+- 本文（明朝・`--fs-md`）は据え置き。`.field__label` は `--fs-xs` → `--fs-sm`、`.field__input` は `--fs-lg`（1.0625rem → 1.1875rem）に 1 段上げた
+- `@media (max-height: 740px)`（iPhone SE 等）では **余白トークンと見出し以外の文字**だけを縮める。上の下限は割らない
+
+### 追加クラス
+
+| クラス | 役割 |
+|---|---|
+| `.paper__section` | 用紙の中の節見出し（「答案の見直し」「順位表」）。`<h3>` に付ける。`.paper__title` の 1 段下 |
+| `.answer-hint` | 解答欄の下の案内文。`HiraganaInput` が必ず出す（`aria-describedby` で入力欄と結ぶ） |
+| `.cover` | 表紙の `.paper` に併記する修飾子 |
+| `.cover__title` / `.cover__subtitle` | 表紙の大見出し（`--fs-cover`）と副題。`.paper__title` / `.paper__subtitle` に足す |
+| `.cover__bubble` | 赤ペンの吹き出し（「目指せ！…」）。尻尾は `::before` / `::after` |
+| `.cover__field` | 表紙のニックネーム欄。`.field` に足して中央寄せ・拡大 |
+| `.cover__note` | 氏名欄の下の注記 |
+| `.cover__actions` / `.cover__sub-actions` | 「はじめる」と「ランキングを見る」の置き場 |
+| `.cover__start` | `.btn.btn--primary` に足して拡大＋浮きアニメ（`prefers-reduced-motion` で停止） |
+| `.cover__ranking` | `.btn.btn--ghost` に足して控えめに縮める |
+| `.cover__prop` / `--pencil` / `--circle` / `--stamp` | 用紙の余白の小物（鉛筆・赤ペンの花丸・「満点」のゴム印）。画像を使わず絵文字と CSS だけ。`aria-hidden="true"` を付ける |
+
+### 1 画面運用（ページをスクロールさせない）
+
+- `body` は `height: 100%` + `overflow: hidden`。`.board` は `height: 100dvh` + `overflow: hidden` で上下中央寄せ
+- `.paper` は `display: flex; flex-direction: column; max-height: 100%; min-height: 0; overflow-y: auto`
+- **`.paper` の直下の子は既定で縮まない**（`.paper > * { flex: 0 0 auto }`）。
+  長くなりうる `.review` / `.ranking` / `.pref-grid` だけが `flex: 1 1 auto` + `overflow-y: auto` で**用紙の内側だけ**スクロールする（下限 `.review`/`.ranking` 5.5rem、`.pref-grid` 7rem）
+- `.paper__header` は `position: sticky; top: 0`、**`.btn` を直接含む `<p>` / `<div>` は `position: sticky; bottom: 0`**。
+  つまり画面側は**ボタンを `<p>` か `<div>` で包む**こと（現行の 4 画面はすべてそうなっている）。包まないと底に貼り付かない
+- 確認したビューポート: 375×667 と 1280×800。表紙・範囲選択・出題は用紙の内側スクロールも不要、結果だけ `.review` / `.ranking` が内側で動く。どの画面も `body` はスクロールしない
+
+### 入力
+
+- `src/components/HiraganaInput.tsx` が `.answer-input` ＋ `.answer-hint` を出す。値は常にひらがな＋「ー」
+- 変換規則は `src/components/hiragana.ts`（`splitHiragana` / `toHiraganaStrict`）。`wanakana` の `toKana({ IMEMode: 'toHiragana' })` を使う

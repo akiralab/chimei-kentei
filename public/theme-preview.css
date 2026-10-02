@@ -47,17 +47,28 @@
   /* ---- フォント ------------------------------------------------------- */
   /* index.html の Google Fonts <link> で読み込む。必ずフォールバックを添える */
   --font-body: 'Shippori Mincho B1', 'Hiragino Mincho ProN', 'Yu Mincho', 'YuMincho', serif;
-  --font-display: 'Dela Gothic One', 'Hiragino Sans', 'Yu Gothic', sans-serif;
+  /* 見出し。Dela Gothic One から Mochiy Pop One へ（2026-10-02）。
+     Dela は字幅を詰めた極太デザインで、2 文字熟語の漢字（範囲・結果・匝瑳）が
+     1.4rem 前後で墨だまりになって読めなかった。Mochiy は同じくらいポップだが
+     画線が均一でフトコロが開いており、小さくしても字面が潰れない。 */
+  --font-display: 'Mochiy Pop One', 'Hiragino Sans', 'Yu Gothic', sans-serif;
   --font-hand: 'Klee One', 'Hiragino Mincho ProN', 'Yu Mincho', serif;
   --font-pen: 'Yusei Magic', 'Hiragino Sans', 'Yu Gothic', sans-serif;
+  /* 得点スタンプの数字だけ Dela Gothic One に残す。数字 2 桁しか使わないので
+     潰れようがなく、縦に詰まった字形がゴム印らしく見える */
+  --font-stamp: 'Dela Gothic One', 'Hiragino Sans', 'Yu Gothic', sans-serif;
 
   /* ---- 文字サイズ（clamp で 375px〜1024px+ を 1 本化）----------------- */
   --fs-xs: 0.75rem;
   --fs-sm: 0.8125rem;
+  /* 本文（明朝）の大きさ。ここは触らない */
   --fs-md: 0.9375rem;
-  --fs-lg: 1.0625rem;
-  --fs-xl: clamp(1.125rem, 0.95rem + 0.9vw, 1.5rem);
-  --fs-title: clamp(1.25rem, 1rem + 1.6vw, 1.875rem);
+  /* 氏名欄・得点欄・見直しの出題。2026-10-02 に 1.0625rem から 1 段上げた */
+  --fs-lg: 1.1875rem;
+  /* 節見出し（問番号・順位表・答案の見直し）。375px でも 1.4rem を割らない */
+  --fs-xl: clamp(1.4rem, 1.2rem + 0.9vw, 1.75rem);
+  /* 用紙の見出し。375px で約 1.83rem、1024px 以上で 2.4rem */
+  --fs-title: clamp(1.8rem, 1.45rem + 1.6vw, 2.4rem);
   /* 出題漢字: 最小 2.4rem を下限に、375px では約 2.8rem まで縮む */
   --fs-kanji: clamp(2.4rem, 1.4rem + 6vw, 4.4rem);
   --fs-answer: clamp(1.5rem, 1.1rem + 2.4vw, 2.25rem);
@@ -85,8 +96,29 @@
   --rule-height: 2rem;
   /* 用紙の最大幅（1 画面 1 枚）*/
   --paper-max: 720px;
+  /* 表紙のタイトル。見出しより更に一段大きい（表紙にしか使わない）*/
+  --fs-cover: clamp(2.25rem, 1.6rem + 2.8vw, 3.25rem);
 }
 
+/* --------------------------------------------------------------------------
+   縦に余裕のない画面（iPhone SE 375x667 など）。
+   ページをスクロールさせない方針なので、入りきらない分は余白と
+   「見出し以外」の文字で吸収する。
+   --fs-title / --fs-xl は可読性の下限として決めた値なので下げない。
+   -------------------------------------------------------------------------- */
+@media (max-height: 740px) {
+  :root {
+    --space-5: 1.125rem;
+    --space-6: 1.375rem;
+    --space-7: 1.75rem;
+    --space-8: 2rem;
+    --fs-kanji: clamp(2rem, 1.2rem + 5vw, 3.2rem);
+    --fs-answer: clamp(1.375rem, 1.1rem + 1.8vw, 1.875rem);
+    --fs-mark: clamp(1.5rem, 1.1rem + 1.8vw, 2.25rem);
+    --fs-stamp: clamp(1.875rem, 1.3rem + 2.6vw, 2.75rem);
+    --fs-cover: clamp(2rem, 1.5rem + 2.2vw, 2.75rem);
+  }
+}
 /* ==========================================================================
    theme.css — 答案用紙テーマの部品（正本）
    --------------------------------------------------------------------------
@@ -110,10 +142,16 @@
 
 html {
   -webkit-text-size-adjust: 100%;
+  height: 100%;
 }
 
+/* 1 画面で完結させる。ページ（body）はスクロールせず、はみ出す中身は
+   用紙（.paper）の内側だけが動く。アドレスバーの伸縮を拾う dvh を使う */
 body {
   margin: 0;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
   font-family: var(--font-body);
   font-size: var(--fs-md);
   line-height: 1.8;
@@ -145,13 +183,17 @@ body {
    -------------------------------------------------------------------------- */
 
 .board {
-  min-height: 100vh;
-  min-height: 100dvh;
-  padding: var(--space-5) var(--space-3) var(--space-8);
+  /* min-height ではなく height。黒板はビューポートそのもので、ここはスクロールしない */
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  padding: var(--space-4) var(--space-3);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--space-5);
+  /* 用紙は上下中央。短い画面では .paper 側が縮んで収まる */
+  justify-content: center;
+  gap: var(--space-3);
   background-color: var(--color-board);
   background-image:
     radial-gradient(ellipse 60% 40% at 18% 12%, var(--color-chalk), transparent 70%),
@@ -169,6 +211,17 @@ body {
 .paper {
   width: 100%;
   max-width: var(--paper-max);
+  /* 黒板に収まる高さまで縮む。min-height: 0 が無いと flex 項目は内容分だけ伸びる */
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  /* 中身が本当に収まらないときの逃げ道。普段は下の .review / .ranking /
+     .pref-grid が先に縮んでスクロールするので、ここは動かない */
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
   padding: var(--space-5) clamp(var(--space-3), 3vw, var(--space-6)) var(--space-6);
   position: relative;
   background-color: var(--color-paper);
@@ -183,7 +236,46 @@ body {
   background-position: left top;
   border-radius: var(--radius-paper);
   box-shadow: var(--shadow-paper);
-  overflow: hidden; /* 罫線を角丸で切る */
+}
+
+/* 用紙の中の縦の並び。既定はどれも縮ませない（文字を潰さない）*/
+.paper > * {
+  flex: 0 0 auto;
+}
+
+/* 長くなりうる一覧だけが、用紙の内側で縮んでスクロールする。
+   min-height を 0 にすると狭い画面で高さが消えて一覧が見えなくなるので、
+   「必ず数行は見える」下限を置く。ここで吸収しきれない分は用紙が
+   スクロールするが、下の sticky で帯とボタンは残る */
+.paper > .review,
+.paper > .ranking,
+.paper > .pref-grid {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.paper > .review,
+.paper > .ranking {
+  min-height: 5.5rem;
+}
+
+.paper > .pref-grid {
+  min-height: 7rem;
+}
+
+/* ボタンの並び（画面側は .btn を <p> か <div> で包む）は用紙の底に貼り付ける。
+   一覧が長くて用紙が動いても、主ボタンは必ず押せる位置に残る */
+.paper > :is(p, div):has(> .btn) {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  padding-block: var(--space-2);
+  margin-bottom: 0;
+  background: var(--color-paper);
+  /* sticky の基準は用紙の padding box なので、下の余白から次の行が覗く。
+     用紙色の実線影で下側の余白ごと塗りつぶす */
+  box-shadow: 0 var(--space-6) 0 var(--color-paper);
 }
 
 /* 用紙の左に綴じ代（薄い縦線）。装飾なので小さい画面では出さない */
@@ -200,9 +292,11 @@ body {
 }
 
 .paper__header {
-  /* 罫線の上に乗せて隠す（自力で不透明な地を持つ）*/
-  position: relative;
-  z-index: 1;
+  /* 罫線の上に乗せて隠す（自力で不透明な地を持つ）。
+     用紙の中身が動いても見出しだけは残るよう sticky にする */
+  position: sticky;
+  top: 0;
+  z-index: 2;
   margin: calc(var(--space-5) * -1) calc(clamp(var(--space-3), 3vw, var(--space-6)) * -1) var(--space-5);
   padding: var(--space-4) clamp(var(--space-3), 3vw, var(--space-6)) var(--space-3);
   display: flex;
@@ -219,7 +313,22 @@ body {
   font-family: var(--font-display);
   font-size: var(--fs-title);
   font-weight: 400;
-  line-height: 1.3;
+  /* 2 行に折り返したときに行が噛み合わないよう、丸みのある書体に合わせて広めに取る */
+  line-height: 1.35;
+  letter-spacing: 0.03em;
+  color: var(--color-ink);
+  /* 「出題できませんでした」のような長い見出しでも 375px で溢れない */
+  overflow-wrap: anywhere;
+}
+
+/* 用紙の中の節見出し（「答案の見直し」「順位表」など）。
+   .paper__title ほど大きくせず、本文より明確に大きい段を 1 つ持たせる */
+.paper__section {
+  margin: var(--space-6) 0 var(--space-3);
+  font-family: var(--font-display);
+  font-size: var(--fs-xl);
+  font-weight: 400;
+  line-height: 1.4;
   letter-spacing: 0.02em;
   color: var(--color-ink);
 }
@@ -249,15 +358,16 @@ body {
 .field__label {
   flex: none;
   font-family: var(--font-body);
-  font-size: var(--fs-xs);
-  letter-spacing: 0.1em;
+  /* --fs-xs から 1 段上げた（2026-10-02）。帯の中で読めない大きさだったため */
+  font-size: var(--fs-sm);
+  letter-spacing: 0.08em;
   color: var(--color-pencil);
 }
 
 .field__input {
-  flex: 1 1 5rem;
-  min-width: 3.5rem;
-  max-width: 11rem;
+  flex: 1 1 5.5rem;
+  min-width: 4rem;
+  max-width: 12rem;
   padding: 0 var(--space-1) 2px;
   font-family: var(--font-hand);
   font-size: var(--fs-lg);
@@ -288,7 +398,8 @@ body {
   font-family: var(--font-display);
   font-size: var(--fs-xl);
   font-weight: 400;
-  letter-spacing: 0.06em;
+  line-height: 1.4;
+  letter-spacing: 0.04em;
   color: var(--color-ink);
 }
 
@@ -367,6 +478,16 @@ body {
 .answer-input:disabled {
   color: var(--color-pencil);
   border-bottom-style: dashed;
+}
+
+/* 解答欄の下に添える使い方の一言（HiraganaInput が必ず出す）。
+   鉛筆書きの注意書きのつもりなので、本文より小さく薄く */
+.answer-hint {
+  margin: calc(var(--space-2) * -1) 0 var(--space-4);
+  font-family: var(--font-hand);
+  font-size: var(--fs-sm);
+  line-height: 1.6;
+  color: var(--color-pencil);
 }
 
 /* --------------------------------------------------------------------------
@@ -487,6 +608,8 @@ body {
 }
 
 .stamp__num {
+  /* 見出し書体から独立。ゴム印らしい縦長の数字だけ Dela Gothic One を残す */
+  font-family: var(--font-stamp);
   font-size: var(--fs-stamp);
   letter-spacing: 0.02em;
 }
@@ -822,7 +945,206 @@ body {
 }
 
 /* --------------------------------------------------------------------------
-   16. .footer-credit — 出典表記
+   16. .cover — 表紙
+   「小テストが配られた瞬間」の 1 枚。1 画面に収めるのが絶対条件なので、
+   .paper の中身を縦に中央寄せし、余白は gap だけで作る（margin を積まない）。
+   -------------------------------------------------------------------------- */
+
+.cover {
+  text-align: center;
+  gap: var(--space-4);
+  /* 用紙が黒板いっぱいに伸びたときに中身を中央へ。縮んだときは上詰め */
+  justify-content: center;
+}
+
+/* 表紙の帯は中央寄せ（他の画面は氏名欄・得点欄を右に流す）*/
+.cover > .paper__header {
+  justify-content: center;
+  text-align: center;
+  gap: var(--space-1);
+}
+
+.cover__title {
+  /* .paper__title の margin-right: auto を打ち消して中央へ */
+  margin-right: 0;
+  flex-basis: 100%;
+  font-size: var(--fs-cover);
+  line-height: 1.25;
+}
+
+.cover__subtitle {
+  flex-basis: 100%;
+  order: 0; /* .paper__subtitle の order: 1 を打ち消す */
+  font-family: var(--font-hand);
+  font-size: var(--fs-md);
+  letter-spacing: 0.08em;
+}
+
+/* 赤ペンで欄外に書き足した煽り文句。吹き出しの尻尾は ::before/::after の三角 */
+.cover__bubble {
+  position: relative;
+  align-self: center;
+  max-width: 22rem;
+  margin: var(--space-2) 0 0;
+  padding: var(--space-3) var(--space-4);
+  font-family: var(--font-pen);
+  font-size: var(--fs-lg);
+  line-height: 1.5;
+  color: var(--color-red-pen);
+  background: var(--color-paper);
+  border: 2.5px solid var(--color-red-pen);
+  border-radius: 18px;
+  /* 二重線。手書きのゆるさを出すため少しだけ傾ける */
+  box-shadow: 0 0 0 2px var(--color-paper), 0 0 0 4px var(--color-red-pen-faint);
+  transform: rotate(-1.5deg);
+}
+
+/* 尻尾（外側の縁取りと内側の塗りを 2 枚重ねる）*/
+.cover__bubble::before,
+.cover__bubble::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  border: 11px solid transparent;
+  border-top-color: var(--color-red-pen);
+  border-bottom: 0;
+}
+
+.cover__bubble::before {
+  bottom: -11px;
+  margin-left: -11px;
+}
+
+.cover__bubble::after {
+  bottom: -8px;
+  margin-left: -8px;
+  border-width: 8px;
+  border-top-color: var(--color-paper);
+}
+
+/* 氏名欄は表紙だけ中央に置き、少し大きく見せる */
+.cover__field {
+  align-self: center;
+  justify-content: center;
+  margin-top: var(--space-2);
+}
+
+.cover__field .field__input {
+  flex: 0 1 12rem;
+  text-align: center;
+  font-size: var(--fs-xl);
+}
+
+.cover__note {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--color-pencil);
+}
+
+.cover__actions {
+  margin: var(--space-2) 0 0;
+}
+
+/* 表紙は必ず 1 画面に収まるので、ボタンを底に貼り付ける必要がない。
+   貼り付けると用紙色の帯が小物（鉛筆）を隠してしまうので戻す */
+.cover > .cover__actions,
+.cover > .cover__sub-actions {
+  position: static;
+  padding-block: 0;
+  background: none;
+  box-shadow: none;
+}
+
+/* 「ランキングを見る」は控えめに。主役は「はじめる」 */
+.cover__sub-actions {
+  margin: var(--space-1) 0 0;
+}
+
+.cover__ranking {
+  min-height: 38px;
+  padding: var(--space-1) var(--space-4);
+  font-size: var(--fs-sm);
+}
+
+/* 主役のボタン。押したくなる大きさと、紙がひらひらする程度の浮き */
+.cover__start {
+  min-height: 56px;
+  padding: var(--space-3) var(--space-8);
+  font-size: var(--fs-xl);
+  letter-spacing: 0.08em;
+  box-shadow: 0 4px 0 var(--color-ink);
+  animation: cover-float 2.4s ease-in-out infinite;
+}
+
+.cover__start:disabled {
+  animation: none;
+}
+
+@keyframes cover-float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-1deg);
+  }
+  50% {
+    transform: translateY(-5px) rotate(1deg);
+  }
+}
+
+/* 用紙の余白に転がっている小物。画像は使わず絵文字と CSS だけで描く。
+   読み上げ対象ではないので markup 側で aria-hidden を付ける */
+.cover__prop {
+  position: absolute;
+  line-height: 1;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* 赤ペンで付けた花丸（右下）*/
+.cover__prop--circle {
+  right: var(--space-5);
+  bottom: var(--space-5);
+  width: 3.25rem;
+  height: 3.25rem;
+  border: 4px solid var(--color-red-pen);
+  border-radius: 50%;
+  opacity: 0.45;
+  transform: rotate(-12deg);
+}
+
+/* 鉛筆（左下）。消しゴムの削りかすの代わりに少し傾ける */
+.cover__prop--pencil {
+  left: var(--space-4);
+  bottom: var(--space-4);
+  font-size: 2rem;
+  transform: rotate(-24deg);
+}
+
+/* 「満点」のゴム印（右上）。帯（sticky・z-index 2）の上に押す */
+.cover__prop--stamp {
+  top: var(--space-4);
+  right: var(--space-4);
+  z-index: 3;
+  padding: 2px var(--space-2);
+  font-family: var(--font-pen);
+  font-size: var(--fs-sm);
+  letter-spacing: 0.16em;
+  white-space: nowrap;
+  color: var(--color-stamp);
+  border: 2px solid var(--color-stamp);
+  border-radius: var(--radius-sm);
+  opacity: 0.6;
+  transform: rotate(9deg);
+}
+
+/* 狭い画面では用紙を圧迫するので、右上のゴム印だけ下げる（鉛筆と花丸は残す）*/
+@media (max-width: 420px) {
+  .cover__prop--stamp {
+    display: none;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   17. .footer-credit — 出典表記
    -------------------------------------------------------------------------- */
 
 .footer-credit {
@@ -842,7 +1164,40 @@ body {
 }
 
 /* --------------------------------------------------------------------------
-   17. 動きの抑制
+   17.5 縦に余裕のない画面での詰め
+   tokens.css 側で余白トークンを縮めたうえで、出題画面が 375x667 で
+   1 枚に収まるよう部品の margin も落とす。文字サイズは触らない。
+   -------------------------------------------------------------------------- */
+
+@media (max-height: 740px) {
+  .q-prompt {
+    margin-bottom: var(--space-3);
+  }
+
+  .q-kanji {
+    line-height: 1.15;
+  }
+
+  .answer-input {
+    margin-top: var(--space-3);
+  }
+
+  .answer-hint {
+    margin-bottom: var(--space-3);
+  }
+
+  .q-pref {
+    margin-top: var(--space-1);
+  }
+
+  .paper__header {
+    padding-bottom: var(--space-2);
+    margin-bottom: var(--space-3);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   18. 動きの抑制
    回転（スタンプ・赤ペンの傾き）は静的な transform なので残す。
    時間変化するものだけ止める。
    -------------------------------------------------------------------------- */
@@ -858,6 +1213,12 @@ body {
 
   .btn:hover:not(:disabled),
   .btn:active:not(:disabled) {
+    transform: none;
+  }
+
+  /* 表紙のボタンの浮きは止める（傾きも持っているので transform ごと落とす）*/
+  .cover__start {
+    animation: none;
     transform: none;
   }
 }
