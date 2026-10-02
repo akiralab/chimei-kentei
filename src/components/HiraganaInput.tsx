@@ -40,6 +40,13 @@
  * (1)(2) を使わず確定文字列をそのまま正規化する。利用者が変換候補から別の読みを
  * 選び直した場合に、打鍵列より確定文字列を信じたいため。
  *
+ * ## 捨てた・戻したことを伝える
+ *
+ * 黙って値が変わると「壊れている」と見えるので、入力欄の直下（重ねて出すので
+ * 用紙の高さは増えない）に一言出す。漢字を捨てたときと、読みに戻したときの
+ * 2 種類。次に値が動いた時点（入力・変換の開始・Enter・親からの value 差し替え）
+ * で消える。
+ *
  * ## Enter
  *
  * Enter で onSubmit。このとき末尾のローマ字を確定させる必要があるが（「もんぜn」→
@@ -48,7 +55,8 @@
  */
 import type { ChangeEvent, CompositionEvent, FocusEvent, KeyboardEvent, Ref } from 'react'
 import { useEffect, useId, useRef, useState } from 'react'
-import { isKanaOnly, pushStroke, splitHiragana, toHiraganaStrict } from './hiragana.ts'
+import { hasUnconvertible, isKanaOnly, pushStroke, splitHiragana, toHiraganaStrict } from './hiragana.ts'
+import '../styles/hiragana-input.css'
 
 export interface HiraganaInputProps {
   /** 現在の解答。常にひらがな＋「ー」 */
@@ -71,6 +79,10 @@ export interface HiraganaInputProps {
 
 const HINT = 'ローマ字でもひらがなでも入力できます。漢字に変換されても読みに戻ります'
 const HINT_MAC = '（IME を英数にすると変換なしで打てます）'
+/** ひらがなに直せない文字を捨てたとき */
+const NOTICE_DROPPED = '漢字や記号は入りません。ひらがなで書いてください'
+/** 確定された漢字を打鍵列・未確定履歴から読みに戻せたとき */
+const NOTICE_RECOVERED = '漢字を読み（ひらがな）に戻しました'
 
 export default function HiraganaInput({
   value,
@@ -86,6 +98,8 @@ export default function HiraganaInput({
   const hintId = useId()
   /** 入力欄に実際に出す文字列（= value ＋ 未確定のローマ字） */
   const [shown, setShown] = useState(value)
+  /** 入力欄の下に出す一言。'' なら何も出さない */
+  const [notice, setNotice] = useState('')
   /** 直前に onChange で外へ出した値。親からの value 変更と自分の更新を見分ける */
   const emittedRef = useRef(value)
   /** IME 変換中か */
@@ -118,6 +132,7 @@ export default function HiraganaInput({
     if (value === emittedRef.current) return
     emittedRef.current = value
     setShown(value)
+    setNotice('')
   }, [value])
 
   // 確定を伴う Enter の後始末。親が onChange を受けて再描画したあとに onSubmit を呼ぶ
@@ -132,6 +147,7 @@ export default function HiraganaInput({
     const { kana, pending } = splitHiragana(raw)
     const next = kana + pending
     setShown(next)
+    setNotice(hasUnconvertible(raw) ? NOTICE_DROPPED : '')
     if (kana !== emittedRef.current) {
       emittedRef.current = kana
       onChange(kana)
@@ -178,6 +194,7 @@ export default function HiraganaInput({
   function handleCompositionStart() {
     composingRef.current = true
     recoveredRef.current = null
+    setNotice('')
     // 1 打鍵目を keydown で先取りしてあるなら消さない（先頭文字が落ちる）
     if (primedRef.current) return
     strokesRef.current = ''
@@ -211,8 +228,10 @@ export default function HiraganaInput({
       segment = raw
     }
 
-    const next = head + recoverSegment(segment)
-    const applied = apply(next)
+    const recovered = recoverSegment(segment)
+    const applied = apply(head + recovered)
+    // 打鍵列・未確定履歴から読みを作り直せた（＝確定文字列を使わなかった）
+    if (recovered !== segment) setNotice(NOTICE_RECOVERED)
     recoveredRef.current = raw === applied ? null : { from: raw, to: applied }
     strokesRef.current = ''
     kanaUpdateRef.current = ''
@@ -241,6 +260,7 @@ export default function HiraganaInput({
 
     if (event.key !== 'Enter') return
     event.preventDefault()
+    setNotice('')
     const flushed = toHiraganaStrict(event.currentTarget.value)
     if (flushed === shown) {
       // 確定するものが無い（＝値は既に最新）。そのまま送る
@@ -270,32 +290,40 @@ export default function HiraganaInput({
 
   return (
     <>
-      <input
-        ref={ref}
-        className={className ? `answer-input ${className}` : 'answer-input'}
-        type="text"
-        value={shown}
-        onChange={handleChange}
-        onCompositionStart={handleCompositionStart}
-        onCompositionUpdate={handleCompositionUpdate}
-        onCompositionEnd={handleCompositionEnd}
-        onKeyDown={handleKeyDown}
-        onBlur={handleBlur}
-        disabled={disabled}
-        autoFocus={autoFocus}
-        placeholder={placeholder}
-        aria-label={ariaLabel}
-        aria-describedby={hintId}
-        // IME 任せにせず自前で正規化するので、ブラウザの補助は全部切る
-        autoComplete="off"
-        autoCorrect="off"
-        autoCapitalize="off"
-        spellCheck={false}
-        inputMode="text"
-        lang="ja"
-        enterKeyHint="done"
-      />
-      <p className="answer-hint" id={hintId}>
+      {/* 通知を入力欄に重ねるための基準。margin は入力欄のものが突き抜けるので高さは変わらない */}
+      <div className="answer-field">
+        <input
+          ref={ref}
+          className={className ? `answer-input ${className}` : 'answer-input'}
+          type="text"
+          value={shown}
+          onChange={handleChange}
+          onCompositionStart={handleCompositionStart}
+          onCompositionUpdate={handleCompositionUpdate}
+          onCompositionEnd={handleCompositionEnd}
+          onKeyDown={handleKeyDown}
+          onBlur={handleBlur}
+          disabled={disabled}
+          autoFocus={autoFocus}
+          placeholder={placeholder}
+          aria-label={ariaLabel}
+          aria-describedby={hintId}
+          // IME 任せにせず自前で正規化するので、ブラウザの補助は全部切る
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="off"
+          spellCheck={false}
+          inputMode="text"
+          lang="ja"
+          enterKeyHint="done"
+        />
+        {/* 空のときは中身が無いので描画面積も 0。読み上げは polite で割り込ませない */}
+        <p className="answer-notice" role="status" aria-live="polite">
+          {notice}
+        </p>
+      </div>
+      {/* 通知が出ている間は案内文を伏せる（場所を譲るだけで、行は残して詰まらせない）*/}
+      <p className={notice ? 'answer-hint is-hushed' : 'answer-hint'} id={hintId}>
         {HINT}
         <span className="answer-hint__mac">{HINT_MAC}</span>
       </p>
