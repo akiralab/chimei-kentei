@@ -129,7 +129,15 @@ function answerInput(): HTMLInputElement {
   return screen.getByLabelText('読みをひらがなで入力') as HTMLInputElement
 }
 
-/** 1 問解答する。value が null なら 20 秒放置して自動パスさせる */
+/** 間違えたあとに出る「次へ」（最後の問なら「結果を見る」）。正解のあとは出ない */
+function nextButton(): HTMLElement | null {
+  return screen.queryByRole('button', { name: /^(次へ|結果を見る)$/ })
+}
+
+/**
+ * 1 問解答する。value が null なら 20 秒放置して自動パスさせる。
+ * ○ は 1 秒で自動的に次へ進むが、× とパスは「次へ」を押すまで止まるので、出ていれば押す
+ */
 async function answerOne(value: string | null): Promise<void> {
   if (value === null) {
     await settle(TIME_LIMIT_MS)
@@ -139,6 +147,11 @@ async function answerOne(value: string | null): Promise<void> {
     fireEvent.keyDown(input, { key: 'Enter' })
   }
   await settle(FEEDBACK_MS)
+  const next = nextButton()
+  if (next) {
+    fireEvent.click(next)
+    await settle()
+  }
 }
 
 /** main.tsx と同じ条件（StrictMode）で描画する */
@@ -432,7 +445,10 @@ describe('出題', () => {
     fireEvent.keyDown(input, { key: 'Enter' })
     expect(all('.mark')).toHaveLength(1)
 
+    // 「さん」は不正解なので「次へ」を押して進む
     await settle(FEEDBACK_MS)
+    fireEvent.click(nextButton()!)
+    await settle()
     expect(el('.q-number').textContent).toBe('問二 / 十')
 
     // 残り 9 問を埋めて、1 問目に「さん」が記録されていることを確かめる
@@ -441,7 +457,7 @@ describe('出題', () => {
     expect(records[0]).toMatchObject({ input: 'さん', passed: false })
   })
 
-  it('誤答では × と正解が出る', async () => {
+  it('誤答では × と正解が出て、「次へ」を押すまで次の問へ進まない', async () => {
     await openQuiz(SET_ID)
 
     const input = answerInput()
@@ -450,6 +466,44 @@ describe('出題', () => {
 
     expect(all('.mark--wrong')).toHaveLength(1)
     expect(el('.marker--yellow').textContent).toBe(EXPECTED.questions[0].answer)
+    // 「解答」の場所に「次へ」が出る（正しい読みを確かめてから自分のペースで進む）。
+    // フォーカスも移るので Enter / Space でそのまま進める
+    expect(screen.queryByRole('button', { name: '解答' })).toBeNull()
+    expect(nextButton()).toHaveTextContent('次へ')
+    expect(document.activeElement).toBe(nextButton())
+    // 間違えている間は「空欄のまま解答すると…」の注意書きを出さない（用紙の高さを抑える）
+    expect(screen.queryByText(/空欄のまま解答すると/)).toBeNull()
+
+    // 正解のときの 1 秒どころか、ずっと待っても進まない
+    await settle(FEEDBACK_MS * 10)
+    expect(el('.q-number').textContent).toBe('問一 / 十')
+    expect(all('.mark--wrong')).toHaveLength(1)
+
+    fireEvent.click(nextButton()!)
+    await settle()
+    expect(el('.q-number').textContent).toBe('問二 / 十')
+    expect(all('.mark')).toHaveLength(0)
+    expect(screen.getByRole('button', { name: '解答' })).toBeInTheDocument()
+    // 次の問の計測は「次へ」を押してから。正解を眺めていた時間は答案の ms に入らない
+    await answerOne(EXPECTED.questions[1].answer)
+    for (let i = 2; i < EXPECTED.questions.length; i++) await answerOne(EXPECTED.questions[i].answer)
+    const records = JSON.parse(sessionStorage.getItem(answerSheetKey(SET_ID)) ?? '[]')
+    expect(records[1].ms).toBeLessThan(FEEDBACK_MS)
+  })
+
+  it('最後の問を間違えると「結果を見る」になり、押すと結果へ進む', async () => {
+    await openQuiz(SET_ID)
+    for (let i = 0; i < EXPECTED.questions.length - 1; i++) await answerOne(EXPECTED.questions[i].answer)
+    expect(el('.q-number').textContent).toBe('問十 / 十')
+
+    fireEvent.click(screen.getByRole('button', { name: '解答' }))
+    await settle(FEEDBACK_MS * 3)
+    expect(hash()).toBe(quizPath(SET_ID))
+    expect(nextButton()).toHaveTextContent('結果を見る')
+
+    fireEvent.click(nextButton()!)
+    await settle()
+    expect(hash()).toBe(resultPath(SET_ID))
   })
 
   it('空欄で「解答」はパス扱い', async () => {
@@ -458,7 +512,11 @@ describe('出題', () => {
     fireEvent.click(screen.getByRole('button', { name: '解答' }))
     expect(all('.mark--wrong')).toHaveLength(1)
 
+    // パスも間違いと同じく「次へ」を押すまで止まる
     await settle(FEEDBACK_MS)
+    expect(el('.q-number').textContent).toBe('問一 / 十')
+    fireEvent.click(nextButton()!)
+    await settle()
     expect(el('.q-number').textContent).toBe('問二 / 十')
 
     // 残り 9 問は適当に埋めて、1 問目がパスとして記録されていることを確認する
@@ -467,7 +525,7 @@ describe('出題', () => {
     expect(records[0]).toMatchObject({ input: '', passed: true, correct: false, ms: TIME_LIMIT_MS })
   })
 
-  it('20 秒放置すると自動でパスして次の問へ進む', async () => {
+  it('20 秒放置すると自動でパスし、「次へ」で次の問へ進む', async () => {
     await openQuiz(SET_ID)
     expect(el('.timer__label').textContent).toContain('のこり 20 秒')
 
@@ -479,7 +537,11 @@ describe('出題', () => {
     await settle(100)
     expect(all('.mark--wrong')).toHaveLength(1)
 
-    await settle(FEEDBACK_MS)
+    // 時間切れのあとは砂時計が止まり、「次へ」を押すまで次の問に進まない
+    await settle(FEEDBACK_MS * 5)
+    expect(el('.q-number').textContent).toBe('問一 / 十')
+    fireEvent.click(nextButton()!)
+    await settle()
     expect(el('.q-number').textContent).toBe('問二 / 十')
     expect(el('.timer__label').textContent).toContain('のこり 20 秒')
     expect(el('.timer__label')).not.toHaveClass('is-urgent')
@@ -808,6 +870,8 @@ describe('時間制限なし', () => {
     await settle(3000)
     fireEvent.click(screen.getByRole('button', { name: '解答' }))
     await settle(FEEDBACK_MS)
+    fireEvent.click(nextButton()!)
+    await settle()
     for (let i = 1; i < EXPECTED.questions.length; i++) await answerOne(EXPECTED.questions[i].answer)
 
     const records = JSON.parse(sessionStorage.getItem(answerSheetKey(SET_ID)) ?? '[]')

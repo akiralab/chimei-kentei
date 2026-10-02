@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AnswerRecord, Question, QuestionSet } from '../engine/types.ts'
 import { QUESTIONS_PER_SET, UNLIMITED_MAX_MS } from '../engine/types.ts'
 import { buildQuestionSet, defaultSource } from '../engine/bank.ts'
@@ -117,17 +117,21 @@ export default function Quiz({ setId, direct = false }: { setId: string; direct?
     return () => clearInterval(timer)
   }, [question, feedback, exiting, pending, limited, timeLimitMs])
 
-  // ○× を 1 秒見せてから次の問へ
+  /** 次の問へ（最後の問なら結果へ）。計測は次の問の表示から始まるので、正解を眺めていた時間は数えない */
+  const advance = useCallback(() => {
+    setFeedback(null)
+    setInput('')
+    setRemainMs(timeLimitMs)
+    setIndex((i) => i + 1)
+  }, [timeLimitMs])
+
+  // ○ は 1 秒見せて自動で次へ。× とパス（時間切れ含む）は「次へ」を押すまで止める。
+  // このアプリの目的は正しい読みを身につけることなので、間違えた読みは自分のペースで確かめてから進む
   useEffect(() => {
-    if (!feedback) return
-    const t = setTimeout(() => {
-      setFeedback(null)
-      setInput('')
-      setRemainMs(timeLimitMs)
-      setIndex((i) => i + 1)
-    }, FEEDBACK_MS)
+    if (!feedback || !feedback.correct) return
+    const t = setTimeout(advance, FEEDBACK_MS)
     return () => clearTimeout(t)
-  }, [feedback, timeLimitMs])
+  }, [feedback, advance])
 
   // 10 問終わったら答案を保存して結果へ
   useEffect(() => {
@@ -309,11 +313,26 @@ export default function Quiz({ setId, direct = false }: { setId: string; direct?
           )}
 
           <p>
-            <button type="button" className="btn btn--primary" onClick={answerNow} disabled={feedback !== null}>
-              解答
-            </button>
+            {/* 間違えたあとは「解答」の場所に「次へ」を出す（高さを変えず、指の位置も同じ）。
+                autoFocus で Enter / Space でも進める。最後の問なら結果へ */}
+            {/* key を分けて別要素として差し替える。同じ <button> の更新扱いだと autoFocus が効かない */}
+            {feedback && !feedback.correct ?
+              <button key="next" type="button" className="btn btn--primary" onClick={advance} autoFocus>
+                {index + 1 >= set.questions.length ? '結果を見る' : '次へ'}
+              </button>
+            : <button
+                key="answer"
+                type="button"
+                className="btn btn--primary"
+                onClick={answerNow}
+                disabled={feedback !== null}
+              >
+                解答
+              </button>
+            }
           </p>
-          <p className="q-note">空欄のまま解答するとパスになります。</p>
+          {/* 丸バツを見せている間は要らない注意書き。消して用紙の高さを抑える（1280×800 で底が欠けないように） */}
+          {!feedback && <p className="q-note">空欄のまま解答するとパスになります。</p>}
 
         </div>
       </div>
