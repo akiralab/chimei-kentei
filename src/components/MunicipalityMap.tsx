@@ -23,8 +23,11 @@ import { mainCluster, projectCollection } from '../geo/project.ts'
 
 interface Props {
   prefCode: string
-  /** 強調する市区町村の 6 桁コード */
-  lgCode: string
+  /**
+   * 強調する市区町村の 6 桁コード。省くと県の形だけを描く（塗り・縁取り・照準リングを出さない）。
+   * 地名帳（#/atlas/{scope}）で行を選ぶ前の状態に使う
+   */
+  lgCode?: string
   /** 見出しに出す県名 */
   prefName?: string
   source?: GeoSource
@@ -66,11 +69,12 @@ export default function MunicipalityMap({ prefCode, lgCode, prefName, source = d
   // 出題対象だけは必ず fit に含めるので、小笠原が出題されたときはそこまで引いた地図になる
   const projected = useMemo(() => {
     if (!collection) return null
-    const fitTo = mainCluster(collection, { mustKeep: (props) => props.lgCode === lgCode })
+    // 対象が無い（地名帳で行を選ぶ前）ときは守る自治体も無いので mustKeep を渡さない
+    const fitTo = mainCluster(collection, lgCode === undefined ? {} : { mustKeep: (props) => props.lgCode === lgCode })
     return projectCollection(collection, { fitTo })
   }, [collection, lgCode])
 
-  const target = projected?.paths.find((p) => p.props.lgCode === lgCode)
+  const target = lgCode === undefined ? undefined : projected?.paths.find((p) => p.props.lgCode === lgCode)
   const others = projected?.paths.filter((p) => p.props.lgCode !== lgCode) ?? []
 
   // 対象が小さいときだけ照準リングを足す（大阪市のような大きい自治体には出さない）
