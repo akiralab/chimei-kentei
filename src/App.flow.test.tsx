@@ -200,10 +200,14 @@ async function openQuiz(setId: string): Promise<void> {
 const writeText = vi.fn<(text: string) => Promise<void>>(() => Promise.resolve())
 
 const SET_ID = `${DATA_VERSION}-e-12-1234`
+/** 全市区町村名（千葉県）。フィクスチャの千葉県は meta.cities が 15 件なので 15 問 */
+const SET_ALL = `${DATA_VERSION}-e-12-0417-all`
 let EXPECTED: QuestionSet
+let EXPECTED_ALL: QuestionSet
 
 beforeAll(async () => {
   EXPECTED = await buildQuestionSet('e', '12', '1234', FIXTURE_SOURCE)
+  EXPECTED_ALL = await buildQuestionSet('e', '12', '0417', FIXTURE_SOURCE, true)
 })
 
 beforeEach(() => {
@@ -1202,5 +1206,46 @@ describe('共有リンクの着地', () => {
 
     expect(screen.queryByRole('heading', { name: '挑戦状' })).toBeNull()
     expect(el('.q-number').textContent).toBe('問一 / 十')
+  })
+})
+
+// ------------------------------------------- 全市区町村名（順位表に登録できる）
+
+describe('全市区町村名の結果', () => {
+  /** 15 問のうち correctCount 問だけ正解した答案を置いてから結果画面を開く */
+  async function openAllResult(correctCount: number): Promise<void> {
+    localStorage.setItem(NICKNAME_KEY, 'たろう')
+    const records = EXPECTED_ALL.questions.map((q, i) => ({
+      questionId: q.id,
+      input: i < correctCount ? q.answer : 'ちがう',
+      correct: i < correctCount,
+      ms: 3000,
+      passed: false,
+    }))
+    sessionStorage.setItem(answerSheetKey(SET_ALL), JSON.stringify(records))
+    goto(resultPath(SET_ALL))
+    renderApp()
+    await settle()
+  }
+
+  it('得点は正答率で、10 問と同じように登録できる', async () => {
+    expect(EXPECTED_ALL.questions).toHaveLength(15)
+    await openAllResult(11)
+
+    // 11 / 15 = 73.3… → 73 点
+    expect(el('.stamp').textContent).toBe('73点')
+    expect(all('.review__row')).toHaveLength(15)
+    expect(el('.paper__subtitle').textContent).toContain('正解 11 / 15 問')
+    expect(screen.queryByText(/順位表には載りません/)).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'ランキングに登録' }))
+    await settle()
+
+    expect(screen.getByText('1 位で登録しました。')).toBeInTheDocument()
+    const row = all('.ranking__row')[0]
+    expect(row.textContent).toContain('たろう')
+    expect(row.querySelector('.ranking__score')?.textContent).toBe('73点［全市区町村名（15 問）］')
+    // 間違えた問題も 10 問のときと同じように残る
+    expect(readWrongList()).toHaveLength(4)
   })
 })

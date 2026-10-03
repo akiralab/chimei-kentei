@@ -18,6 +18,8 @@ const SET_12A = `${DATA_VERSION}-e-12-1234`
 const SET_12B = `${DATA_VERSION}-d-120001-5678`
 const SET_13 = `${DATA_VERSION}-e-13-1234`
 const SET_00 = `${DATA_VERSION}-e-00-1234`
+/** 千葉県の全市区町村名（10 問の 2 科目とは別区分） */
+const SET_12ALL = `${DATA_VERSION}-e-12-0417-all`
 
 function entry(over: Partial<ResultEntry> & { entryId: string; setId: string }): ResultEntry {
   return {
@@ -280,5 +282,78 @@ describe('ストアが失敗したとき', () => {
     } finally {
       spy.mockRestore()
     }
+  })
+})
+
+describe('全市区町村名（3 つ目の区分）', () => {
+  /** 正解 correct / total 問の答案（行の「正解 n / N 問」はこれから数える） */
+  function answers(correct: number, total: number) {
+    return Array.from({ length: total }, (_, i) => ({
+      questionId: `q${String(i)}`,
+      input: 'あ',
+      correct: i < correct,
+      ms: 2_000,
+      passed: false,
+    }))
+  }
+
+  beforeEach(() => {
+    put(SET_12A, [entry({ entryId: 'a', setId: SET_12A, nickname: 'じゅっもん', clientToken: 'tok-a' })])
+    put(SET_12ALL, [
+      entry({
+        entryId: 'z',
+        setId: SET_12ALL,
+        nickname: 'ぜんぶ',
+        score: 87,
+        clientToken: 'tok-z',
+        answers: answers(20, 23),
+      }),
+    ])
+  })
+
+  it('トップの切替は 3 つで、全市区町村名だけを数える', async () => {
+    installFetchMock()
+    render(<Ranking />)
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '千葉県 1人が回答（市区町村名）' })).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: '全市区町村名' }))
+
+    expect(screen.getByRole('button', { name: '千葉県 1人が回答（全市区町村名）' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: '東京都 0人が回答（全市区町村名）' })).toBeDisabled()
+    // 全国に全市区町村名は無い
+    expect(screen.getByRole('button', { name: '全国 0人が回答（全市区町村名）' })).toBeDisabled()
+    expect(screen.getByText(/全市区町村名 ／ 登録 1 件/)).toBeInTheDocument()
+  })
+
+  it('詳細では 10 問と混ざらず、正解数と問題数も見せる', async () => {
+    localStorage.setItem(RANKING_MODE_KEY, 'all')
+    installFetchMock()
+    render(<Ranking prefCode="12" />)
+
+    await waitFor(() => {
+      expect(rows()).toHaveLength(1)
+    })
+    expect(el('.ranking__name').textContent).toBe('ぜんぶ')
+    expect(el('.ranking__score').textContent).toBe('正解 20 / 23 問・87点')
+    expect(rows()[0].textContent).toContain('全市区町村名')
+
+    // 10 問の科目に戻すと別の一覧になる
+    fireEvent.click(screen.getByRole('button', { name: '市区町村名' }))
+    await waitFor(() => {
+      expect(el('.ranking__name').textContent).toBe('じゅっもん')
+    })
+    expect(el('.ranking__score').textContent).toBe('70点')
+  })
+
+  it('全国の詳細では全市区町村名を選べない', async () => {
+    installFetchMock()
+    render(<Ranking prefCode="00" />)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '全市区町村名' })).toBeDisabled()
+    })
+    expect(screen.getByRole('button', { name: '市区町村名＋町名' })).toBeEnabled()
   })
 })

@@ -1,16 +1,21 @@
 /**
  * これまでのランキング。
  *
- * - `#/ranking` … 出題の種類（市区町村名 / 市区町村名＋町名）ごとに、都道府県の回答人数を一覧で見せる
- * - `#/ranking/{prefCode}` … その都道府県・その科目の上位 30 件
+ * - `#/ranking` … 区分（市区町村名 / 市区町村名＋町名 / 全市区町村名）ごとに、都道府県の回答人数を一覧で見せる
+ * - `#/ranking/{prefCode}` … その都道府県・その区分の上位 30 件
+ *
+ * 区分は 3 つ。10 問の 2 科目と、全市区町村名（問題数が県ごとに違い、得点は正答率）は
+ * 1 問の重みが違うので同じ一覧に混ぜない。全国（scope '00'）に全市区町村名は無い。
  *
  * 地図は置かない（範囲選択の主役なので、ここでは一覧だけにする）。
- * 科目は localStorage（useRankingMode）でトップと詳細を引き継ぐ。
+ * 区分は localStorage（useRankingMode）でトップと詳細を引き継ぐ。
  * 絞り込みはストア側（Remote なら API の `?mode=`）で行うので、画面は受け取った順に並べるだけ。
  */
 import { useEffect, useMemo, useState } from 'react'
-import type { BankMeta, Mode, PrefectureStat, RankingRow } from '../engine/types.ts'
-import { modeName } from '../engine/modes.ts'
+import type { BankMeta, PrefectureStat, RankingMode, RankingRow } from '../engine/types.ts'
+import { ALL_RANKING_MODE } from '../engine/types.ts'
+import { RANKING_MODES, RANKING_MODE_LABELS, rankingModeName } from '../engine/modes.ts'
+import { isAllRow, rowCounts } from '../engine/score.ts'
 import { loadMeta } from '../engine/bank.ts'
 import { scopeLabel } from '../engine/scope.ts'
 import { SCOPE_NATIONWIDE } from '../engine/setId.ts'
@@ -36,10 +41,16 @@ function formatDate(iso: string): string {
   return `${d.getFullYear()}-${m}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-/** その科目の件数・人数。byMode が無い古いデータは合計で代用する */
-function countOf(stat: PrefectureStat | undefined, mode: Mode): { entries: number; players: number } {
+/**
+ * その区分の件数・人数。byMode が無い古いデータは合計で代用するが、
+ * 全市区町村名は登録できるようになる前のデータに存在しないので 0 件とする。
+ */
+function countOf(stat: PrefectureStat | undefined, mode: RankingMode): { entries: number; players: number } {
   if (!stat) return { entries: 0, players: 0 }
-  return stat.byMode?.[mode] ?? { entries: stat.entries, players: stat.players }
+  const hit = stat.byMode?.[mode]
+  if (hit) return hit
+  if (mode === ALL_RANKING_MODE) return { entries: 0, players: 0 }
+  return { entries: stat.entries, players: stat.players }
 }
 
 export default function Ranking({ prefCode }: { prefCode?: string } = {}) {
@@ -103,18 +114,29 @@ export default function Ranking({ prefCode }: { prefCode?: string } = {}) {
   const titleOf = (code: string): string =>
     code === SCOPE_NATIONWIDE ? '全国' : (prefName.get(code) ?? `都道府県 ${code}`)
 
-  /** 出題の種類の切替。トップと詳細で同じものを出す */
+  /** 全国（scope '00'）の一覧。全市区町村名は都道府県ごとの出題なので区分として出さない */
+  const nationwideOnly = prefCode === SCOPE_NATIONWIDE
+
+  /** 区分の切替（市区町村名 / 市区町村名＋町名 / 全市区町村名）。トップと詳細で同じものを出す */
   const modeSwitch = (
     <div className="mode-switch">
-      {(['e', 'd'] as Mode[]).map((m) => (
+      {RANKING_MODES.map((m) => (
         <button
           key={m}
           type="button"
           className={mode === m ? 'mode-switch__item is-selected' : 'mode-switch__item'}
           aria-pressed={mode === m}
+          aria-label={RANKING_MODE_LABELS[m].name}
+          disabled={nationwideOnly && m === ALL_RANKING_MODE}
           onClick={() => setMode(m)}
         >
-          {modeName(m)}
+          {/* 狭い画面では短いほうを見せる（3 つ並ぶので 1 行に収める）。切り替えは CSS 側 */}
+          <span className="mode-switch__full" aria-hidden="true">
+            {RANKING_MODE_LABELS[m].name}
+          </span>
+          <span className="mode-switch__abbr" aria-hidden="true">
+            {RANKING_MODE_LABELS[m].short}
+          </span>
         </button>
       ))}
     </div>
@@ -145,7 +167,7 @@ export default function Ranking({ prefCode }: { prefCode?: string } = {}) {
         <div className="paper__header">
           <h1 className="paper__title">{titleOf(prefCode)}のランキング</h1>
           <p className="paper__subtitle">
-            {modeName(mode)} ／ 上位 {PREF_LIMIT} 件まで ／ 得点の高い順（同点なら所要時間の短い順）
+            {rankingModeName(mode)} ／ 上位 {PREF_LIMIT} 件まで ／ 得点の高い順（同点なら所要時間の短い順）
           </p>
         </div>
 
@@ -162,7 +184,13 @@ export default function Ranking({ prefCode }: { prefCode?: string } = {}) {
               <li className="ranking__row" key={r.entryId}>
                 <span className="ranking__rank">{i + 1}</span>
                 <span className="ranking__name">{r.nickname}</span>
-                <span className="ranking__score">{r.score}点</span>
+                <span className="ranking__score">
+                  {/* 全市区町村名は問題数が県ごとに違うので、正解数と問題数も見せる */}
+                  {isAllRow(r) && r.total !== undefined && (
+                    <span className="q-suffix">正解 {rowCounts(r).correct} / {r.total} 問・</span>
+                  )}
+                  {r.score}点
+                </span>
                 <span className="ranking__time">
                   {formatDuration(r.timeMs)}
                   {r.timeLimitMs !== undefined && r.timeLimitMs > 0 && (
@@ -174,7 +202,8 @@ export default function Ranking({ prefCode }: { prefCode?: string } = {}) {
                 </span>
                 {/* 4 列グリッドの 2 行目として全幅に置く（科目・範囲・登録日・挑戦リンク） */}
                 <span className="q-pref" style={{ gridColumn: '1 / -1', margin: 0 }}>
-                  {r.mode === undefined ? '—' : modeName(r.mode)} ／ {labelOfScope(r.scope)} ／{' '}
+                  {isAllRow(r) ? rankingModeName(ALL_RANKING_MODE) : r.mode === undefined ? '—' : rankingModeName(r.mode)}{' '}
+                  ／ {labelOfScope(r.scope)} ／{' '}
                   {formatDate(r.createdAt)}{' '}
                   <a className="btn btn--ghost" href={quizPath(r.setId)}>
                     この問題に挑戦
@@ -212,7 +241,7 @@ export default function Ranking({ prefCode }: { prefCode?: string } = {}) {
           type="button"
           className="pref-grid__item"
           disabled={count.entries === 0}
-          aria-label={`${titleOf(code)} ${count.players}人が回答（${modeName(mode)}）`}
+          aria-label={`${titleOf(code)} ${count.players}人が回答（${rankingModeName(mode)}）`}
           onClick={() => navigate(rankingPrefPath(code))}
         >
           {count.entries > 0 ? <span className="marker marker--yellow">{label}</span> : label}
@@ -226,7 +255,7 @@ export default function Ranking({ prefCode }: { prefCode?: string } = {}) {
       <div className="paper__header">
         <h1 className="paper__title">これまでのランキング</h1>
         <p className="paper__subtitle">
-          {modeName(mode)} ／ 登録 {totalEntries} 件 ／ 都道府県をえらぶと上位 {PREF_LIMIT} 件が見られる
+          {rankingModeName(mode)} ／ 登録 {totalEntries} 件 ／ 都道府県をえらぶと上位 {PREF_LIMIT} 件が見られる
         </p>
       </div>
 
@@ -242,7 +271,7 @@ export default function Ranking({ prefCode }: { prefCode?: string } = {}) {
               type="button"
               className="pref-grid__item"
               disabled={nationwide.entries === 0}
-              aria-label={`全国 ${nationwide.players}人が回答（${modeName(mode)}）`}
+              aria-label={`全国 ${nationwide.players}人が回答（${rankingModeName(mode)}）`}
               onClick={() => navigate(rankingPrefPath(SCOPE_NATIONWIDE))}
             >
               {nationwide.entries > 0 ? (

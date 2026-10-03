@@ -9,7 +9,8 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import type { AnswerRecord, ResultEntry } from '../engine/types.ts'
 import { DATA_VERSION } from '../engine/bank.ts'
 import { LocalRankingStore, rankingKey } from '../engine/ranking.ts'
-import { EASY_ALL, META } from '../engine/__fixtures__/questions.ts'
+import { readWrongList } from '../engine/wrongList.ts'
+import { EASY_12, EASY_ALL, META } from '../engine/__fixtures__/questions.ts'
 import { writeAnswerSheet } from '../hooks/answerSheet.ts'
 import { NICKNAME_KEY } from '../hooks/useNickname.ts'
 import Result from './Result.tsx'
@@ -222,13 +223,14 @@ describe('ランキングに届かないとき', () => {
   })
 })
 
-describe('全市区町村名（練習）', () => {
+describe('全市区町村名', () => {
   /** 千葉県の全市区町村名。フィクスチャの千葉県は 25 件 */
   const SET_ALL = `${DATA_VERSION}-e-12-0417-all`
 
+  /** 問題バンク（千葉県 25 件）の実際の questionId で答案を作る（間違えた問題の記録に要る） */
   function answerAll(correct: number, total: number): AnswerRecord[] {
     return Array.from({ length: total }, (_, i) => ({
-      questionId: `q${String(i)}`,
+      questionId: EASY_12[i % EASY_12.length].id,
       input: 'あ',
       correct: i < correct,
       ms: 2_000,
@@ -236,31 +238,74 @@ describe('全市区町村名（練習）', () => {
     }))
   }
 
-  it('得点は正答率、順位表と登録ボタンは出さず、練習である旨を出す', async () => {
-    writeAnswerSheet(SET_ALL, answerAll(20, 25))
+  it('得点は正答率で、順位表も登録ボタンも 10 問と同じように出す', async () => {
+    writeAnswerSheet(SET_ALL, answerAll(18, 25))
     putThree(SET_ALL)
     render(<Result setId={SET_ALL} />)
 
     await waitFor(() => {
       expect(document.querySelectorAll('.review__row')).toHaveLength(25)
     })
-    expect(document.querySelector('.stamp__num')?.textContent).toBe('80')
-    expect(document.querySelector('.paper__subtitle')?.textContent).toContain('正解 20 / 25 問')
-    expect(screen.queryByRole('button', { name: 'ランキングに登録' })).toBeNull()
-    expect(penComments()).toContain('順位表には載りません')
-    expect(rows()).toHaveLength(0)
-    expect(screen.queryByText(/登録すると/)).toBeNull()
-    // 共有ともう一度は使える
-    expect(screen.getByRole('button', { name: 'この問題で挑ませる' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'もう一度（別の問題）' })).toBeInTheDocument()
+    // 18 / 25 = 72 点（「正答数 × 10」ではない）
+    expect(document.querySelector('.stamp__num')?.textContent).toBe('72')
+    expect(document.querySelector('.paper__subtitle')?.textContent).toContain('正解 18 / 25 問')
+    expect(screen.getByRole('button', { name: 'ランキングに登録' })).toBeEnabled()
+    expect(penComments()).not.toContain('順位表には載りません')
+    // このセットの順位表を取りに行く（72 点なので 80 点の下・60 点の上）
+    await waitFor(() => {
+      expect(rows()).toHaveLength(3)
+    })
+    expect(penComments()).toContain('登録すると 3 位です。')
+  })
+
+  it('登録すると順位が付き、間違えた問題も 10 問と同じように記録する', async () => {
+    writeAnswerSheet(SET_ALL, answerAll(18, 25))
+    render(<Result setId={SET_ALL} />)
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'ランキングに登録' })).toBeEnabled()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'ランキングに登録' }))
+    await waitFor(() => {
+      expect(penComments()).toContain('1 位で登録しました。')
+    })
+    expect(screen.getByRole('button', { name: '間違えた問題を見る' })).toBeInTheDocument()
+    const saved = JSON.parse(localStorage.getItem(rankingKey(SET_ALL)) ?? '[]') as ResultEntry[]
+    expect(saved.map((e) => e.score)).toEqual([72])
+    expect(readWrongList()).not.toHaveLength(0)
+  })
+
+  it('順位表の行には「全市区町村名（N 問）」を得点の横に添える', async () => {
+    writeAnswerSheet(SET_ALL, answerAll(18, 25))
+    put(SET_ALL, [
+      entry({
+        entryId: 'a',
+        setId: SET_ALL,
+        nickname: 'たろう',
+        score: 87,
+        answers: answerAll(20, 23),
+      }),
+    ])
+    render(<Result setId={SET_ALL} />)
+
+    await waitFor(() => {
+      expect(rows()).toHaveLength(1)
+    })
+    expect(rows()[0].querySelector('.ranking__score')?.textContent).toBe('87点［全市区町村名（23 問）］')
   })
 
   it('10 問のセットでは従来どおり正答数 × 10 点で、正解数も添える', async () => {
+    putThree()
     render(<Result setId={SET} />)
     await waitFor(() => {
       expect(document.querySelector('.stamp__num')?.textContent).toBe('80')
     })
     expect(document.querySelector('.paper__subtitle')?.textContent).toContain('正解 8 / 10 問')
     expect(screen.getByRole('button', { name: 'ランキングに登録' })).toBeInTheDocument()
+    // 10 問の行には注記を付けない
+    await waitFor(() => {
+      expect(rows()).toHaveLength(3)
+    })
+    expect(rows()[0].querySelector('.ranking__score')?.textContent).toBe('100点')
   })
 })

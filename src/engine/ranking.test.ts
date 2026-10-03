@@ -65,6 +65,7 @@ describe('LocalRankingStore', () => {
     await store.submit(entry({ answers: [{ questionId: 'q1', input: 'あ', correct: true, ms: 1000, passed: false }] }))
     const [row] = await store.list(SET_ID)
     expect(Object.keys(row).sort()).toEqual([
+      'correct',
       'createdAt',
       'entryId',
       'mode',
@@ -73,10 +74,14 @@ describe('LocalRankingStore', () => {
       'score',
       'setId',
       'timeMs',
+      'total',
     ])
     // 科目・範囲は setId から導く
     expect(row.mode).toBe('e')
     expect(row.scope).toBe('12')
+    // 正解数・問題数は答案から数える（「正解 n / N 問」の表示に使う）
+    expect(row.correct).toBe(1)
+    expect(row.total).toBe(1)
   })
 
   it('同じ (setId, clientToken) の二重登録は already_submitted', async () => {
@@ -152,21 +157,37 @@ describe('LocalRankingStore の都道府県集計', () => {
         prefCode: '00', // 全国
         entries: 1,
         players: 1,
-        byMode: { e: { entries: 1, players: 1 }, d: { entries: 0, players: 0 } },
+        byMode: { e: { entries: 1, players: 1 }, d: { entries: 0, players: 0 }, all: { entries: 0, players: 0 } },
       },
       {
         prefCode: '12', // 市区町村スコープ（difficult）も 12 に集まる
         entries: 3,
         players: 2,
-        byMode: { e: { entries: 2, players: 1 }, d: { entries: 1, players: 1 } },
+        byMode: { e: { entries: 2, players: 1 }, d: { entries: 1, players: 1 }, all: { entries: 0, players: 0 } },
       },
       {
         prefCode: '13',
         entries: 1,
         players: 1,
-        byMode: { e: { entries: 1, players: 1 }, d: { entries: 0, players: 0 } },
+        byMode: { e: { entries: 1, players: 1 }, d: { entries: 0, players: 0 }, all: { entries: 0, players: 0 } },
       },
     ])
+  })
+
+  it('全市区町村名は科目とは別の区分（all）として数え、mode で絞り込める', async () => {
+    const store = new LocalRankingStore(createMemoryStorage())
+    await seed(store)
+    // 千葉県の全市区町村名を 1 件足す（10 問の 'e' には混ざらない）
+    await store.submit(entry({ setId: 'abr20260925-e-12-1234-all', clientToken: 'c', nickname: 'C', score: 87 }))
+    const chiba = (await store.prefectureStats()).find((s) => s.prefCode === '12')
+    expect(chiba?.byMode).toEqual({
+      e: { entries: 2, players: 1 },
+      d: { entries: 1, players: 1 },
+      all: { entries: 1, players: 1 },
+    })
+    expect(chiba?.entries).toBe(4)
+    expect((await store.listByPrefecture('12', 30, 'all')).map((r) => r.score)).toEqual([87])
+    expect((await store.listByPrefecture('12', 30, 'e')).map((r) => r.score)).toEqual([100, 80])
   })
 
   it('listByPrefecture は mode で絞れる', async () => {

@@ -5,6 +5,10 @@
  * 設計の要点:
  *  - 採点はここで行う。クライアントが送るのは setId と各問の入力だけ。
  *    setId から `src/engine` の buildQuestionSet() で問題セットを再導出し、grade() で採点する。
+ *    得点の式はクライアントと同じ `src/engine/score.ts` の scoreOf()（10 問なら ×10、
+ *    全市区町村名のように問題数が違うセットは正答率を 100 点満点に丸める）。
+ *  - 順位表の区分は 3 つ（'e' | 'd' | 'all'）。全市区町村名は 1 問の重みが違うので
+ *    10 問の 2 科目と同じ一覧に混ぜず、都道府県別の索引・カウンタも別の sk に分ける。
  *  - 1 セット 1 登録は DynamoDB の条件付き書き込み（予約アイテム）で担保する。
  *  - 依存（DynamoDB・問題バンク・時刻・ID 生成）は createHandler() に注入する。
  *    default export の handler は本番依存で組み立てたもの。
@@ -12,9 +16,18 @@
 import type { BankSource } from '../../../src/engine/bank.ts'
 import { DATA_VERSION, buildQuestionSet, createFetchSource } from '../../../src/engine/bank.ts'
 import { grade } from '../../../src/engine/grading.ts'
+import { scoreOf } from '../../../src/engine/score.ts'
 import { SCOPE_NATIONWIDE, parseSetId } from '../../../src/engine/setId.ts'
-import type { Mode, ModeCount, PrefectureStat, Question, RankingRow } from '../../../src/engine/types.ts'
+import type {
+  Mode,
+  ModeCount,
+  PrefectureStat,
+  Question,
+  RankingMode,
+  RankingRow,
+} from '../../../src/engine/types.ts'
 import {
+  ALL_RANKING_MODE,
   QUESTIONS_PER_SET,
   TIME_LIMIT_MAX_MS,
   TIME_LIMIT_MIN_MS,
@@ -67,11 +80,17 @@ export interface EntryItem {
   scope: string
   /** その回の時間制限。0 ＝ 制限なし */
   timeLimitMs: number
+  /** 正答数。後から足した項目なので古いアイテムには無い */
+  correct?: number
+  /** 問題数。後から足した項目なので古いアイテムには無い（当時は 10 問だけ） */
+  total?: number
+  /** 全市区町村名のセットか。後から足した項目で、古いアイテム（＝必ず 10 問）には無い */
+  all?: boolean
 }
 
 /**
- * pk = `pref#{prefCode}`、sk = `player#{clientToken}`（合計）または `player#{mode}#{clientToken}`（科目別）。
- * 人数（players）の distinct を数えるための印
+ * pk = `pref#{prefCode}`、sk = `player#{clientToken}`（合計）または `player#{mode}#{clientToken}`（区分別）。
+ * 区分は 'e' | 'd' | 'all'（全市区町村名）。人数（players）の distinct を数えるための印
  */
 export interface MarkerItem {
   pk: string
@@ -80,8 +99,8 @@ export interface MarkerItem {
 }
 
 /**
- * pk = `stats#pref`、sk = `{prefCode}`（合計）または `{prefCode}#{mode}`（科目別）。件数と人数のカウンタ。
- * 合計行は既存データとそのまま両立する（科目別の行が後から足される形）。
+ * pk = `stats#pref`、sk = `{prefCode}`（合計）または `{prefCode}#{mode}`（区分別）。件数と人数のカウンタ。
+ * 合計行は既存データとそのまま両立する（区分別の行が後から足される形）。
  */
 export interface StatItem {
   pk: string
@@ -130,6 +149,11 @@ export const MAX_LIMIT = 100
 export const NICKNAME_MAX = 12
 /** 解答入力の文字数上限（防御的な上限。採点には影響しない） */
 const INPUT_MAX = 64
+/**
+ * answers の件数の上限（防御的な上限）。本当の件数は再導出した問題セットと突き合わせる。
+ * 全市区町村名は都道府県ごとに違い、最も多い北海道で 179 件。
+ */
+export const ANSWERS_MAX = 500
 
 export function setPk(setId: string): string {
   return `set#${setId}`
@@ -142,19 +166,25 @@ export function prefPk(prefCode: string): string {
 /** 都道府県別カウンタの pk。sk は `{prefCode}` か `{prefCode}#{mode}` */
 export const STATS_PK = 'stats#pref'
 
-/** 科目別カウンタの sk */
-export function statKeyOf(prefCode: string, mode: Mode): string {
+/** 区分別カウンタの sk。mode は 'e' | 'd' | 'all' */
+export function statKeyOf(prefCode: string, mode: RankingMode): string {
   return `${prefCode}#${mode}`
 }
 
-const MODES: Mode[] = ['e', 'd']
+/** 順位表の区分。全市区町村名は科目と並ぶ 3 つ目として数える */
+const RANKING_MODES: RankingMode[] = ['e', 'd', ALL_RANKING_MODE]
 
-function isMode(v: string): v is Mode {
-  return v === 'e' || v === 'd'
+function isRankingMode(v: string): v is RankingMode {
+  return v === 'e' || v === 'd' || v === ALL_RANKING_MODE
 }
 
-function emptyByMode(): Record<Mode, ModeCount> {
-  return { e: { entries: 0, players: 0 }, d: { entries: 0, players: 0 } }
+function emptyByMode(): Record<RankingMode, ModeCount> {
+  return { e: { entries: 0, players: 0 }, d: { entries: 0, players: 0 }, all: { entries: 0, players: 0 } }
+}
+
+/** そのアイテムの区分。all フラグが無い古いアイテムは 10 問の科目 */
+export function rankingModeOf(item: Pick<EntryItem, 'mode' | 'all'>): RankingMode {
+  return item.all === true ? ALL_RANKING_MODE : item.mode
 }
 
 /** setId の scope が属する都道府県コード。全国（'00'）はそのまま '00' */
@@ -239,11 +269,16 @@ export function compareRows(a: EntryItem | RankingRow, b: EntryItem | RankingRow
 }
 
 export function toRow(item: EntryItem): RankingRow {
+  // correct / total は後から足した項目。持っていない古いアイテムは必ず 10 問
+  // （全市区町村名を登録できるようにする前のデータ）なので、得点から正答数を戻せる
+  const total = item.total ?? QUESTIONS_PER_SET
   return {
     entryId: item.entryId,
     setId: item.setId,
     nickname: item.nickname,
     score: item.score,
+    correct: item.correct ?? Math.round((item.score / 100) * total),
+    total,
     timeMs: item.timeMs,
     createdAt: item.createdAt,
     mode: item.mode,
@@ -299,7 +334,8 @@ function validateSubmitBody(raw: unknown): { body: SubmitBody } | { detail: stri
   }
   const msMax = limit > 0 ? limit : UNLIMITED_MAX_MS
   if (!Array.isArray(answers)) return { detail: 'answers が配列ではありません。' }
-  if (answers.length !== QUESTIONS_PER_SET) return { detail: `answers は ${QUESTIONS_PER_SET} 件です。` }
+  // 件数そのものは再導出した問題セットと突き合わせる（10 問 / 全市区町村名で変わる）
+  if (answers.length < 1 || answers.length > ANSWERS_MAX) return { detail: `answers は 1〜${ANSWERS_MAX} 件です。` }
   const checked: AnswerInput[] = []
   for (const a of answers) {
     if (!isObject(a)) return { detail: 'answers の要素がオブジェクトではありません。' }
@@ -342,6 +378,7 @@ export function createHandler(deps: HandlerDeps): (event: HttpApiEvent) => Promi
   async function indexByPrefecture(item: EntryItem, clientToken: string): Promise<void> {
     const prefCode = prefCodeOfScope(item.scope)
     const pk = prefPk(prefCode)
+    const rankingMode = rankingModeOf(item)
     try {
       await deps.ddb.putIndexEntry({ ...item, pk })
       // マーカーが新規なら、その端末はこの都道府県で初めて = players +1
@@ -351,13 +388,14 @@ export function createHandler(deps: HandlerDeps): (event: HttpApiEvent) => Promi
         createdAt: item.createdAt,
       })
       await deps.ddb.addStats(prefCode, 1, firstTime ? 1 : 0)
-      // 科目別も同じやり方で数える（合計行とは別の sk なので既存データと両立する）
+      // 区分別（'e' | 'd' | 'all'）も同じやり方で数える
+      // （合計行とは別の sk なので既存データと両立する）
       const firstInMode = await deps.ddb.putMarkerIfAbsent({
         pk,
-        sk: `player#${item.mode}#${clientToken}`,
+        sk: `player#${rankingMode}#${clientToken}`,
         createdAt: item.createdAt,
       })
-      await deps.ddb.addStats(statKeyOf(prefCode, item.mode), 1, firstInMode ? 1 : 0)
+      await deps.ddb.addStats(statKeyOf(prefCode, rankingMode), 1, firstInMode ? 1 : 0)
     } catch (e: unknown) {
       console.error('[ranking-api] 都道府県インデックスの更新に失敗', e instanceof Error ? e.stack : e)
     }
@@ -380,15 +418,21 @@ export function createHandler(deps: HandlerDeps): (event: HttpApiEvent) => Promi
 
     let set
     try {
-      set = await buildQuestionSet(parsed.mode, parsed.scope, parsed.seed, bank)
+      // 全市区町村名（`-all` 付きの setId）はその都道府県の市区町村を全部出すセット
+      set = await buildQuestionSet(parsed.mode, parsed.scope, parsed.seed, bank, parsed.all)
     } catch (e: unknown) {
       if (e instanceof BankUnavailableError) throw e
       return invalid(e instanceof Error ? e.message : '問題セットを再導出できませんでした。', cors)
     }
     // dataVersion が違う setId は再導出した setId と一致しない
     if (set.setId !== body.setId) return invalid(`この版では再現できない setId です: ${body.setId}`, cors)
-    if (set.questions.length !== QUESTIONS_PER_SET) {
+    // 10 問のセットは必ず 10 問。全市区町村名は都道府県ごとに件数が違う
+    if (!parsed.all && set.questions.length !== QUESTIONS_PER_SET) {
       return invalid(`${QUESTIONS_PER_SET} 問を再導出できませんでした。`, cors)
+    }
+    if (set.questions.length === 0) return invalid('問題セットを再導出できませんでした。', cors)
+    if (body.answers.length !== set.questions.length) {
+      return invalid(`answers は ${set.questions.length} 件です。`, cors)
     }
     const mismatch = matchQuestionIds(body.answers, set.questions)
     if (mismatch) return invalid(mismatch, cors)
@@ -403,7 +447,9 @@ export function createHandler(deps: HandlerDeps): (event: HttpApiEvent) => Promi
       if (!a.passed && grade(a.input, q.answer)) correct += 1
       timeMs += a.ms
     }
-    const score = correct * 10
+    // 10 問なら正答数 × 10、全市区町村名は正答率を 100 点満点に丸める（クライアントと同じ関数）
+    const total = set.questions.length
+    const score = scoreOf(correct, total)
 
     const createdAt = now().toISOString()
     const entryId = randomId()
@@ -416,11 +462,14 @@ export function createHandler(deps: HandlerDeps): (event: HttpApiEvent) => Promi
       setId: body.setId,
       nickname: body.nickname,
       score,
+      correct,
+      total,
       timeMs,
       createdAt,
       mode: parsed.mode,
       scope: parsed.scope,
       timeLimitMs: body.timeLimitMs,
+      all: parsed.all,
     }
     const reservation: ReservationItem = {
       pk,
@@ -445,7 +494,8 @@ export function createHandler(deps: HandlerDeps): (event: HttpApiEvent) => Promi
     const prefCode = qs.prefCode ?? ''
     const setId = qs.setId ?? ''
     const modeParam = qs.mode ?? ''
-    if (modeParam !== '' && !isMode(modeParam)) return invalid(`mode が読めません: ${modeParam}`, cors)
+    // mode は順位表の区分（'e' | 'd' | 'all'）
+    if (modeParam !== '' && !isRankingMode(modeParam)) return invalid(`mode が読めません: ${modeParam}`, cors)
     const mode = modeParam === '' ? undefined : modeParam
 
     // limit の既定は setId 引き 20 / 都道府県引き 30
@@ -466,8 +516,8 @@ export function createHandler(deps: HandlerDeps): (event: HttpApiEvent) => Promi
       pk = setPk(setId)
     }
     const found = await deps.ddb.listEntries(pk)
-    // 科目の絞り込みはサーバー側で行う（クライアントは受け取った順に並べるだけ）
-    const filtered = mode === undefined ? found : found.filter((e) => e.mode === mode)
+    // 区分の絞り込みはサーバー側で行う（クライアントは受け取った順に並べるだけ）
+    const filtered = mode === undefined ? found : found.filter((e) => rankingModeOf(e) === mode)
     const rows = filtered.sort(compareRows).slice(0, limit).map(toRow)
     return json(200, { entries: rows }, cors)
   }
@@ -478,7 +528,7 @@ export function createHandler(deps: HandlerDeps): (event: HttpApiEvent) => Promi
    */
   async function handleStats(cors: Record<string, string>): Promise<HttpApiResult> {
     const totals = new Map<string, ModeCount>()
-    const byMode = new Map<string, Record<Mode, ModeCount>>()
+    const byMode = new Map<string, Record<RankingMode, ModeCount>>()
     for (const item of await deps.ddb.listStats()) {
       const count: ModeCount = { entries: item.entries ?? 0, players: item.players ?? 0 }
       const [prefCode, modePart] = item.sk.split('#')
@@ -486,7 +536,7 @@ export function createHandler(deps: HandlerDeps): (event: HttpApiEvent) => Promi
         totals.set(prefCode, count)
         continue
       }
-      if (!isMode(modePart)) continue
+      if (!isRankingMode(modePart)) continue
       const hit = byMode.get(prefCode) ?? emptyByMode()
       hit[modePart] = count
       byMode.set(prefCode, hit)
@@ -497,12 +547,12 @@ export function createHandler(deps: HandlerDeps): (event: HttpApiEvent) => Promi
       .map((prefCode) => {
         const per = byMode.get(prefCode) ?? emptyByMode()
         const total = totals.get(prefCode) ?? {
-          entries: MODES.reduce((sum, m) => sum + per[m].entries, 0),
-          players: MODES.reduce((sum, m) => sum + per[m].players, 0),
+          entries: RANKING_MODES.reduce((sum, m) => sum + per[m].entries, 0),
+          players: RANKING_MODES.reduce((sum, m) => sum + per[m].players, 0),
         }
         return { prefCode, entries: total.entries, players: total.players, byMode: per }
       })
-      .filter((s) => s.entries > 0 || MODES.some((m) => s.byMode[m].entries > 0))
+      .filter((s) => s.entries > 0 || RANKING_MODES.some((m) => s.byMode[m].entries > 0))
       .sort((a, b) => (a.prefCode < b.prefCode ? -1 : 1))
     return json(200, { prefectures }, cors)
   }

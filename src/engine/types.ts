@@ -54,7 +54,8 @@ export interface QuestionSet {
   widened: boolean
   /**
    * 全市区町村名: その範囲（都道府県か地域）の市区町村名を全部。
-   * 母集団は easy.json にあるものだけで、問題バンクが除いた市区町村は出さない
+   * 母集団は easy.json にあるものだけで、問題バンクが除いた市区町村は出さない。
+   * 順位表は 10 問とは別区分（RankingMode の 'all'）
    */
   all: boolean
   questions: Question[] // 出題順。all でなければ QUESTIONS_PER_SET 件
@@ -72,8 +73,10 @@ export interface AnswerRecord {
 export interface ResultEntry {
   setId: string
   nickname: string
-  score: number // 正答数 × 10
-  timeMs: number // 10 問の合計
+  /** 得点。10 問なら正答数 × 10、それ以外は正答率を 100 点満点に丸めた値（engine/score.ts の scoreOf） */
+  score: number
+  /** 全問の合計（10 問のセットなら 10 問分） */
+  timeMs: number
   answers: AnswerRecord[]
   clientToken: string
   createdAt: string // ISO 8601
@@ -95,8 +98,8 @@ export interface RankingStore {
   list(setId: string, limit?: number): Promise<RankingRow[]>
   /** 都道府県ごとの登録件数・人数。「これまでのランキング」のトップ画面で使う */
   prefectureStats(): Promise<PrefectureStat[]>
-  /** ある都道府県の上位 limit 件（既定 30）。list と同じ並び。mode を渡すとその科目だけ */
-  listByPrefecture(prefCode: string, limit?: number, mode?: Mode): Promise<RankingRow[]>
+  /** ある都道府県の上位 limit 件（既定 30）。list と同じ並び。mode を渡すとその区分だけ */
+  listByPrefecture(prefCode: string, limit?: number, mode?: RankingMode): Promise<RankingRow[]>
 }
 
 export const QUESTIONS_PER_SET = 10
@@ -155,6 +158,10 @@ export interface RankingRow {
   setId: string
   nickname: string
   score: number
+  /** 正答数。後から足した項目なので古い行には無い（score から復元する → engine/score.ts） */
+  correct?: number
+  /** 問題数。10 ＝ 従来の 10 問、それ以外 ＝ 全市区町村名（都道府県ごとに違う）。古い行には無い */
+  total?: number
   timeMs: number
   createdAt: string
   /** setId から導ける出題条件。都道府県別の一覧で科目・範囲を見せるために添える */
@@ -165,7 +172,17 @@ export interface RankingRow {
   timeLimitMs?: number
 }
 
-/** 件数と人数の組。科目別の内訳に使う */
+/**
+ * 順位表の区分。科目 2 つ（'e' | 'd'・どちらも 10 問）に、
+ * 全市区町村名（'all'）を第 3 の区分として並べる。
+ * 10 問と全市区町村名は 1 問の重みが違うので、同じ一覧に混ぜない。
+ */
+export type RankingMode = Mode | 'all'
+
+/** 全市区町村名の区分。API の `?mode=` とカウンタの sk にもこの文字列を使う */
+export const ALL_RANKING_MODE = 'all'
+
+/** 件数と人数の組。区分別の内訳に使う */
 export interface ModeCount {
   /** 登録された答案の件数 */
   entries: number
@@ -180,10 +197,10 @@ export interface ModeCount {
  */
 export interface PrefectureStat {
   prefCode: string
-  /** 登録された答案の件数（easy ＋ difficult の合計） */
+  /** 登録された答案の件数（3 区分の合計） */
   entries: number
-  /** 登録した端末の数（clientToken の distinct・科目をまたいだ合計） */
+  /** 登録した端末の数（clientToken の distinct・区分をまたいだ合計） */
   players: number
-  /** 科目別の内訳。古いデータには無いので任意 */
-  byMode?: Record<Mode, ModeCount>
+  /** 区分別の内訳（'e' | 'd' | 'all'）。古いデータには無いので任意 */
+  byMode?: Partial<Record<RankingMode, ModeCount>>
 }
