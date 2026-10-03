@@ -2,7 +2,7 @@
  * 共有ランキング API（infra/API.md）を叩く RankingStore。
  * 採点はサーバーが行うので、送るのは setId と各問の入力だけ（score / correct は送らない）。
  */
-import type { Mode, PrefectureStat, RankingRow, RankingStore, ResultEntry, SubmitResult } from './types.ts'
+import type { PrefectureStat, RankingMode, RankingRow, RankingStore, ResultEntry, SubmitResult } from './types.ts'
 
 /** 1 リクエストあたりの待ち時間。これを超えたら network 扱い */
 export const REMOTE_TIMEOUT_MS = 8000
@@ -100,8 +100,8 @@ export class RemoteRankingStore implements RankingStore {
     return Array.isArray(parsed.prefectures) ? parsed.prefectures : []
   }
 
-  /** mode を渡すとサーバー側で科目を絞ってから上位を返す */
-  async listByPrefecture(prefCode: string, limit = 30, mode?: Mode): Promise<RankingRow[]> {
+  /** mode（区分 'e' | 'd' | 'all'）を渡すとサーバー側で絞ってから上位を返す */
+  async listByPrefecture(prefCode: string, limit = 30, mode?: RankingMode): Promise<RankingRow[]> {
     const modeQuery = mode === undefined ? '' : `&mode=${mode}`
     return this.listRows(`?prefCode=${encodeURIComponent(prefCode)}&limit=${String(limit)}${modeQuery}`)
   }

@@ -178,6 +178,10 @@ describe('RemoteRankingStore の都道府県エンドポイント', () => {
 
     await store.listByPrefecture('13', 5)
     expect(calls[1]).toBe('https://api.example.test/results?prefCode=13&limit=5')
+
+    // 区分は 3 つ。全市区町村名は `?mode=all` でサーバー側が絞る
+    await store.listByPrefecture('12', 30, 'all')
+    expect(calls[2]).toBe('https://api.example.test/results?prefCode=12&limit=30&mode=all')
   })
 
   it('どちらも失敗は例外にする', async () => {

@@ -18,6 +18,8 @@ import type {
 import { STATS_PK, createHandler, prefPk, setPk } from './handler.ts'
 
 const SET_ID = `${DATA_VERSION}-e-12-1234`
+/** 千葉県の全市区町村名。フィクスチャの千葉県は 25 市区町村なので 25 問になる */
+const SET_ALL = `${DATA_VERSION}-e-12-0417-all`
 const ORIGIN = 'https://akiralab.github.io'
 
 /** pk|sk → item のメモリ実装。条件付き書き込みと ADD の加算だけを再現する */
@@ -87,6 +89,8 @@ function entryItem(over: Partial<EntryItem> & { entryId: string }): EntryItem {
 }
 
 let EXPECTED: QuestionSet
+/** 全市区町村名のセット（千葉県の 25 市区町村ぜんぶ） */
+let EXPECTED_ALL: QuestionSet
 let seq = 0
 
 function makeHandler(ddb: DdbPort) {
@@ -128,8 +132,19 @@ function parse(res: HttpApiResult): Record<string, unknown> {
   return JSON.parse(res.body) as Record<string, unknown>
 }
 
+/** 全市区町村名のセットの答案。先頭 correctCount 件だけ正解を入れる */
+function answersForAll(correctCount: number) {
+  return EXPECTED_ALL.questions.map((q, i) => ({
+    questionId: q.id,
+    input: i < correctCount ? q.answer : 'ちがう',
+    ms: 2000,
+    passed: false,
+  }))
+}
+
 beforeEach(async () => {
   EXPECTED = await buildQuestionSet('e', '12', '1234', fixtureSource())
+  EXPECTED_ALL = await buildQuestionSet('e', '12', '0417', fixtureSource(), true)
 })
 
 describe('POST /results', () => {
@@ -148,6 +163,8 @@ describe('POST /results', () => {
       setId: SET_ID,
       nickname: 'たろう', // 前後空白は落とす
       score: 70,
+      correct: 7,
+      total: 10,
       timeMs: 30_000,
       createdAt: '2026-10-02T12:00:00.000Z',
       mode: 'e',
@@ -202,7 +219,7 @@ describe('POST /results', () => {
     expect(String(parse(res).detail)).toContain('questionId')
   })
 
-  it('answers が 10 件でなければ 400', async () => {
+  it('answers が再導出した問題数（10 問）と違えば 400', async () => {
     const handler = makeHandler(memoryDdb())
     const res = await handler(
       postEvent({ setId: SET_ID, nickname: 'たろう', clientToken: 'tok-a', answers: answersFor(7).slice(0, 9) }),
@@ -337,6 +354,7 @@ describe('GET /results', () => {
     const handler = makeHandler(memoryDdb(seedRows))
     const entries = parse(await handler(getEvent({ setId: SET_ID }))).entries as Record<string, unknown>[]
     expect(Object.keys(entries[0]).sort()).toEqual([
+      'correct',
       'createdAt',
       'entryId',
       'mode',
@@ -346,6 +364,7 @@ describe('GET /results', () => {
       'setId',
       'timeLimitMs',
       'timeMs',
+      'total',
     ])
   })
 
@@ -587,13 +606,23 @@ describe('GET /stats/prefectures', () => {
     const res = await handler(statsEvent())
     expect(res.statusCode).toBe(200)
     expect(parse(res).prefectures).toEqual([
-      { prefCode: '00', entries: 2, players: 2, byMode: { e: { entries: 0, players: 0 }, d: { entries: 0, players: 0 } } },
-      { prefCode: '12', entries: 1, players: 1, byMode: { e: { entries: 0, players: 0 }, d: { entries: 0, players: 0 } } },
+      {
+        prefCode: '00',
+        entries: 2,
+        players: 2,
+        byMode: { e: { entries: 0, players: 0 }, d: { entries: 0, players: 0 }, all: { entries: 0, players: 0 } },
+      },
+      {
+        prefCode: '12',
+        entries: 1,
+        players: 1,
+        byMode: { e: { entries: 0, players: 0 }, d: { entries: 0, players: 0 }, all: { entries: 0, players: 0 } },
+      },
       {
         prefCode: '13',
         entries: 5,
         players: 3,
-        byMode: { e: { entries: 4, players: 2 }, d: { entries: 1, players: 1 } },
+        byMode: { e: { entries: 4, players: 2 }, d: { entries: 1, players: 1 }, all: { entries: 0, players: 0 } },
       },
     ])
   })
@@ -608,7 +637,7 @@ describe('GET /stats/prefectures', () => {
         prefCode: '12',
         entries: 5,
         players: 3,
-        byMode: { e: { entries: 3, players: 2 }, d: { entries: 2, players: 1 } },
+        byMode: { e: { entries: 3, players: 2 }, d: { entries: 2, players: 1 }, all: { entries: 0, players: 0 } },
       },
     ])
   })
@@ -629,5 +658,85 @@ describe('ルーティング', () => {
       requestContext: { http: { method: 'GET', path: '/nope' } },
     })
     expect(res.statusCode).toBe(404)
+  })
+})
+
+// ---------------------------------------------------------------- 全市区町村名
+
+describe('POST /results（全市区町村名の `-all` セット）', () => {
+  it('問題数は再導出したセットに合わせ、得点は正答率を 100 点満点に丸めた値で保存する', async () => {
+    expect(EXPECTED_ALL.questions).toHaveLength(25)
+    const ddb = memoryDdb()
+    const handler = makeHandler(ddb)
+    const res = await handler(
+      postEvent({ setId: SET_ALL, nickname: 'たろう', clientToken: 'tok-a', answers: answersForAll(19) }),
+    )
+    expect(res.statusCode).toBe(201)
+    // 19 / 25 = 76 点（10 問のときの「正答数 × 10」ではない）
+    expect(parse(res).entry).toEqual({
+      entryId: 'id-1',
+      setId: SET_ALL,
+      nickname: 'たろう',
+      score: 76,
+      correct: 19,
+      total: 25,
+      timeMs: 50_000,
+      createdAt: '2026-10-02T12:00:00.000Z',
+      mode: 'e',
+      scope: '12',
+      timeLimitMs: 0,
+    })
+    // 保存したアイテムにも区分の印が残る（都道府県別の絞り込みに使う）
+    expect(ddb.items.get(`${setPk(SET_ALL)}|entry#2026-10-02T12:00:00.000Z#id-1`)).toMatchObject({
+      all: true,
+      correct: 19,
+      total: 25,
+    })
+  })
+
+  it('answers が 10 件でも 24 件でも、セットの件数と違えば 400', async () => {
+    const handler = makeHandler(memoryDdb())
+    for (const answers of [answersForAll(10).slice(0, 10), answersForAll(24).slice(0, 24)]) {
+      const res = await handler(postEvent({ setId: SET_ALL, nickname: 'たろう', clientToken: 'tok-a', answers }))
+      expect(res.statusCode).toBe(400)
+      expect(String(parse(res).detail)).toContain('25 件')
+    }
+  })
+
+  it('都道府県別では 10 問の科目と混ざらず、`?mode=all` で引ける', async () => {
+    const ddb = memoryDdb()
+    const handler = makeHandler(ddb)
+    expect(
+      (
+        await handler(postEvent({ setId: SET_ALL, nickname: 'たろう', clientToken: 'tok-a', answers: answersForAll(19) }))
+      ).statusCode,
+    ).toBe(201)
+    expect(
+      (
+        await handler(postEvent({ setId: SET_ID, nickname: 'はなこ', clientToken: 'tok-b', answers: answersFor(7) }))
+      ).statusCode,
+    ).toBe(201)
+
+    const allRows = parse(await handler(getEvent({ prefCode: '12', mode: 'all' }))).entries as { nickname: string }[]
+    expect(allRows.map((r) => r.nickname)).toEqual(['たろう'])
+    const easyRows = parse(await handler(getEvent({ prefCode: '12', mode: 'e' }))).entries as { nickname: string }[]
+    expect(easyRows.map((r) => r.nickname)).toEqual(['はなこ'])
+
+    // カウンタも区分別（`{prefCode}#all`）に分かれる
+    expect(ddb.items.get(`${STATS_PK}|12#all`)).toMatchObject({ entries: 1, players: 1 })
+    expect(ddb.items.get(`${STATS_PK}|12#e`)).toMatchObject({ entries: 1, players: 1 })
+    const stats = parse(
+      await handler({
+        headers: { origin: ORIGIN },
+        requestContext: { http: { method: 'GET', path: '/stats/prefectures' } },
+      }),
+    ).prefectures as { prefCode: string; byMode: Record<string, { entries: number }> }[]
+    expect(stats.find((s) => s.prefCode === '12')?.byMode.all.entries).toBe(1)
+  })
+
+  it('知らない mode は 400 のまま', async () => {
+    const handler = makeHandler(memoryDdb())
+    const res = await handler(getEvent({ prefCode: '12', mode: 'x' }))
+    expect(res.statusCode).toBe(400)
   })
 })

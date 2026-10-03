@@ -4,6 +4,7 @@ import { buildQuestionSet, defaultSource } from '../engine/bank.ts'
 import { rangeLabelOf } from '../engine/scope.ts'
 import { parseSetId } from '../engine/setId.ts'
 import { defaultStorage, getClientToken, isValidNickname, provisionalRank } from '../engine/ranking.ts'
+import { allRowNote, scoreOf } from '../engine/score.ts'
 import { defaultRankingStore, isRemoteRanking } from '../engine/ranking-factory.ts'
 import { appendWrongFromEntry } from '../engine/wrongList.ts'
 import { readNickname } from '../hooks/useNickname.ts'
@@ -69,15 +70,10 @@ export default function Result({ setId }: { setId: string }) {
   const timeLimitMs = useMemo(() => readQuizTimeLimit(setId) ?? readTimeLimit(), [setId])
 
   const error = parsed ? loadError : `セットIDが読めません: ${setId}`
-  /** 全市区町村名（練習）。順位表には載せず、得点は正答率で出す */
-  const practice = parsed?.all === true
   const total = records?.length ?? 0
   const correct = useMemo(() => (records ?? []).filter((r) => r.correct).length, [records])
-  /** 10 問なら正答数 × 10。全市区町村名は問題数が県ごとに違うので 100 点満点の正答率 */
-  const score = useMemo(
-    () => (practice ? (total === 0 ? 0 : Math.round((correct / total) * 100)) : correct * 10),
-    [practice, correct, total],
-  )
+  /** 10 問なら正答数 × 10、全市区町村名は 100 点満点の正答率（engine/score.ts） */
+  const score = useMemo(() => scoreOf(correct, total), [correct, total])
   const timeMs = useMemo(() => (records ?? []).reduce((sum, r) => sum + r.ms, 0), [records])
 
   /** 「今日の10問」（seed が日付）なら見出しに日付を出す */
@@ -137,9 +133,9 @@ export default function Result({ setId }: { setId: string }) {
 
   // 登録の有無にかかわらず、画面を開いた時点で順位表を出す。
   // 未登録なら「登録すると N 位」を示し、登録を迷っている人も比べられるようにする。
-  // 全市区町村名（練習）は順位表の対象外なので取りに行かない
+  // 全市区町村名も対象（この setId の順位表なので、10 問の答案とは混ざらない）
   useEffect(() => {
-    if (!parsed || records === null || parsed.all) return
+    if (!parsed || records === null) return
     const saved = storage.getItem(submittedKey(setId))
     let alive = true
     void (async () => {
@@ -152,7 +148,7 @@ export default function Result({ setId }: { setId: string }) {
   }, [setId, parsed, records, loadRanking])
 
   const register = async () => {
-    if (!records || registered || submitting || practice) return
+    if (!records || registered || submitting) return
     if (!isValidNickname(nickname)) {
       setNotice('氏名（ニックネーム）が未記入です。表紙で記入してください。')
       return
@@ -174,7 +170,7 @@ export default function Result({ setId }: { setId: string }) {
       storage.setItem(submittedKey(setId), res.entryId)
       setMyEntryId(res.entryId)
       setRegistered(true)
-      // 「間違えた問題」は登録した答案だけ記録する（練習の回は残さない）
+      // 「間違えた問題」は登録した答案だけ記録する（登録しなかった回は残さない）
       if (set) appendWrongFromEntry(set, { ...entry, entryId: res.entryId })
       setNotice(`${res.rank} 位で登録しました。`)
       await loadRanking(res.entryId)
@@ -276,19 +272,16 @@ export default function Result({ setId }: { setId: string }) {
 
       {notice && <p className="pen-comment">{notice}</p>}
       {shareUrl && <p className="review__mine">{shareUrl}</p>}
-      {practice && <p className="pen-comment">全市区町村名は練習なので、順位表には載りません。</p>}
 
       <p>
-        {!practice && (
-          <button
-            type="button"
-            className="btn btn--primary"
-            disabled={registered || submitting}
-            onClick={() => void register()}
-          >
-            ランキングに登録
-          </button>
-        )}
+        <button
+          type="button"
+          className="btn btn--primary"
+          disabled={registered || submitting}
+          onClick={() => void register()}
+        >
+          ランキングに登録
+        </button>
         <button type="button" className="btn" onClick={() => void share()}>
           この問題で挑ませる
         </button>
@@ -325,6 +318,8 @@ export default function Result({ setId }: { setId: string }) {
             <ol className="ranking">
               {entries.map((e, i) => {
                 const me = e.entryId === myEntryId
+                // 全市区町村名のセットは問題数が県ごとに違うので、得点の横に添える
+                const note = allRowNote(e)
                 return (
                   <li className={me ? 'ranking__row is-me' : 'ranking__row'} key={e.entryId}>
                     <span className="ranking__rank">
@@ -335,7 +330,10 @@ export default function Result({ setId }: { setId: string }) {
                       {e.nickname}
                       {me && <span className="sr-only">（あなた）</span>}
                     </span>
-                    <span className="ranking__score">{e.score}点</span>
+                    <span className="ranking__score">
+                      {e.score}点
+                      {note !== null && <span className="q-suffix">［{note}］</span>}
+                    </span>
                     <span className="ranking__time">
                       {formatDuration(e.timeMs)}
                       {e.timeLimitMs !== undefined && e.timeLimitMs > 0 && (

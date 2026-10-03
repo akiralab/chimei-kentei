@@ -1,0 +1,48 @@
+/**
+ * 得点の計算。クライアント（結果画面）とサーバー（共有ランキング API）で同じ関数を使う。
+ *
+ * - 10 問のセット … 正答数 × 10（従来どおり）
+ * - それ以外（全市区町村名のように問題数が都道府県ごとに違うセット）… 正答率を 100 点満点に丸めた値
+ *
+ * どちらも 0〜100 点だが **1 問の重みが違う**ので、10 問と全市区町村名は別の順位表として扱う
+ * （区分は RankingMode の 'e' | 'd' | 'all'）。
+ */
+import type { RankingRow } from './types.ts'
+import { QUESTIONS_PER_SET } from './types.ts'
+import { parseSetId } from './setId.ts'
+
+/** 得点。total が 0 以下（答案が無い）なら 0 点 */
+export function scoreOf(correct: number, total: number): number {
+  if (total <= 0) return 0
+  if (total === QUESTIONS_PER_SET) return correct * 10
+  return Math.round((correct / total) * 100)
+}
+
+/** 順位表の 1 行のうち、正解数・問題数の判定に要る分だけ */
+export type CountableRow = Pick<RankingRow, 'setId' | 'score'> & Partial<Pick<RankingRow, 'correct' | 'total'>>
+
+/**
+ * その行の「正解 n / N 問」。
+ * correct / total は後から足した項目なので、持っていない古い行は 10 問のセットとみなし
+ * （全市区町村名が登録できなかった頃のデータなので必ず 10 問）、得点から正解数を復元する。
+ */
+export function rowCounts(row: CountableRow): { correct: number; total: number } {
+  const total = row.total ?? QUESTIONS_PER_SET
+  return { correct: row.correct ?? Math.round((row.score / 100) * total), total }
+}
+
+/**
+ * 全市区町村名のセットの行か。
+ * setId が読めればそれが正本（`-all` 付き）、読めないときだけ total が 10 問でないことで見分ける。
+ */
+export function isAllRow(row: CountableRow): boolean {
+  const parsed = parseSetId(row.setId)
+  if (parsed) return parsed.all
+  return row.total !== undefined && row.total !== QUESTIONS_PER_SET
+}
+
+/** 順位表の行に添える注記。10 問のセットなら null（問題数は古い行には無いので出さない） */
+export function allRowNote(row: CountableRow): string | null {
+  if (!isAllRow(row)) return null
+  return row.total === undefined ? '全市区町村名' : `全市区町村名（${row.total} 問）`
+}

@@ -3,17 +3,17 @@
  * テスト（node 環境）では localStorage が無いのでメモリ実装へフォールバックする。
  */
 import type {
-  Mode,
   ModeCount,
   PrefectureStat,
+  RankingMode,
   RankingRow,
   RankingStore,
   ResultEntry,
   SubmitResult,
 } from './types.ts'
+import { ALL_RANKING_MODE } from './types.ts'
 import { SCOPE_NATIONWIDE, parseSetId } from './setId.ts'
-
-const MODES: Mode[] = ['e', 'd']
+import { RANKING_MODES } from './modes.ts'
 
 export interface KeyValueStorage {
   getItem(key: string): string | null
@@ -131,12 +131,15 @@ export function provisionalRank(rows: readonly RankingRow[], entry: ScorableEntr
 /** 保存済みエントリを公開用の 1 行へ。answers と clientToken は落とし、科目・範囲は setId から導く */
 export function toRow(entry: ResultEntry): RankingRow {
   const parsed = parseSetId(entry.setId)
+  const total = entry.answers.length
   return {
     // 旧データ（entryId が無い）は clientToken で代用する
     entryId: entry.entryId ?? entry.clientToken,
     setId: entry.setId,
     nickname: entry.nickname,
     score: entry.score,
+    // 答案を持たない旧データでは省く（受け取る側が 10 問として復元する）
+    ...(total === 0 ? {} : { correct: entry.answers.filter((a) => a.correct).length, total }),
     timeMs: entry.timeMs,
     createdAt: entry.createdAt,
     ...(parsed ? { mode: parsed.mode, scope: parsed.scope } : {}),
@@ -209,14 +212,16 @@ export class LocalRankingStore implements RankingStore {
   }
 
   /** 端末内の `ranking:*` を全部読む。setId が読めないキーは捨てる */
-  private readAll(): { prefCode: string; mode: Mode; entries: ResultEntry[] }[] {
-    const out: { prefCode: string; mode: Mode; entries: ResultEntry[] }[] = []
+  private readAll(): { prefCode: string; rankingMode: RankingMode; entries: ResultEntry[] }[] {
+    const out: { prefCode: string; rankingMode: RankingMode; entries: ResultEntry[] }[] = []
     for (const key of rankingKeys(this.storage)) {
       const setId = key.slice(RANKING_KEY_PREFIX.length)
       const parsed = parseSetId(setId)
       if (!parsed) continue
       const prefCode = parsed.scope === SCOPE_NATIONWIDE ? SCOPE_NATIONWIDE : parsed.scope.slice(0, 2)
-      out.push({ prefCode, mode: parsed.mode, entries: this.read(setId) })
+      // 全市区町村名は 10 問とは別区分として数える
+      const rankingMode: RankingMode = parsed.all ? ALL_RANKING_MODE : parsed.mode
+      out.push({ prefCode, rankingMode, entries: this.read(setId) })
     }
     return out
   }
@@ -225,10 +230,10 @@ export class LocalRankingStore implements RankingStore {
     interface Acc {
       entries: number
       players: Set<string>
-      byMode: Record<Mode, { entries: number; players: Set<string> }>
+      byMode: Record<RankingMode, { entries: number; players: Set<string> }>
     }
     const counts = new Map<string, Acc>()
-    for (const { prefCode, mode, entries } of this.readAll()) {
+    for (const { prefCode, rankingMode, entries } of this.readAll()) {
       let hit = counts.get(prefCode)
       if (!hit) {
         hit = {
@@ -237,6 +242,7 @@ export class LocalRankingStore implements RankingStore {
           byMode: {
             e: { entries: 0, players: new Set<string>() },
             d: { entries: 0, players: new Set<string>() },
+            all: { entries: 0, players: new Set<string>() },
           },
         }
         counts.set(prefCode, hit)
@@ -244,8 +250,8 @@ export class LocalRankingStore implements RankingStore {
       for (const e of entries) {
         hit.entries += 1
         hit.players.add(e.clientToken)
-        hit.byMode[mode].entries += 1
-        hit.byMode[mode].players.add(e.clientToken)
+        hit.byMode[rankingMode].entries += 1
+        hit.byMode[rankingMode].players.add(e.clientToken)
       }
     }
     const freeze = (v: { entries: number; players: Set<string> }): ModeCount => ({
@@ -257,15 +263,16 @@ export class LocalRankingStore implements RankingStore {
         prefCode,
         entries: v.entries,
         players: v.players.size,
-        byMode: { e: freeze(v.byMode.e), d: freeze(v.byMode.d) },
+        byMode: { e: freeze(v.byMode.e), d: freeze(v.byMode.d), all: freeze(v.byMode.all) },
       }))
-      .filter((s) => s.entries > 0 || MODES.some((m) => s.byMode[m].entries > 0))
+      .filter((s) => s.entries > 0 || RANKING_MODES.some((m) => s.byMode[m].entries > 0))
       .sort((a, b) => (a.prefCode < b.prefCode ? -1 : 1))
   }
 
-  async listByPrefecture(prefCode: string, limit = 30, mode?: Mode): Promise<RankingRow[]> {
+  /** mode は区分（'e' | 'd' | 'all'）。省略すると 3 区分を混ぜて返す */
+  async listByPrefecture(prefCode: string, limit = 30, mode?: RankingMode): Promise<RankingRow[]> {
     const rows = this.readAll()
-      .filter((g) => g.prefCode === prefCode && (mode === undefined || g.mode === mode))
+      .filter((g) => g.prefCode === prefCode && (mode === undefined || g.rankingMode === mode))
       .flatMap((g) => g.entries)
     return rows.sort(compareEntries).slice(0, limit).map(toRow)
   }
