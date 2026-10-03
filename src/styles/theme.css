@@ -1081,6 +1081,12 @@ body {
   box-shadow: none;
 }
 
+/* 「今日の10問」の難易度（★★★）。ボタンのラベルに入れると 375px で折り返すので
+   すぐ下の 1 行に出す。表紙は 1 画面に収めるのが絶対条件なので、上の gap だけ詰める */
+.cover__today-note {
+  margin-top: calc(-1 * var(--space-3));
+}
+
 /* 「ランキングを見る」は控えめに。主役は「はじめる」 */
 .cover__sub-actions {
   margin: var(--space-1) 0 0;

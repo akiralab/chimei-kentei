@@ -379,17 +379,18 @@ describe('範囲・科目', () => {
     expect(hash()).toMatch(new RegExp(`^#/q/${DATA_VERSION}-d-12-\\d{4}$`))
   })
 
-  it('都道府県を選ぶと市区町村の数が出て、全市区町村名（問題バンクの件数）で -all のセットになる', async () => {
+  it('都道府県を選ぶと出題数が出て、全市区町村名（問題バンクの件数）で -all のセットになる', async () => {
     await openSelect()
 
     // 全国のあいだは「全市区町村名」を選べない（都道府県ごとの出題なので）
     expect(screen.getByRole('button', { name: '問題数: 全市区町村名' })).toBeDisabled()
-    expect(screen.queryByText(/全15市町村/)).toBeNull()
+    expect(document.querySelector('.jp-map__note')).toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: '千葉県' }))
-    // 見出し行の余白には **市区町村の数**（meta.cities の 16 件）が出る。
-    // 一方で問題数は問題バンクの件数（easy の 15 件）— 除外した「さいたま市」は出題しない
-    expect(el('.jp-map__note').textContent).toBe('千葉県 全16市町村')
+    // 見出し行の余白には **問題数**（easy の 15 件）が出る。市区町村の数（meta.cities の 16 件）
+    // ではない — 除外した「さいたま市」は出題しないので、数えても出題数と合わない
+    expect(el('.jp-map__note').textContent).toBe('千葉県 15問')
+    expect(el('.jp-map__note')).toHaveAttribute('title', '問題数 15 問')
     const allButton = screen.getByRole('button', { name: '問題数: 全市区町村名（15 問）' })
     expect(allButton).toBeEnabled()
     fireEvent.click(allButton)
@@ -467,6 +468,26 @@ describe('範囲・科目', () => {
     expect(screen.getByRole('button', { name: '問題数: 全市区町村名（3 問）' })).toBeInTheDocument()
   })
 
+  it('地図の見出しの数は難易度に連れて動き、町名のときは出さない', async () => {
+    await openSelect()
+    fireEvent.click(screen.getByRole('button', { name: '千葉県' }))
+    expect(el('.jp-map__note').textContent).toBe('千葉県 15問')
+
+    // ★ で絞ると「★★★ 11問」。記号だけでは何の数か分からないので読み上げ名で言い換える
+    fireEvent.click(screen.getByRole('button', { name: '難易度: ★3' }))
+    expect(el('.jp-map__note').textContent).toBe('千葉県 ★★★ 11問')
+    expect(screen.getByRole('note', { name: '★★★ の問題数 11 問' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '難易度: ★2' }))
+    expect(el('.jp-map__note').textContent).toBe('千葉県 ★★ 3問')
+
+    // 町名は easy の件数ではないので数を出さない（科目を戻せばまた出る）
+    fireEvent.click(screen.getByRole('button', { name: '市区町村名＋町名' }))
+    expect(document.querySelector('.jp-map__note')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '市区町村名' }))
+    expect(el('.jp-map__note').textContent).toBe('千葉県 15問')
+  })
+
   it('10 問に足りない難易度は島しょと同じく全市区町村名に固定し、理由を読み上げる', async () => {
     await openSelect()
     fireEvent.click(screen.getByRole('button', { name: '千葉県' }))
@@ -526,8 +547,8 @@ describe('範囲・科目', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '北海道' }))
     fireEvent.click(screen.getByRole('button', { name: '地域: 道央' }))
-    // 地図の見出しの件数は地域の件数（フィクスチャの道央は 12 市町村）
-    expect(el('.jp-map__note').textContent).toBe('北海道 全12市町村')
+    // 地図の見出しの件数は地域の出題数（フィクスチャの道央は 12 問）
+    expect(el('.jp-map__note').textContent).toBe('北海道 12問')
     expect(el('.paper__subtitle').textContent).toContain('いまの範囲: 北海道・道央')
 
     fireEvent.click(screen.getByRole('button', { name: '始める' }))
@@ -950,6 +971,14 @@ describe('出題の表示', () => {
     expect(el('.paper__header').textContent).toContain('範囲: 全国')
     expect(['千葉県', '東京都', '北海道']).toContain(el('.q-pref').textContent)
     expect(el('.q-suffix').textContent).toBe('［市］')
+  })
+
+  it('表紙の「今日の10問」の形（全国 × ★★★ × 8 桁シード）は 10 問組めて帯に ★★★ が出る', async () => {
+    await openQuiz(`${DATA_VERSION}-e-00-20261002-s3`)
+
+    expect(el('.paper__header').textContent).toContain('範囲: 全国')
+    expect(el('.q-number__text').textContent).toBe('問一 / 十')
+    expect(el('.q-number .stars').textContent).toBe('★★★')
   })
 
   it('壊れた setId は出題エラーになり、範囲選択へ戻れる', async () => {
