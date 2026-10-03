@@ -753,3 +753,57 @@
     font-size: var(--fs-lg);
   }
 }
+
+/* --------------------------------------------------------------------------
+   6. .atlas-detail — 地名帳の詳細（899px 以下）
+   --------------------------------------------------------------------------
+   900px 以上の地名帳は出題画面と同じ .layout / .layout__map をそのまま使うので
+   ここには何も要らない。899px 以下だけが違う:
+
+   出題画面は用紙（問題文・解答欄）に場所を譲るため .layout__map を 24dvh に固定し、
+   .info-card を地図の下端に **重ねて** 縦を節約している。地名帳の詳細は用紙 1 枚を
+   地図とカードだけに使えるので、カードを通常フローへ戻して全項目を見せる。
+
+   .map-* / .info-card* の上書きなので、所有者であるこのファイルに置く（CONTRACT.md）。
+   -------------------------------------------------------------------------- */
+
+.atlas-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  /* .paper > * の flex: 0 0 auto を上書きして、地図に残りの高さを渡す */
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+@media (max-width: 899px) {
+  .atlas-detail .info-card {
+    /* 重ねるのをやめる（.layout__map の position: relative も要らない） */
+    position: static;
+    inset: auto;
+    padding: var(--space-3);
+    background-color: var(--color-paper);
+    backdrop-filter: none;
+  }
+
+  .atlas-detail .info-card__head {
+    padding-bottom: var(--space-1);
+    border-bottom: 2px solid var(--color-rule-strong);
+  }
+
+  /* 4 項目を 2 列 × 2 行。1 行に流すと桁の多い自治体で折り返して読みにくい */
+  .atlas-detail .info-card__stats {
+    margin-top: var(--space-2);
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-2) var(--space-3);
+  }
+
+  .atlas-detail .info-card__row {
+    display: block;
+  }
+
+  .atlas-detail .info-card__label {
+    display: block;
+  }
+}

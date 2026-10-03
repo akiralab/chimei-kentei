@@ -27,6 +27,8 @@
 | `.mode-switch--fit` | `.mode-switch` の修飾子。選択肢ごとに幅が違う切替（難易度: 全部｜★｜★★｜★★★）用に、項目を等分せず中身の幅で置く。`.switch-row` の中では相手に残りの幅を譲る |
 | `.review` / `.review__row` | 答案の見直し（1 行 1 問） |
 | `.ranking` / `.ranking__row` / `.is-me` | 順位表 |
+| `.atlas` / `.atlas__row` / `.atlas__name` / `.atlas__kana` / `.is-selected` | 地名帳の一覧（地名 ｜ よみ）。`.ranking` と同じく `.paper` の内側だけがスクロールする |
+| `.atlas-nav` | 地名帳の移動（「← 一覧へ」「前／次」「3 / 23」） |
 | `.footer-credit` | 出典表記 |
 
 ## 追加した補助クラス（2026-10-02 / design 側）
@@ -126,3 +128,22 @@ Dela Gothic One は字幅を詰めた極太デザインで、1.4rem 前後の漢
 - **記号そのものは読み上げさせない。** `.stars` を単独で置くときは `role="img"` ＋ `aria-label="難易度 3"` にし、
   ボタンの中に置くときは `aria-hidden="true"` にしてボタン側の `aria-label` に任せる。
 - ★ を持つのは**市区町村名の問だけ**。町名（`d`）の問には `.stars` を出さない。
+
+## v1 追加（2026-10-03 / 地名帳 段階 1）
+
+| クラス | 役割 |
+|---|---|
+| `.atlas` | 地名帳の一覧（`<ol>`）。`.paper` の直下に置くと **用紙の内側だけ**スクロールする（`.ranking` と同じ `flex: 1 1 auto` ／ 下限 5.5rem） |
+| `.atlas__row` | 1 行（`<li>`）。中身は `<a>`（選べる行）か `.atlas__cells`（選べない行。段階 2 の町名用） |
+| `.atlas__mark` | 選択中の目印「▶」（赤ペン色）。列幅は常に取るので、選んでも地名の位置がずれない |
+| `.atlas__name` | 地名（明朝・`--font-body`） |
+| `.atlas__kana` | よみ（手書き風・`--font-hand`） |
+| `.atlas-nav` / `.atlas-nav__back` / `.atlas-nav__step` / `.atlas-nav__name` / `.atlas-nav__count` | 「← 一覧へ」「◀ 前 {名前}」「次 {名前} ▶」「3 / 23」。端の行では `.atlas-nav__step--end` で押せない見た目にする |
+| `.atlas-detail`（**map.css**） | 899px 以下の詳細（地図＋カード）。`.info-card` を地図に重ねるのをやめて通常フローに戻す上書きなので、`.map-*` / `.info-card*` の所有者である `map.css` に置く |
+
+実装上の約束:
+
+- **選択中の行は色だけに頼らない。** `.atlas__row.is-selected`（蛍光黄）と同時に、markup 側が `<a aria-current="true">` と `.atlas__mark` の「▶」を出す（`.ranking__row.is-me` と同じ考え）。
+- `.atlas__row` の中の行の高さは **44px 以上**（指で押せる最小）。
+- `.atlas` は `AtlasList`（`src/components/AtlasList.tsx`）が描く。行は `{key, name, kana, href?, selected?}` の配列で受け取る **meta 非依存の表示部品**なので、段階 2 の町名もそのまま並べられる。
+- 900px 以上の地名帳は出題画面と同じ `.layout` / `.layout__map` / `.layout__quiz` をそのまま使う（CSS の追加なし）。

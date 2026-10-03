@@ -23,15 +23,6 @@
    部品は theme.css 側。クラス名の契約は CONTRACT.md。
    ========================================================================== */
 
-/* ==========================================================================
-   tokens.css — 答案用紙テーマの CSS 変数（正本）
-   --------------------------------------------------------------------------
-   方向性: 行政文書風ではなく「中高の小テスト用紙をポップに再現」。
-   黒板色の地にクリーム色の答案用紙が 1 枚。赤ペン・蛍光マーカー・得点スタンプ。
-   ダークモードは作らない（用紙の白地が主役なので反転させる意味がない）。
-   部品は theme.css 側。クラス名の契約は CONTRACT.md。
-   ========================================================================== */
-
 :root {
   /* ---- 色 ------------------------------------------------------------- */
   --color-board: #2e6b5e; /* 黒板（緑板）*/
@@ -128,7 +119,6 @@
     --fs-cover: clamp(2rem, 1.5rem + 2.2vw, 2.75rem);
   }
 }
-
 /* ==========================================================================
    theme.css — 答案用紙テーマの部品（正本）
    --------------------------------------------------------------------------
@@ -259,6 +249,7 @@ body {
    スクロールするが、下の sticky で帯とボタンは残る */
 .paper > .review,
 .paper > .ranking,
+.paper > .atlas,
 .paper > .pref-grid {
   flex: 1 1 auto;
   overflow-y: auto;
@@ -266,7 +257,8 @@ body {
 }
 
 .paper > .review,
-.paper > .ranking {
+.paper > .ranking,
+.paper > .atlas {
   min-height: 5.5rem;
 }
 
@@ -1212,6 +1204,12 @@ body {
   box-shadow: none;
 }
 
+/* 「今日の10問」の難易度（★★★）。ボタンのラベルに入れると 375px で折り返すので
+   すぐ下の 1 行に出す。表紙は 1 画面に収めるのが絶対条件なので、上の gap だけ詰める */
+.cover__today-note {
+  margin-top: calc(-1 * var(--space-3));
+}
+
 /* 「ランキングを見る」は控えめに。主役は「はじめる」 */
 .cover__sub-actions {
   margin: var(--space-1) 0 0;
@@ -1433,4 +1431,124 @@ body {
 }
 .pref-grid__item:has(> .marker) > .marker {
   background: none;
+}
+
+/* --------------------------------------------------------------------------
+   18. .atlas — 地名帳の一覧（地名 ｜ よみ）
+   --------------------------------------------------------------------------
+   .ranking と同じ扱い: .paper の直下で flex: 1 1 auto ＋ overflow-y: auto なので
+   **用紙の内側だけ**がスクロールし、見出しの帯と底のボタンは残る（上の §3 に追記済み）。
+   行は 3 列（選択中の目印 ｜ 地名 ｜ よみ）。目印の列は常に幅を取るので、
+   選んでも地名の位置がずれない。
+   -------------------------------------------------------------------------- */
+
+.atlas {
+  margin: var(--space-2) 0;
+  padding: 0;
+  list-style: none;
+}
+
+.atlas__row {
+  border-bottom: 1px solid var(--color-paper-line);
+}
+
+/* 行の中身。リンクの行（市区町村）と素の行（段階 2 の町名）で同じ格子を使う */
+.atlas__row > a,
+.atlas__row > .atlas__cells {
+  display: grid;
+  grid-template-columns: 1.1rem minmax(0, 1fr) minmax(0, 1.2fr);
+  align-items: center;
+  gap: var(--space-2);
+  /* 指で押せる最小の高さ */
+  min-height: 44px;
+  padding: var(--space-1) var(--space-2);
+  color: var(--color-ink);
+  text-decoration: none;
+}
+
+.atlas__row > a:hover {
+  background: color-mix(in srgb, var(--color-marker-yellow) 40%, transparent);
+}
+
+.atlas__row > a:focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: -2px;
+}
+
+/* 選択中の目印「▶」。色（赤ペン）だけでなく記号そのものが手がかり */
+.atlas__mark {
+  font-family: var(--font-pen);
+  font-size: var(--fs-sm);
+  line-height: 1;
+  color: var(--color-red-pen);
+  text-align: center;
+}
+
+/* 地名は明朝（出題の .q-kanji と同じ系統を小さくしたもの） */
+.atlas__name {
+  font-family: var(--font-body);
+  font-size: var(--fs-md);
+  font-weight: 600;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+/* よみは鉛筆の手書き風 */
+.atlas__kana {
+  font-family: var(--font-hand);
+  font-size: var(--fs-md);
+  line-height: 1.35;
+  color: var(--color-ink);
+  overflow-wrap: anywhere;
+}
+
+/* 選択中の行は蛍光黄。色だけに頼らないよう .atlas__mark の「▶」を markup 側が添える */
+.atlas__row.is-selected {
+  background: var(--color-marker-yellow);
+  border-bottom-color: var(--color-ink);
+}
+
+.atlas__row.is-selected > a {
+  font-weight: 700;
+}
+
+/* --------------------------------------------------------------------------
+   19. .atlas-nav — 地名帳の移動（一覧へ戻る・前／次・いま何件目か）
+   -------------------------------------------------------------------------- */
+
+.atlas-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-2) 0 0;
+}
+
+.atlas-nav .btn {
+  min-height: 36px;
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--fs-xs);
+}
+
+/* 隣の行の名前。長い自治体名でも 1 行に収める（「◀ 前 …」の形を崩さない） */
+.atlas-nav__name {
+  max-width: 6em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+/* 最初・最後の行では押せない。位置だけ残して見た目を落とす */
+.atlas-nav__step--end {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.atlas-nav__count {
+  margin-left: auto;
+  font-family: var(--font-display);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-pencil);
 }
