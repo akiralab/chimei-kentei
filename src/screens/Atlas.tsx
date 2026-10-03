@@ -236,7 +236,8 @@ export default function Atlas({ scope, lgCode }: Props) {
 
   const nav = (
     <AtlasNav
-      listHref={atlasPath(scope)}
+      // 900px 以上は一覧が隣にあるので「← 一覧へ」は出さない（設計 §12.2 の線画）
+      listHref={wide ? undefined : atlasPath(scope)}
       prev={
         navIndex > 0 ?
           { href: atlasPath(scope, navRows[navIndex - 1].lgCode), name: navRows[navIndex - 1].name }

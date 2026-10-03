@@ -777,6 +777,18 @@
 }
 
 @media (max-width: 899px) {
+  /* 用紙は既定では中身ぶんしか伸びない（theme.css の .paper { flex: 0 1 auto }）ので、
+     そのままだと .atlas-detail に配る残りが無く、地図の SVG（flex: 1 1 0）が 0 に潰れる。
+     詳細の用紙だけ黒板いっぱいに伸ばして、残りを地図へ渡す */
+  .paper:has(> .atlas-detail) {
+    flex: 1 1 auto;
+  }
+
+  /* 縦に余裕のない端末でも地図が線 1 本にならない下限 */
+  .atlas-detail .map-muni {
+    min-height: 8rem;
+  }
+
   .atlas-detail .info-card {
     /* 重ねるのをやめる（.layout__map の position: relative も要らない） */
     position: static;

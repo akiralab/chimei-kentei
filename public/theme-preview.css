@@ -1516,12 +1516,19 @@ body {
    19. .atlas-nav — 地名帳の移動（一覧へ戻る・前／次・いま何件目か）
    -------------------------------------------------------------------------- */
 
+/* 900px 以上では用紙の外（黒板の上）に出るので、地図・カードと同じクリーム地の台紙を敷く
+   （.btn--ghost は用紙色の地を前提にした見た目なので、黒板に直置きすると沈む） */
 .atlas-nav {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
   margin: var(--space-2) 0 0;
+  padding: var(--space-2);
+  background-color: var(--color-paper);
+  border: 1.5px solid var(--color-paper-line);
+  border-radius: var(--radius-paper);
+  box-shadow: var(--shadow-chip);
 }
 
 .atlas-nav .btn {

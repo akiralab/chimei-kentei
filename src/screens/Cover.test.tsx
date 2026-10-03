@@ -91,6 +91,15 @@ describe('表紙のボタン', () => {
     expect(localStorage.getItem(NICKNAME_KEY)).toBe('はなこ')
   })
 
+  it('副ボタンは 3 つ（ランキング・間違えた問題・地名帳）。375px で 1 行に収めるため見える字は縮める', () => {
+    render(<Cover />)
+    const subs = [...document.querySelectorAll<HTMLElement>('.cover__sub-actions .btn')]
+    expect(subs.map((a) => a.textContent)).toEqual(['ランキング', '間違えた問題', '地名帳'])
+    expect(subs.map((a) => a.getAttribute('href'))).toEqual(['#/ranking', '#/review', '#/atlas'])
+    // 見える字を縮めても読み上げ名は「ランキングを見る」のまま
+    expect(screen.getByRole('link', { name: 'ランキングを見る' })).toHaveAttribute('href', '#/ranking')
+  })
+
   it('「はじめる」は範囲選択へ、Enter キーも範囲選択へ', () => {
     render(<Cover />)
     typeNickname('たろう')

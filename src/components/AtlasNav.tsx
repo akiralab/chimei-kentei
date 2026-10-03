@@ -12,8 +12,11 @@ export interface AtlasNavTarget {
 }
 
 interface Props {
-  /** 「← 一覧へ」の行き先（`#/atlas/{scope}`） */
-  listHref: string
+  /**
+   * 「← 一覧へ」の行き先（`#/atlas/{scope}`）。
+   * 900px 以上は一覧が隣に出ているので渡さない（戻る先が今の画面になってしまう）
+   */
+  listHref?: string
   prev?: AtlasNavTarget
   next?: AtlasNavTarget
   /** 1 始まりの位置。行を選んでいなければ省く */
@@ -51,9 +54,11 @@ function Step({ target, dir }: { target: AtlasNavTarget | undefined; dir: 'prev'
 export default function AtlasNav({ listHref, prev, next, index, total }: Props) {
   return (
     <nav className="atlas-nav" aria-label="地名帳の移動">
-      <a className="btn btn--ghost atlas-nav__back" href={listHref}>
-        <span aria-hidden="true">← </span>一覧へ
-      </a>
+      {listHref !== undefined && (
+        <a className="btn btn--ghost atlas-nav__back" href={listHref}>
+          <span aria-hidden="true">← </span>一覧へ
+        </a>
+      )}
       <Step target={prev} dir="prev" />
       <Step target={next} dir="next" />
       {index !== undefined && (
