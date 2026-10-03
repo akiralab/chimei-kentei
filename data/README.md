@@ -171,3 +171,59 @@ GEOS は潰せない辺を残すので、関東 10 県だけでも 26,000 頂点
 - `pref/*.json` の Feature 合計 1,741 ＝ `municipalities.json` の件数 ＝ `meta.json` の `cities` の件数、かつ 3 者の `lgCode` 集合と `name` が一致
 - 全ポリゴンが `is_valid`、`centroid` が日本の範囲内
 - `japan.json` の各県ポリゴンが主要な離島の代表点を含む
+
+---
+
+# 難易度 ★ の試作（data/build_stars.py・Issue #33）
+
+市区町村名（mode `e`）の各問に ★1〜★3 を機械的に付ける**試作**。
+Issue #33 の軸のうち **A1（人口による知名度）** と **B2（漢字の音訓辞書で公式読みを分解できるか）**
+の 2 軸だけを実装し、2 次元の表で ★ を決める。
+**まだ `build_questions.py` には組み込んでいない**（`easy.json` に `stars` は書かない／`DATA_VERSION` も上げない）。
+
+```sh
+python3 data/build_stars.py                                   # 帯の境界・★ の分布・アンカーの検算
+python3 data/build_stars.py --sample 100 --seed 20261003 \
+    --markdown /tmp/sample100.md                              # サンプルの Markdown 表
+python3 data/build_stars.py --json /tmp/stars.jsonl            # 全 1,700 件の判定（検算用）
+python3 data/build_stars.py --nanori b                        # 名乗り読みを (b) 扱いにした場合
+python3 -m unittest data/test_build_stars.py                  # 分解判定の単体テスト
+```
+
+## 入力と判定
+
+- **A1** … `public/geo/municipalities.json` の `population`（国勢調査 2020）を全国一律の分位点で 3 帯に切る。
+  有名 ≥ p80（79,306 人・341 件）／無名 < p40（14,959 人・680 件）／間はふつう。
+  政令指定都市 20 市と都道府県庁所在地が全件「有名」帯に入ることを実行時に検算する（外れたら警告）
+- **B2** … KANJIDIC2 の音読み・訓読みで `display` を 1 字ずつ区切り、`answer` を左から消費できるかを DP で判定。
+  (a) 素直（音訓そのまま。訓は送り仮名をどこまで読むかのゆれを許す）／(b) 連濁・半濁音化・促音化・長音のゆれ・
+  末尾の母音の脱落が要る／(c) それでも無理（熟字訓・当て字・助詞「の」の挿入）。
+  「々」は直前の字の読みを引き継ぐ。「ケ」「ヶ」は助詞「が」として読める
+- **総合** … `STAR_TABLE`（(a)/(b)/(c) × 有名/ふつう/無名）。判定の根拠は `--json` の `b2detail` で 1 問ずつ追える
+
+**名乗り読み（KANJIDIC2 の `<nanori>`）は (b) に入れず (c) に残している。** `<nanori>` には
+「その地名があるからこそ辞書に載っている読み」が含まれるため（宿=すく ← 宿毛／南=は・風=え・原=ばる ← 南風原）、
+(b) に昇格させると当て字が ★2 に落ちる。`--nanori b` で Issue のたたき台どおりの挙動に戻せる。
+
+## 既知の限界
+
+アンカー 11 件のうち 4 件（小樽・高槻・匝瑳・八重瀬）が外れる。いずれも
+**辞書の音訓では素直に割れるが字そのものが読めない**型で、匝・瑳・槻・樽 は常用漢字表外。
+A1×B2 の 2 軸では原理的に拾えないので、Issue #33 の **軸 B4（漢字の難しさ）** が次の 1 手。
+
+## KANJIDIC2 の出典とライセンス
+
+漢字の読みは **KANJIDIC2**（Electronic Dictionary Research and Development Group, Monash University）。
+ライセンスは **CC BY-SA 4.0**（<https://www.edrdg.org/edrdg/licence.html>）。
+**ファイルはリポジトリに含めない。** 既定のキャッシュ場所は
+`~/workspace/abr-data/raw/kanjidic2/kanjidic2.xml.gz`（`build_stars.py` の `KANJIDIC2_CACHE`）で、
+無ければ `--download` を付けるか手動で取得する。
+
+```sh
+mkdir -p ~/workspace/abr-data/raw/kanjidic2
+curl -A 'Mozilla/5.0' -L -o ~/workspace/abr-data/raw/kanjidic2/kanjidic2.xml.gz \
+    https://www.edrdg.org/kanjidic/kanjidic2.xml.gz
+```
+
+`data/test_build_stars.py` は KANJIDIC2 を落とさなくても動くよう、必要な漢字の読みだけを
+テスト内に埋め込んでいる。
