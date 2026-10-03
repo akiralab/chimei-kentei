@@ -47,6 +47,31 @@ describe('MunicipalityMap', () => {
     expect(document.querySelector('.map-muni__pin')).toBeNull()
   })
 
+  it('caption を渡すと見出しと読み上げ名が差し替わる（既定は出題画面の「{県名}のどこ？」）', async () => {
+    // 既定（出題画面）。問いの言い方のまま
+    render(<MunicipalityMap prefCode="13" lgCode="130003" prefName="東京都" source={fixtureGeoSource()} />)
+    await waitFor(() => {
+      expect(document.querySelector('.map-muni__caption')?.textContent).toBe('東京都のどこ？')
+    })
+    expect(screen.getByRole('img')).toHaveAttribute('aria-label', '東京都の中の出題地点')
+
+    // 地名帳はクイズではないので範囲の名前をそのまま出す
+    cleanup()
+    render(
+      <MunicipalityMap
+        prefCode="13"
+        lgCode="130003"
+        prefName="東京都"
+        caption="東京都・23区"
+        source={fixtureGeoSource()}
+      />,
+    )
+    await waitFor(() => {
+      expect(document.querySelector('.map-muni__caption')?.textContent).toBe('東京都・23区')
+    })
+    expect(screen.getByRole('img')).toHaveAttribute('aria-label', '東京都・23区の地図')
+  })
+
   it('地図が読めなければ 1 行の注記にとどめ、パネルは残す', async () => {
     render(<MunicipalityMap prefCode="12" lgCode="120001" source={emptyGeoSource()} />)
 

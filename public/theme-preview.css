@@ -1215,6 +1215,14 @@ body {
   margin: var(--space-1) 0 0;
 }
 
+/* 副ボタンが 3 つ（ランキング・間違えた問題・地名帳）になったので、360px 幅の端末では
+   既定の左右余白だと 2 行に折れて用紙が 22px あふれる。この行だけ左右を詰めて 1 行に保つ */
+@media (max-width: 374px) {
+  .cover__sub-actions .btn {
+    padding-inline: var(--space-3);
+  }
+}
+
 .cover__ranking {
   min-height: 38px;
   padding: var(--space-1) var(--space-4);
@@ -1299,9 +1307,19 @@ body {
   transform: rotate(9deg);
 }
 
-/* 狭い画面では用紙を圧迫するので、右上のゴム印だけ下げる（鉛筆と花丸は残す）*/
+/* 狭い画面では用紙を圧迫するので、右上のゴム印を下げる */
 @media (max-width: 420px) {
   .cover__prop--stamp {
+    display: none;
+  }
+}
+
+/* 用紙の下の飾り（鉛筆・花丸）は副ボタンの行と同じ高さにある。副ボタンが 3 つになって
+   行が用紙の端から端まで伸びたので、**重ならなくなる幅でだけ**出す。
+   実測（表紙 #/）では 519px 以下で花丸が「地名帳」に、鉛筆が「ランキング」に重なる */
+@media (max-width: 519px) {
+  .cover__prop--pencil,
+  .cover__prop--circle {
     display: none;
   }
 }

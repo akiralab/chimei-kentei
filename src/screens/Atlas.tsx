@@ -256,7 +256,8 @@ export default function Atlas({ scope, lgCode }: Props) {
   // 地図とカード。行を選ぶ前は塗りなしの県の形＋プレースホルダーのカード
   const detail = (
     <>
-      <MunicipalityMap prefCode={prefCode ?? ''} lgCode={lgCode} prefName={prefName} />
+      {/* 地名帳は問いではないので見出しは「東京都のどこ？」ではなく範囲の名前そのもの */}
+      <MunicipalityMap prefCode={prefCode ?? ''} lgCode={lgCode} prefName={prefName} caption={rangeName} />
       {/* lgCode が無いときは引ける統計も無い（空文字でカードがプレースホルダーになる） */}
       <MunicipalityInfo
         lgCode={lgCode ?? ''}
