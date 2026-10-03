@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """市区町村名（mode e）の難易度 ★（1〜3）を機械的に付ける試作（Issue #33・外部ライブラリ不使用）。
 
-Issue #33 の軸のうち **A1（人口による知名度）** と **B2（漢字の音訓辞書で公式読みを
-分解できるか）** の 2 軸だけを実装し、2 次元の表で ★1〜★3 を決める。まだ
-`build_questions.py` には組み込まない（`easy.json` に `stars` を書かない）試作。
+Issue #33 の軸のうち **A1（人口による知名度）**・**B2（漢字の音訓辞書で公式読みを
+分解できるか）**・**B4（漢字の難しさ）** の 3 軸を実装し、B2×A1 の表で素点を出して
+B4 で加算する。まだ `build_questions.py` には組み込まない
+（`easy.json` に `stars` を書かない）試作。
 
 入力
     public/questions/{DATA_VERSION}/easy.json … display / answer / lgCode / pref
     public/geo/municipalities.json            … lgCode → population（国勢調査 2020）
-    KANJIDIC2                                 … 漢字の音読み・訓読み・名乗り
+    KANJIDIC2                                 … 漢字の音読み・訓読み・名乗りと配当学年
 
 出力
     標準出力（既定）  … 帯の境界・★ の分布・クロス集計・アンカーの検算
@@ -20,6 +21,7 @@ Issue #33 の軸のうち **A1（人口による知名度）** と **B2（漢字
     python3 data/build_stars.py --sample 100 --seed 20261003 \
         --markdown /tmp/sample100.md                              # サンプル表を書き出す
     python3 data/build_stars.py --nanori b                        # 名乗り読みを (b) 扱いにした場合
+    python3 data/build_stars.py --major-exempt                    # 政令市・県庁所在地は B4 加算を免除
     python3 -m unittest data/test_build_stars.py                  # 分解判定の単体テスト
 
 漢字の読みの出典
@@ -70,6 +72,21 @@ STAR_TABLE = {
     "c": {"有名": 2, "ふつう": 3, "無名": 3},
 }
 B2_LABELS = {"a": "素直", "b": "変化あり", "c": "読めない"}
+
+# --- B4: 漢字の難しさ（KANJIDIC2 の <grade>）------------------------------
+# <grade> は 1〜6＝教育漢字の配当学年、8＝それ以外の常用漢字（中学で習う）、
+# 9・10＝人名用漢字、無し＝常用漢字表外。幹の中で **最も難しい 1 字**でランクを決める。
+# 漢字以外（かな・ケ・ノ・々）はランク 0 として扱う。
+B4_LABELS = ("教育", "常用", "人名用", "表外")
+# 素点（B2×A1）への加算。cap は ★3。
+#   教育・常用 … +0。常用に +1 すると「横浜（浜 は常用）」が ★2 に上がってアンカーを外す
+#   人名用     … +1。幌・樽・槻・旭・函・萩・蕨 など「読めるが書けない」層
+#   表外       … +2。匝・竈・鰺・檮 など字そのものが読めない層（全 1,700 件中 36 件だけ）
+B4_BONUS = (0, 0, 1, 2)
+
+# JIS 水準は採らなかった。難読の代表である「匝」（匝瑳市）が JIS X 0208 第 1 水準に
+# 入っており（区点 1-33-57）、水準では拾えない。<grade> が無いこと（＝常用漢字表外）の
+# ほうが「読めなさ」をよく表す。
 
 # --- B2: 読みの変化 -------------------------------------------------------
 # 連濁（頭の清音が濁る）。は行は濁音と半濁音の両方を許す。
@@ -298,6 +315,30 @@ def format_segments(segs: list) -> str:
     return "＋".join(f"{c}={r}({k})" for c, r, k in segs)
 
 
+def kanji_rank(char: str, kd: dict) -> int:
+    """B4: 1 字の難しさ。0 教育 / 1 常用 / 2 人名用 / 3 表外。
+    漢字以外（かな・ケ・ノ・々）と KANJIDIC2 に無い字は 0。"""
+    entry = kd.get(char)
+    if entry is None:
+        return 0
+    grade = entry["grade"]
+    if grade is None:
+        return 3
+    if grade >= 9:
+        return 2
+    if grade == 8:
+        return 1
+    return 0
+
+
+def b4_rank(display: str, kd: dict) -> tuple:
+    """幹の中で最も難しい字のランクと、その字を返す → (rank, 内訳).
+    内訳は「人名用: 幌」のような形で、どの字でそのランクになったかを人が検算できる。"""
+    rank = max((kanji_rank(c, kd) for c in display), default=0)
+    hardest = "".join(c for c in display if kanji_rank(c, kd) == rank)
+    return rank, f"{B4_LABELS[rank]}: {hardest}"
+
+
 def quantile(sorted_values: list, q: float):
     """最近傍順位法の分位点（決定論的・補間しない）。"""
     if not sorted_values:
@@ -316,7 +357,16 @@ def fame_band(pop, upper, lower) -> str:
     return "ふつう"
 
 
-def judge_all(questions: list, geo: dict, kd: dict, nanori_level: str = "c") -> tuple:
+def combine(b2: str, a1: str, b4: int, exempt: bool = False) -> tuple:
+    """B2×A1 の素点に B4 を加算して ★ を決める → (★, 素点, 加算).
+    exempt=True（政令市・県庁所在地）のときは B4 の加算をしない。"""
+    base = STAR_TABLE[b2][a1]
+    bonus = 0 if exempt else B4_BONUS[b4]
+    return min(3, base + bonus), base, bonus
+
+
+def judge_all(questions: list, geo: dict, kd: dict, nanori_level: str = "c",
+              major_exempt: bool = False) -> tuple:
     pops = sorted(geo[q["lgCode"]]["population"] for q in questions if q["lgCode"] in geo)
     upper = quantile(pops, FAME_UPPER_Q)
     lower = quantile(pops, FAME_LOWER_Q)
@@ -325,6 +375,9 @@ def judge_all(questions: list, geo: dict, kd: dict, nanori_level: str = "c") -> 
         pop = geo.get(q["lgCode"], {}).get("population")
         band = fame_band(pop, upper, lower)
         level, detail = classify_b2(q["display"], q["answer"], kd, nanori_level)
+        rank, rank_detail = b4_rank(q["display"], kd)
+        major = is_major(q["display"], q["prefCode"], q["suffix"])
+        stars, base, bonus = combine(level, band, rank, major_exempt and major)
         rows.append(
             {
                 "id": q["id"],
@@ -338,7 +391,11 @@ def judge_all(questions: list, geo: dict, kd: dict, nanori_level: str = "c") -> 
                 "a1": band,
                 "b2": level,
                 "b2detail": detail,
-                "stars": STAR_TABLE[level][band],
+                "b4": rank,
+                "b4detail": rank_detail,
+                "baseStars": base,
+                "b4Bonus": bonus,
+                "stars": stars,
             }
         )
     return rows, upper, lower
@@ -378,27 +435,31 @@ CAPITALS = (
 CAPITAL_PREF = {name: f"{i:02d}" for i, name in enumerate(CAPITALS, start=1)}
 
 
+def is_major(display: str, pref_code: str, suffix: str) -> bool:
+    """政令指定都市 or 都道府県庁所在地か（同名の別自治体を拾わないよう県コードで縛る）。"""
+    if CAPITAL_PREF.get(display) == pref_code:
+        return True
+    return display in SEIREI and suffix == "市"
+
+
 def sanity_capitals(rows: list) -> list:
     """政令市・県庁所在地のうち「有名」帯に入らなかったものを返す。"""
-    out = []
-    for r in rows:
-        is_cap = CAPITAL_PREF.get(r["display"]) == r["prefCode"]
-        is_sei = r["display"] in SEIREI and r["suffix"] == "市"
-        if (is_cap or is_sei) and r["a1"] != "有名":
-            out.append(r)
-    return out
+    return [r for r in rows
+            if is_major(r["display"], r["prefCode"], r["suffix"]) and r["a1"] != "有名"]
 
 
 def markdown_table(rows: list) -> str:
     lines = [
-        "| 地名（接尾辞） | 都道府県 | 読み | 人口 | A1 | B2（割り当て） | ★ |",
-        "|---|---|---|---:|---|---|---|",
+        "| 地名（接尾辞） | 都道府県 | 読み | 人口 | A1 | B2（割り当て） | B4 | ★ |",
+        "|---|---|---|---:|---|---|---|---|",
     ]
     for r in rows:
         pop = f"{r['population']:,}" if r["population"] is not None else "—"
+        bonus = f" +{r['b4Bonus']}" if r["b4Bonus"] else ""
         lines.append(
             f"| {r['display']}（{r['suffix']}） | {r['pref']} | {r['answer']} | {pop} "
-            f"| {r['a1']} | ({r['b2']}) {r['b2detail']} | {'★' * r['stars']} |"
+            f"| {r['a1']} | ({r['b2']}) {r['b2detail']} | {r['b4detail']}{bonus} "
+            f"| {'★' * r['stars']} |"
         )
     return "\n".join(lines)
 
@@ -412,6 +473,8 @@ def main() -> int:
     ap.add_argument("--download", action="store_true", help="KANJIDIC2 が無ければ取得する")
     ap.add_argument("--nanori", choices=("b", "c"), default="c",
                     help="名乗り読みでしか分解できないものを (b) 変化あり とみなすか（既定 c）")
+    ap.add_argument("--major-exempt", action="store_true",
+                    help="政令市・県庁所在地は B4 の加算を免除する（Issue #33 の軸 A2 の試し打ち）")
     ap.add_argument("--sample", type=int, default=0,
                     help="サンプル表の件数。アンカーを必ず含め、残りを無作為抽出する")
     ap.add_argument("--seed", type=int, default=20261003)
@@ -423,10 +486,11 @@ def main() -> int:
     geo = json.loads(args.geo.read_text(encoding="utf-8"))
     kd = load_kanjidic(args.kanjidic, download=args.download)
 
-    rows, upper, lower = judge_all(questions, geo, kd, args.nanori)
+    rows, upper, lower = judge_all(questions, geo, kd, args.nanori, args.major_exempt)
     by_lg = {r["lgCode"]: r for r in rows}
 
-    print(f"問題 {len(rows)} 件 / KANJIDIC2 {len(kd)} 字 / 名乗りの扱い=({args.nanori})")
+    print(f"問題 {len(rows)} 件 / KANJIDIC2 {len(kd)} 字 / 名乗りの扱い=({args.nanori})"
+          f"{' / 政令市・県庁所在地は B4 免除' if args.major_exempt else ''}")
     print(f"A1 の境界: 有名 ≥ {upper:,} 人（p{FAME_UPPER_Q:.0%}）／"
           f"無名 < {lower:,} 人（p{FAME_LOWER_Q:.0%}）")
     bands = Counter(r["a1"] for r in rows)
@@ -444,15 +508,36 @@ def main() -> int:
     undecomposable = [r for r in rows if r["b2detail"] == "分解不能"]
     print(f"  うち名乗りを使っても分解できない: {len(undecomposable)} 件")
 
+    b4 = Counter(r["b4"] for r in rows)
+    print("B4: " + " / ".join(f"{B4_LABELS[k]} {b4[k]} (+{B4_BONUS[k]})" for k in range(4)))
+
     stars = Counter(r["stars"] for r in rows)
-    print("★ の分布（全 {} 件）: ".format(len(rows))
+    base = Counter(r["baseStars"] for r in rows)
+    print("素点の分布（B2×A1 のみ）: "
+          + " / ".join(f"{'★' * s} {base[s]}" for s in (1, 2, 3)))
+    print("★ の分布（全 {} 件・B4 加算後）: ".format(len(rows))
           + " / ".join(f"{'★' * s} {stars[s]} ({stars[s] / len(rows):.0%})" for s in (1, 2, 3)))
+    moved = sum(1 for r in rows if r["stars"] != r["baseStars"])
+    print(f"  B4 で ★ が上がった: {moved} 件")
+
     cross = Counter((r["b2"], r["a1"]) for r in rows)
-    print("クロス集計（B2 × A1）:")
+    print("クロス集計（B2 × A1。括弧内は B4 加算前の素点）:")
     print("            " + "".join(f"{b:>10}" for b in FAME_LABELS))
     for k in "abc":
         cells = "".join(f"{cross[(k, b)]:>6} (★{STAR_TABLE[k][b]})" for b in FAME_LABELS)
         print(f"  ({k}) {B2_LABELS[k]:<5}{cells}")
+
+    cube = Counter((r["b2"], r["a1"], r["b4"]) for r in rows)
+    print("B2 × A1 × B4 の各升（件数／確定する ★）:")
+    for rank in range(4):
+        print(f"  B4={B4_LABELS[rank]}(+{B4_BONUS[rank]})"
+              + "".join(f"{b:>12}" for b in FAME_LABELS))
+        for k in "abc":
+            cells = ""
+            for b in FAME_LABELS:
+                n = cube[(k, b, rank)]
+                cells += f"{n:>7} (★{combine(k, b, rank)[0]})"
+            print(f"    ({k}) {B2_LABELS[k]:<5}{cells}")
 
     hit = 0
     print("アンカーの検算:")
@@ -464,7 +549,8 @@ def main() -> int:
         ok = r["stars"] == want
         hit += ok
         print(f"  {'OK' if ok else 'NG'} {r['display']}{r['suffix']}: 期待★{want} / 判定★{r['stars']}"
-              f" [{r['a1']} / ({r['b2']}) {r['b2detail']}]")
+              f" [{r['a1']} / ({r['b2']}) {r['b2detail']} / B4 {r['b4detail']} +{r['b4Bonus']}"
+              f" → 素点★{r['baseStars']}]")
     print(f"  一致 {hit}/{len(ANCHORS)}")
 
     # KANJIDIC2 に無い字（JIS 外字などの取りこぼしの検出）

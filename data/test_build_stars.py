@@ -18,12 +18,17 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from build_stars import (  # noqa: E402
+    B4_BONUS,
+    B4_LABELS,
     FAME_LABELS,
     STAR_TABLE,
+    b4_rank,
     classify_b2,
+    combine,
     decompose,
     fame_band,
     format_segments,
+    kanji_rank,
     kun_forms,
     nanori_candidates,
     plain_candidates,
@@ -95,6 +100,19 @@ READINGS = {
 }
 
 
+# 漢字 → KANJIDIC2 の <grade>（1〜6 教育漢字／8 その他の常用漢字／9・10 人名用／
+# 無し＝常用漢字表外）。B4 はこれだけで決まる。
+GRADES = {
+    "松": 4, "本": 1, "坂": 3, "横": 3, "浜": 8, "高": 2, "槻": 9,
+    "匝": None, "瑳": 9, "八": 1, "重": 3, "瀬": 8, "立": 1, "川": 1,
+    "越": 8, "野": 2, "市": 2, "札": 4, "幌": 9, "新": 2, "宿": 3,
+    "名": 1, "古": 2, "屋": 3, "金": 1, "崎": 4, "佐": 4, "池": 2,
+    "田": 1, "毛": 2, "南": 2, "風": 2, "原": 2, "我": 6, "孫": 4,
+    "子": 1, "渋": 8, "谷": 2, "東": 2, "平": 3, "戸": 2, "大": 1,
+    "和": 3,
+}
+
+
 def build_kd() -> dict:
     """READINGS を load_kanjidic() と同じ形（訓は kun_forms で展開済み）に直す。"""
     kd = {}
@@ -102,7 +120,12 @@ def build_kd() -> dict:
         forms = []
         for k in kun:
             forms.extend(kun_forms(k))
-        kd[ch] = {"on": list(on), "kun": forms, "nanori": list(nanori), "grade": None}
+        kd[ch] = {
+            "on": list(on),
+            "kun": forms,
+            "nanori": list(nanori),
+            "grade": GRADES[ch],
+        }
     return kd
 
 
@@ -244,6 +267,54 @@ class TestClassifyB2(unittest.TestCase):
         first = classify_b2("札幌", "さっぽろ", KD)
         classify_b2("南風原", "はえばる", KD)
         self.assertEqual(classify_b2("札幌", "さっぽろ", KD), first)
+
+
+class TestB4(unittest.TestCase):
+    """B4: 幹の中で最も難しい 1 字のランク（0 教育 / 1 常用 / 2 人名用 / 3 表外）。"""
+
+    def test_配当学年でランクが決まる(self):
+        self.assertEqual(kanji_rank("本", KD), 0)   # grade 1 = 教育漢字
+        self.assertEqual(kanji_rank("我", KD), 0)   # grade 6 = 教育漢字
+        self.assertEqual(kanji_rank("瀬", KD), 1)   # grade 8 = 中学で習う常用漢字
+        self.assertEqual(kanji_rank("槻", KD), 2)   # grade 9 = 人名用漢字
+        self.assertEqual(kanji_rank("匝", KD), 3)   # grade 無し = 常用漢字表外
+
+    def test_grade_が無い字を含むと表外扱いになる(self):
+        self.assertEqual(b4_rank("匝瑳", KD), (3, "表外: 匝"))
+        # 瑳 は人名用（9）なので、より難しい 匝 の側でランクが決まる
+        self.assertEqual(kanji_rank("瑳", KD), 2)
+
+    def test_漢字以外と辞書に無い字はランク_0(self):
+        for ch in ("ケ", "ヶ", "々", "ノ", "の", "ア", "鼡"):
+            with self.subTest(ch=ch):
+                self.assertEqual(kanji_rank(ch, KD), 0)
+
+    def test_最も難しい_1_字でランクが決まり内訳にその字が残る(self):
+        self.assertEqual(b4_rank("松本", KD), (0, "教育: 松本"))
+        self.assertEqual(b4_rank("横浜", KD), (1, "常用: 浜"))
+        self.assertEqual(b4_rank("高槻", KD), (2, "人名用: 槻"))
+        self.assertEqual(b4_rank("札幌", KD), (2, "人名用: 幌"))
+        self.assertEqual(b4_rank("八重瀬", KD), (1, "常用: 瀬"))
+
+    def test_加算は教育と常用が_0_人名用_1_表外_2(self):
+        self.assertEqual(B4_BONUS, (0, 0, 1, 2))
+        self.assertEqual(len(B4_LABELS), len(B4_BONUS))
+        for a, b in zip(B4_BONUS, B4_BONUS[1:]):
+            self.assertLessEqual(a, b)  # 難しくなるほど加算は減らない
+
+
+class TestCombine(unittest.TestCase):
+    def test_素点に_B4_を足す(self):
+        self.assertEqual(combine("a", "有名", 0), (1, 1, 0))
+        self.assertEqual(combine("a", "有名", 2), (2, 1, 1))  # 小樽・高槻
+        self.assertEqual(combine("a", "ふつう", 3), (3, 1, 2))  # 匝瑳
+
+    def test_上限は_3(self):
+        self.assertEqual(combine("c", "無名", 3), (3, 3, 2))
+        self.assertEqual(combine("b", "無名", 2), (3, 3, 1))
+
+    def test_免除すると加算しない(self):
+        self.assertEqual(combine("a", "有名", 3, exempt=True), (1, 1, 0))
 
 
 class TestFameBand(unittest.TestCase):
