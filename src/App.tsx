@@ -5,6 +5,7 @@ import Quiz from './screens/Quiz.tsx'
 import Result from './screens/Result.tsx'
 import Ranking from './screens/Ranking.tsx'
 import Review from './screens/Review.tsx'
+import Atlas from './screens/Atlas.tsx'
 
 export default function App() {
   // navigated が false なら「ページを開いた直後の画面」＝共有リンクからの着地（出題なら挑戦状を挟む）
@@ -18,6 +19,14 @@ export default function App() {
       {route.name === 'ranking' && <Ranking />}
       {route.name === 'rankingPref' && <Ranking key={route.prefCode} prefCode={route.prefCode} />}
       {route.name === 'review' && <Review />}
+      {/* 地名帳の 3 ルートは 1 つの要素にまとめる（別の位置に書くと React が作り直して
+          検索語と読み込んだ meta が消える）。key も付けない */}
+      {(route.name === 'atlas' || route.name === 'atlasScope' || route.name === 'atlasRow') && (
+        <Atlas
+          scope={route.name === 'atlas' ? undefined : route.scope}
+          lgCode={route.name === 'atlasRow' ? route.lgCode : undefined}
+        />
+      )}
       {/* .footer-credit は黒板の上に載る（白系の文字色）ため .paper の外に置く */}
       <p className="footer-credit">
         出典: デジタル庁 アドレス・ベース・レジストリ（

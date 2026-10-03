@@ -23,10 +23,18 @@ import { mainCluster, projectCollection } from '../geo/project.ts'
 
 interface Props {
   prefCode: string
-  /** 強調する市区町村の 6 桁コード */
-  lgCode: string
+  /**
+   * 強調する市区町村の 6 桁コード。省くと県の形だけを描く（塗り・縁取り・照準リングを出さない）。
+   * 地名帳（#/atlas/{scope}）で行を選ぶ前の状態に使う
+   */
+  lgCode?: string
   /** 見出しに出す県名 */
   prefName?: string
+  /**
+   * 見出しの文言そのものを差し替える。省くと出題画面の「{県名}のどこ？」。
+   * 地名帳のように**問いではない**画面では範囲の名前（「東京都・23区」）をそのまま出す
+   */
+  caption?: string
   source?: GeoSource
 }
 
@@ -40,7 +48,13 @@ interface Loaded {
   collection: MunicipalityCollection | null
 }
 
-export default function MunicipalityMap({ prefCode, lgCode, prefName, source = defaultGeoSource() }: Props) {
+export default function MunicipalityMap({
+  prefCode,
+  lgCode,
+  prefName,
+  caption,
+  source = defaultGeoSource(),
+}: Props) {
   const [loaded, setLoaded] = useState<Loaded | null>(null)
 
   useEffect(() => {
@@ -66,11 +80,12 @@ export default function MunicipalityMap({ prefCode, lgCode, prefName, source = d
   // 出題対象だけは必ず fit に含めるので、小笠原が出題されたときはそこまで引いた地図になる
   const projected = useMemo(() => {
     if (!collection) return null
-    const fitTo = mainCluster(collection, { mustKeep: (props) => props.lgCode === lgCode })
+    // 対象が無い（地名帳で行を選ぶ前）ときは守る自治体も無いので mustKeep を渡さない
+    const fitTo = mainCluster(collection, lgCode === undefined ? {} : { mustKeep: (props) => props.lgCode === lgCode })
     return projectCollection(collection, { fitTo })
   }, [collection, lgCode])
 
-  const target = projected?.paths.find((p) => p.props.lgCode === lgCode)
+  const target = lgCode === undefined ? undefined : projected?.paths.find((p) => p.props.lgCode === lgCode)
   const others = projected?.paths.filter((p) => p.props.lgCode !== lgCode) ?? []
 
   // 対象が小さいときだけ照準リングを足す（大阪市のような大きい自治体には出さない）
@@ -82,16 +97,23 @@ export default function MunicipalityMap({ prefCode, lgCode, prefName, source = d
     if (span < short * PIN_THRESHOLD) pinRadius = projected.width * PIN_RADIUS_RATIO
   }
 
+  // 見出しと読み上げ名。caption を渡した画面（地名帳）は「問い」の言い方をしない
+  const captionText = caption ?? (prefName ? `${prefName}のどこ？` : '県内のどこ？')
+  const mapLabel =
+    caption !== undefined ? `${caption}の地図`
+    : prefName ? `${prefName}の中の出題地点`
+    : '都道府県の中の出題地点'
+
   return (
     <div className="map-muni">
-      <p className="map-muni__caption">{prefName ? `${prefName}のどこ？` : '県内のどこ？'}</p>
+      <p className="map-muni__caption">{captionText}</p>
       {projected ? (
         <svg
           className="map-muni__svg"
           viewBox={projected.viewBox}
           preserveAspectRatio="xMidYMid meet"
           role="img"
-          aria-label={prefName ? `${prefName}の中の出題地点` : '都道府県の中の出題地点'}
+          aria-label={mapLabel}
         >
           {others.map((p) => (
             <path key={p.props.lgCode} className="map-muni__path" data-lg-code={p.props.lgCode} d={p.d} />
