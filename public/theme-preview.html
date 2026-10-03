@@ -126,6 +126,23 @@
           <button class="mode-switch__item" type="button" aria-pressed="false">むずかしい</button>
         </div>
 
+        <!-- 難易度の ★（.stars）。選択肢ごとに幅が違うので .mode-switch--fit で中身の幅に置く。
+             記号はボタンの aria-label に任せて aria-hidden にする -->
+        <div class="mode-switch mode-switch--compact mode-switch--fit" role="group" aria-label="難易度（★）">
+          <button class="mode-switch__item is-selected" type="button" aria-pressed="true" aria-label="難易度: 全部">
+            全部<span class="sr-only">（選択中）</span>
+          </button>
+          <button class="mode-switch__item" type="button" aria-pressed="false" aria-label="難易度: ★1">
+            <span class="stars" aria-hidden="true">★</span>
+          </button>
+          <button class="mode-switch__item" type="button" aria-pressed="false" aria-label="難易度: ★2">
+            <span class="stars" aria-hidden="true">★★</span>
+          </button>
+          <button class="mode-switch__item" type="button" aria-pressed="false" aria-label="難易度: ★3">
+            <span class="stars" aria-hidden="true">★★★</span>
+          </button>
+        </div>
+
         <ul class="pref-grid">
           <li><button class="pref-grid__item" type="button">北海道</button></li>
           <li><button class="pref-grid__item" type="button">青森県</button></li>
@@ -214,7 +231,10 @@
           <span class="timer__bar" style="width: 65%"></span>
         </div>
 
-        <p class="q-number">問三 / 十</p>
+        <p class="q-number">
+          <span class="q-number__text">問三 / 十</span>
+          <span class="stars q-number__stars" role="img" aria-label="難易度 3">★★★</span>
+        </p>
         <p class="q-prompt">次の地名の読みをひらがなで書け。</p>
         <p class="q-kanji">匝瑳<span class="q-suffix">［市］</span></p>
         <p class="q-pref">千葉県</p>

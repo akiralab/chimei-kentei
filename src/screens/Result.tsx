@@ -4,7 +4,8 @@ import { buildQuestionSet, defaultSource } from '../engine/bank.ts'
 import { rangeLabelOf } from '../engine/scope.ts'
 import { parseSetId } from '../engine/setId.ts'
 import { defaultStorage, getClientToken, isValidNickname, provisionalRank } from '../engine/ranking.ts'
-import { allRowNote, scoreOf } from '../engine/score.ts'
+import { allRowNote, scoreOf, starsOfRow } from '../engine/score.ts'
+import { starsAria, starsHeaderNote, starsMark, starsRowNote } from '../engine/stars.ts'
 import { defaultRankingStore, isRemoteRanking } from '../engine/ranking-factory.ts'
 import { appendWrongFromEntry } from '../engine/wrongList.ts'
 import { readNickname } from '../hooks/useNickname.ts'
@@ -91,7 +92,7 @@ export default function Result({ setId }: { setId: string }) {
   useEffect(() => {
     if (!parsed) return
     let alive = true
-    buildQuestionSet(parsed.mode, parsed.scope, parsed.seed, defaultSource(), parsed.all)
+    buildQuestionSet(parsed.mode, parsed.scope, parsed.seed, defaultSource(), parsed.all, parsed.stars)
       .then((s) => {
         if (alive) setSet(s)
       })
@@ -234,8 +235,10 @@ export default function Result({ setId }: { setId: string }) {
         </span>
         <span className="paper__subtitle">
           {/* 範囲は出題を組み直せたときだけ（セットが読めない経路でも帯が崩れないように） */}
-          {set && `範囲 ${rangeLabelOf(set)} ／ `}正解 {correct} / {total} 問 ／ 所要時間 {formatDuration(timeMs)} ／ 制限{' '}
-          {timeLimitMs > 0 ? `${Math.round(timeLimitMs / 1000)}秒` : 'なし'}
+          {set && `範囲 ${rangeLabelOf(set)} ／ `}
+          {/* 難易度は絞ったときだけ。setId から読むので、出題を組み直せなくても出せる */}
+          {parsed?.stars != null && `${starsHeaderNote(parsed.stars)} ／ `}正解 {correct} / {total} 問 ／ 所要時間{' '}
+          {formatDuration(timeMs)} ／ 制限 {timeLimitMs > 0 ? `${Math.round(timeLimitMs / 1000)}秒` : 'なし'}
         </span>
       </div>
 
@@ -262,6 +265,12 @@ export default function Result({ setId }: { setId: string }) {
                 </span>
                 {q?.display ?? r.questionId}
                 {suffix && <span className="q-suffix">［{suffix}］</span>}
+                {/* 出題画面と同じ ★（町名の問には無い）。どの難易度で間違えたかが答案に残る */}
+                {q?.stars !== undefined && (
+                  <span className="stars review__stars" role="img" aria-label={starsAria(q.stars)}>
+                    {starsMark(q.stars)}
+                  </span>
+                )}
               </span>
               <span className="review__mine">{r.input === '' ? '（無記入）' : r.input}</span>
               <span className="review__answer">{q?.answer ?? '—'}</span>
@@ -318,8 +327,11 @@ export default function Result({ setId }: { setId: string }) {
             <ol className="ranking">
               {entries.map((e, i) => {
                 const me = e.entryId === myEntryId
-                // 全市区町村名のセットは問題数が県ごとに違うので、得点の横に添える
+                // 全市区町村名のセットは問題数が県ごとに違うので、得点の横に添える。
+                // 難易度は順位表を分けない（区分が 3 → 9 に増えると人数が薄まる）ので、
+                // 絞ったセットの行には「★★★のみ」と添えて同じ一覧に並べる
                 const note = allRowNote(e)
+                const rowStars = starsOfRow(e)
                 return (
                   <li className={me ? 'ranking__row is-me' : 'ranking__row'} key={e.entryId}>
                     <span className="ranking__rank">
@@ -333,6 +345,7 @@ export default function Result({ setId }: { setId: string }) {
                     <span className="ranking__score">
                       {e.score}点
                       {note !== null && <span className="q-suffix">［{note}］</span>}
+                      {rowStars !== null && <span className="q-suffix">［{starsRowNote(rowStars)}］</span>}
                     </span>
                     <span className="ranking__time">
                       {formatDuration(e.timeMs)}

@@ -7,7 +7,7 @@
  * どちらも 0〜100 点だが **1 問の重みが違う**ので、10 問と全市区町村名は別の順位表として扱う
  * （区分は RankingMode の 'e' | 'd' | 'all'）。
  */
-import type { RankingRow } from './types.ts'
+import type { RankingRow, Stars } from './types.ts'
 import { QUESTIONS_PER_SET } from './types.ts'
 import { parseSetId } from './setId.ts'
 
@@ -45,4 +45,13 @@ export function isAllRow(row: CountableRow): boolean {
 export function allRowNote(row: CountableRow): string | null {
   if (!isAllRow(row)) return null
   return row.total === undefined ? '全市区町村名' : `全市区町村名（${row.total} 問）`
+}
+
+/**
+ * その行が難易度で絞ったセットなら ★ の数、絞っていない（または setId が読めない）なら null。
+ * **順位表は難易度で分けない**（10 問どうしなら ★ を絞っても 1 問の重みは同じで、
+ * 区分を 3 → 9 に増やすと 1 区分あたりの人数が薄くなる）。混ざるので行に注記を出す
+ */
+export function starsOfRow(row: Pick<RankingRow, 'setId'>): Stars | null {
+  return parseSetId(row.setId)?.stars ?? null
 }

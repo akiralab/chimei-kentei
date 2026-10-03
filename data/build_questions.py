@@ -2,9 +2,16 @@
 """問題バンク生成スクリプト（外部ライブラリ不使用）。
 
 入力  : abr-data/processed/abr_city_reading.csv, abr_name_reading.csv
+        public/geo/municipalities.json … 難易度 ★ の A1（人口）
+        KANJIDIC2 … 難易度 ★ の B2（音訓分解）・B4（漢字の難しさ）
 出力  : public/questions/{dataVersion}/easy.json, difficult/{prefCode}.json, meta.json
 契約  : src/engine/types.ts の Question / BankMeta（キー順も宣言順に合わせる）
 実行  : python3 data/build_questions.py   （= npm run build:questions）
+
+難易度 ★（easy の `stars`）は **build_stars.py が正本**。ここはそれを呼んで
+easy の各問に 1〜3 を書き込むだけで、軸・表・閾値はいっさい持たない。
+KANJIDIC2（既定 ~/workspace/abr-data/raw/kanjidic2/kanjidic2.xml.gz）が無いと
+難易度を付けられないので、場所を `--kanjidic` で渡すか `--download` で取得する。
 """
 
 import argparse
@@ -22,6 +29,16 @@ DATA_VERSION = "abr20260925r2"
 SOURCE = (
     "デジタル庁 アドレス・ベース・レジストリ 全国 町字マスター "
     "2026-09-25 版（CC BY 4.0）を加工"
+)
+# meta.json に添える難易度の説明（画面には出さない。データの出自を JSON だけで辿れるようにする）。
+# 軸の中身を変えるときは build_stars.py が正本で、ここは「どの軸を使ったか」だけを書く。
+STARS_NOTE = (
+    "難易度 stars（★1〜3）は市区町村名（easy）だけに付く。"
+    "A1 = 人口（国勢調査 2020 の全国分位で有名／ふつう／無名）、"
+    "B2 = 公式の読みを漢字の音訓で分解できるか（素直／変化あり／読めない）、"
+    "B4 = 幹のうち最も難しい漢字（教育／常用／人名用／表外）の 3 軸。"
+    "B2×A1 の素点に B4 を加算して ★3 で打ち切る。判定の正本は data/build_stars.py。"
+    "読みの出典は KANJIDIC2（EDRDG, CC BY-SA 4.0）"
 )
 
 # --- 幹の文字種判定 -------------------------------------------------------
@@ -247,6 +264,40 @@ def build_difficult(name_csv: Path, ward_to_city: dict, pref_names: dict, report
     return by_pref
 
 
+# --- 難易度 ★（easy のみ。判定は build_stars.py） ------------------------
+def attach_stars(questions: list, geo: dict, kd: dict, report: dict) -> None:
+    """easy の各問に `stars`（1〜3）を**破壊的に**書き込む。
+
+    判定は build_stars.judge_all に任せる（A1 の分位点は渡した全件から取るので、
+    **easy 全件をまとめて渡す**こと。都道府県ごとに呼ぶと境界がずれる）。
+    import を関数の中でするのは、build_stars が build_questions を import していて
+    モジュール先頭では循環になるため。
+    """
+    from build_stars import judge_all  # noqa: PLC0415 — 循環 import を避けるため遅延
+
+    rows, upper, lower = judge_all(questions, geo, kd)
+    stars_by_id = {r["id"]: r["stars"] for r in rows}
+    for q in questions:
+        q["stars"] = stars_by_id[q["id"]]
+    report["stars"] = dict(sorted(Counter(q["stars"] for q in questions).items()))
+    report["stars_bands"] = (upper, lower)
+
+
+def load_stars_inputs(geo_path: Path, kanjidic_path: Path, download: bool):
+    """難易度 ★ の入力（人口・KANJIDIC2）を読む。欠けていれば直し方を添えて止める。"""
+    from build_stars import load_kanjidic  # noqa: PLC0415 — 同上
+
+    if not geo_path.exists():
+        raise SystemExit(
+            f"人口データが無いので難易度 ★ を付けられない: {geo_path}\n"
+            f"  python3 data/build_geo.py で生成するか、--geo で場所を渡す。"
+        )
+    geo = json.loads(geo_path.read_text(encoding="utf-8"))
+    # KANJIDIC2 が無いときの案内（取得コマンド）は load_kanjidic が出す
+    kd = load_kanjidic(kanjidic_path, download=download)
+    return geo, kd
+
+
 def write_json(path: Path, obj) -> int:
     path.parent.mkdir(parents=True, exist_ok=True)
     text = json.dumps(obj, ensure_ascii=False, separators=(",", ":"))
@@ -263,6 +314,14 @@ def main() -> int:
         default=REPO / "public" / "questions" / DATA_VERSION,
         help="出力ディレクトリ",
     )
+    ap.add_argument(
+        "--geo",
+        type=Path,
+        default=REPO / "public" / "geo" / "municipalities.json",
+        help="難易度 ★ の A1 に使う人口データ",
+    )
+    ap.add_argument("--kanjidic", type=Path, default=None, help="難易度 ★ に使う KANJIDIC2 の場所")
+    ap.add_argument("--download", action="store_true", help="KANJIDIC2 が無ければ取得する")
     args = ap.parse_args()
 
     city_csv = args.abr_dir / "abr_city_reading.csv"
@@ -272,8 +331,14 @@ def main() -> int:
             print(f"入力が見つからない: {p}", file=sys.stderr)
             return 1
 
+    # 難易度 ★ の入力は easy を組む前に読む（KANJIDIC2 が無いなら 56 MiB の CSV を読む前に止める）
+    from build_stars import KANJIDIC2_CACHE  # noqa: PLC0415 — 循環 import を避けるため遅延
+
+    geo, kd = load_stars_inputs(args.geo, args.kanjidic or KANJIDIC2_CACHE, args.download)
+
     report: dict = {}
     easy, cities_meta, ward_to_city = build_easy(city_csv, report)
+    attach_stars(easy, geo, kd, report)
     pref_names = {c["prefCode"]: c["lgCode"] for c in cities_meta}
     pref_name_by_code = {}
     for q in easy:
@@ -286,6 +351,7 @@ def main() -> int:
         "dataVersion": DATA_VERSION,
         "generatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
         "source": SOURCE,
+        "starsNote": STARS_NOTE,
         "prefectures": [
             {
                 "code": code,
@@ -312,6 +378,12 @@ def main() -> int:
     print(f"easy            : {report['easy_total']} 件 {report['easy_suffix']}")
     print(f"  最小 {easy_lo[0]}={easy_lo[1]}  （meta.cities は全 {report['cities_total']} 件を残す）")
     print(f"  ルール e で除外（幹に漢字なし）: {len(dropped)} 件 {'・'.join(dropped)}")
+    upper, lower = report["stars_bands"]
+    print("難易度 ★         : " + " / ".join(
+        f"{'★' * s} {report['stars'].get(s, 0)} 件"
+        f"（{report['stars'].get(s, 0) / report['easy_total']:.0%}）" for s in (1, 2, 3)
+    ))
+    print(f"  A1 の境界: 有名 ≥ {upper:,} 人／無名 < {lower:,} 人（判定は data/build_stars.py）")
     print(f"政令指定都市     : {report['seirei_cities']} 市（区コードを市コードへ集約）")
     print(f"difficult       : {report['difficult_total']} 件 / {len(difficult)} 都道府県")
     print(f"  最小 {lo[0]}={lo[1]}  最大 {hi[0]}={hi[1]}")

@@ -5,7 +5,14 @@ describe('全市区町村名（-all）のセット ID', () => {
   it('市区町村名 × 都道府県のときだけ組み立てられ、末尾に -all が付く', () => {
     const id = buildSetId('abr20260925r2', 'e', '12', '0417', true)
     expect(id).toBe('abr20260925r2-e-12-0417-all')
-    expect(parseSetId(id)).toEqual({ dataVersion: 'abr20260925r2', mode: 'e', scope: '12', seed: '0417', all: true })
+    expect(parseSetId(id)).toEqual({
+      dataVersion: 'abr20260925r2',
+      mode: 'e',
+      scope: '12',
+      seed: '0417',
+      all: true,
+      stars: null,
+    })
   })
 
   it('all を立てなければ従来どおり 4 つ組で、all: false として分解される', () => {
@@ -40,6 +47,7 @@ describe('地域（3 文字）の scope', () => {
       scope: '01c',
       seed: '0417',
       all: false,
+      stars: null,
     })
     expect(buildSetId('abr20260925r2', 'e', '13i', '0417', true)).toBe('abr20260925r2-e-13i-0417-all')
     expect(parseSetId('abr20260925r2-e-13i-0417-all')?.all).toBe(true)

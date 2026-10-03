@@ -13,10 +13,10 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { BankMeta, Question, QuestionSet } from './engine/types.ts'
-import { TIME_LIMIT_MS } from './engine/types.ts'
+import { QUESTIONS_PER_SET, TIME_LIMIT_MS } from './engine/types.ts'
 import type { BankSource } from './engine/bank.ts'
 import { DATA_VERSION, buildQuestionSet } from './engine/bank.ts'
-import { makeDifficult, makeEasy } from './engine/__fixtures__/questions.ts'
+import { makeDifficult, makeEasy, withStars } from './engine/__fixtures__/questions.ts'
 import { answerSheetKey } from './hooks/answerSheet.ts'
 import { NICKNAME_KEY } from './hooks/useNickname.ts'
 import { NO_TIME_LIMIT, TIME_LIMIT_KEY } from './hooks/useTimeLimit.ts'
@@ -52,8 +52,15 @@ function withLgCodes(questions: Question[], lgCodes: string[]): Question[] {
   return questions.map((q, i) => ({ ...q, lgCode: lgCodes[i], id: `c:${lgCodes[i]}:${q.display}` }))
 }
 
-// 千葉県は easy 15 件・大字 30 件、東京都・北海道は easy 14 件。どれも 10 問に足りる
-const EASY_12 = kanaizeAnswers(makeEasy('12', '千葉県', 15))
+/**
+ * 千葉県は easy 15 件・大字 30 件、東京都・北海道は easy 14 件。どれも 10 問に足りる。
+ *
+ * 千葉県の難易度は ★3 を 11・★2 を 3・★1 を 1 に振る（makeEasy の既定は 1→2→3 の循環）。
+ * ★3 だけ 10 問を組めるので「★3 は 10 問・★2 と ★1 は全市区町村名に固定」の両方を 1 県で通せる
+ */
+const EASY_12 = withStars(kanaizeAnswers(makeEasy('12', '千葉県', 15)), [
+  3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 2, 2, 2, 1,
+])
 // 道央 12（札幌・小樽・室蘭…）＋ 道南 2（函館・北斗）。道央だけで 10 問に足りる
 const EASY_01 = withLgCodes(kanaizeAnswers(makeEasy('01', '北海道', 14)), [
   '011002', '012033', '012050', '012092', '012106', '012131',
@@ -402,8 +409,84 @@ describe('範囲・科目', () => {
     expect(hash()).toMatch(new RegExp(`^#/q/${DATA_VERSION}-e-12-\\d{4}-all$`))
     // 10 問を超えるので問番号は算用数字（fake timers なので waitFor ではなく settle で流す）
     await settle()
-    expect(el('.q-number').textContent).toBe('問1 / 15')
+    expect(el('.q-number__text').textContent).toBe('問1 / 15')
     expect(all('.q-kanji').every((e) => !e.textContent?.includes('さいたま'))).toBe(true)
+  })
+
+  // ---- 難易度（★1〜3。Issue #33 / PR #38 の build_stars.py） ----
+
+  it('市区町村名のときだけ難易度の行が出て、町名も に切り替えると消える', async () => {
+    await openSelect()
+
+    // 全国のままでも難易度は選べる（★ は市区町村名の問に付いているので範囲に依らない）
+    expect(screen.getByRole('group', { name: '難易度' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '難易度: 全部' })).toHaveAttribute('aria-pressed', 'true')
+
+    fireEvent.click(screen.getByRole('button', { name: '市区町村名＋町名' }))
+    expect(screen.queryByRole('group', { name: '難易度' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '難易度: ★3' })).toBeNull()
+
+    // 市区町村名に戻すと行も戻り、「全部」に戻っている（町名のあいだの選択を引きずらない）
+    fireEvent.click(screen.getByRole('button', { name: '市区町村名' }))
+    expect(screen.getByRole('group', { name: '難易度' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '難易度: 全部' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('★★★ を選んで始めると setId に -s3 が付き、出題画面に ★★★ が出る', async () => {
+    await openSelect()
+
+    fireEvent.click(screen.getByRole('button', { name: '千葉県' }))
+    const three = screen.getByRole('button', { name: '難易度: ★3' })
+    expect(three).toBeEnabled()
+    fireEvent.click(three)
+    expect(three).toHaveAttribute('aria-pressed', 'true')
+    // 帯に難易度が出て、問題数は ★3 の件数（11 件）で数える
+    expect(el('.paper__subtitle').textContent).toContain('難易度: ★★★')
+    expect(screen.getByRole('button', { name: '問題数: 全市区町村名（11 問）' })).toBeEnabled()
+
+    fireEvent.click(screen.getByRole('button', { name: '始める' }))
+    await settle()
+
+    expect(hash()).toMatch(new RegExp(`^#/q/${DATA_VERSION}-e-12-\\d{4}-s3$`))
+    await settle()
+    expect(el('.q-number__text').textContent).toBe('問一 / 十')
+    // 10 問すべて ★3（出題画面にも答案にも ★ が出る）
+    expect(el('.q-number .stars').textContent).toBe('★★★')
+    expect(screen.getByLabelText('難易度 3')).toBeInTheDocument()
+  })
+
+  it('難易度を切り替えると問題数の表示もその ★ の件数になる', async () => {
+    await openSelect()
+    fireEvent.click(screen.getByRole('button', { name: '千葉県' }))
+
+    // 全部 15 件 → ★3 は 11 件 → ★2 は 3 件
+    expect(screen.getByRole('button', { name: '問題数: 全市区町村名（15 問）' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '難易度: ★3' }))
+    expect(screen.getByRole('button', { name: '問題数: 全市区町村名（11 問）' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '難易度: ★2' }))
+    expect(screen.getByRole('button', { name: '問題数: 全市区町村名（3 問）' })).toBeInTheDocument()
+  })
+
+  it('10 問に足りない難易度は島しょと同じく全市区町村名に固定し、理由を読み上げる', async () => {
+    await openSelect()
+    fireEvent.click(screen.getByRole('button', { name: '千葉県' }))
+    // ★2 は 3 件しかない
+    fireEvent.click(screen.getByRole('button', { name: '難易度: ★2' }))
+
+    expect(screen.getByRole('button', { name: `問題数: ${QUESTIONS_PER_SET} 問` })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '問題数: 全市区町村名（3 問）' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(el('.sr-only').textContent).toBe('千葉県の★★は 3 問なので、10 問ではなく全市区町村名で解きます')
+
+    fireEvent.click(screen.getByRole('button', { name: '始める' }))
+    await settle()
+    expect(hash()).toMatch(new RegExp(`^#/q/${DATA_VERSION}-e-12-\\d{4}-all-s2$`))
+    await settle()
+    // 10 問以下なので番号は漢数字のまま（算用数字になるのは 10 問を超えたとき）
+    expect(el('.q-number__text').textContent).toBe('問一 / 三')
+    expect(el('.q-number .stars').textContent).toBe('★★')
   })
 
   // ---- 地域（北海道 4・東京都 3。Issue #34） ----
@@ -452,7 +535,7 @@ describe('範囲・科目', () => {
 
     expect(hash()).toMatch(new RegExp(`^#/q/${DATA_VERSION}-e-01c-\\d{4}$`))
     expect(el('.paper__header').textContent).toContain('範囲: 北海道・道央')
-    expect(el('.q-number').textContent).toBe('問一 / 十')
+    expect(el('.q-number__text').textContent).toBe('問一 / 十')
   })
 
   it('東京都→島しょ × 市区町村名は 10 問が押せず、全市区町村名（9 問）になる', async () => {
@@ -484,7 +567,7 @@ describe('範囲・科目', () => {
 
     expect(hash()).toMatch(new RegExp(`^#/q/${DATA_VERSION}-e-13i-\\d{4}-all$`))
     expect(el('.paper__header').textContent).toContain('範囲: 東京都・島しょ')
-    expect(el('.q-number').textContent).toBe('問一 / 九')
+    expect(el('.q-number__text').textContent).toBe('問一 / 九')
   })
 })
 
@@ -494,7 +577,7 @@ describe('出題', () => {
   it('setId を直接開くと 問一 / 十 と漢字が出る', async () => {
     await openQuiz(SET_ID)
 
-    expect(el('.q-number').textContent).toBe('問一 / 十')
+    expect(el('.q-number__text').textContent).toBe('問一 / 十')
     expect(el('.q-kanji').textContent).toContain(EXPECTED.questions[0].display)
   })
 
@@ -506,14 +589,14 @@ describe('出題', () => {
     fireEvent.keyDown(input, { key: 'Enter' })
 
     expect(all('.mark--correct')).toHaveLength(1)
-    expect(el('.q-number').textContent).toBe('問一 / 十')
+    expect(el('.q-number__text').textContent).toBe('問一 / 十')
 
     // 1 秒経つまでは次へ進まない
     await settle(FEEDBACK_MS - 1)
-    expect(el('.q-number').textContent).toBe('問一 / 十')
+    expect(el('.q-number__text').textContent).toBe('問一 / 十')
 
     await settle(1)
-    expect(el('.q-number').textContent).toBe('問二 / 十')
+    expect(el('.q-number__text').textContent).toBe('問二 / 十')
     expect(el('.q-kanji').textContent).toContain(EXPECTED.questions[1].display)
     expect(answerInput()).toHaveValue('')
   })
@@ -528,7 +611,7 @@ describe('出題', () => {
     fireEvent.keyDown(input, { key: 'Enter' })
     await settle(FEEDBACK_MS)
 
-    expect(el('.q-number').textContent).toBe('問二 / 十')
+    expect(el('.q-number__text').textContent).toBe('問二 / 十')
     expect(answerInput()).toHaveFocus()
   })
 
@@ -563,7 +646,7 @@ describe('出題', () => {
     await settle(FEEDBACK_MS)
     fireEvent.click(nextButton()!)
     await settle()
-    expect(el('.q-number').textContent).toBe('問二 / 十')
+    expect(el('.q-number__text').textContent).toBe('問二 / 十')
 
     // 残り 9 問を埋めて、1 問目に「さん」が記録されていることを確かめる
     for (let i = 1; i < EXPECTED.questions.length; i++) await answerOne(EXPECTED.questions[i].answer)
@@ -590,12 +673,12 @@ describe('出題', () => {
 
     // 正解のときの 1 秒どころか、ずっと待っても進まない
     await settle(FEEDBACK_MS * 10)
-    expect(el('.q-number').textContent).toBe('問一 / 十')
+    expect(el('.q-number__text').textContent).toBe('問一 / 十')
     expect(all('.mark--wrong')).toHaveLength(1)
 
     fireEvent.click(nextButton()!)
     await settle()
-    expect(el('.q-number').textContent).toBe('問二 / 十')
+    expect(el('.q-number__text').textContent).toBe('問二 / 十')
     expect(all('.mark')).toHaveLength(0)
     expect(screen.getByRole('button', { name: '解答' })).toBeInTheDocument()
     // 次の問の計測は「次へ」を押してから。正解を眺めていた時間は答案の ms に入らない
@@ -608,7 +691,7 @@ describe('出題', () => {
   it('最後の問を間違えると「結果を見る」になり、押すと結果へ進む', async () => {
     await openQuiz(SET_ID)
     for (let i = 0; i < EXPECTED.questions.length - 1; i++) await answerOne(EXPECTED.questions[i].answer)
-    expect(el('.q-number').textContent).toBe('問十 / 十')
+    expect(el('.q-number__text').textContent).toBe('問十 / 十')
 
     fireEvent.click(screen.getByRole('button', { name: '解答' }))
     await settle(FEEDBACK_MS * 3)
@@ -628,10 +711,10 @@ describe('出題', () => {
 
     // パスも間違いと同じく「次へ」を押すまで止まる
     await settle(FEEDBACK_MS)
-    expect(el('.q-number').textContent).toBe('問一 / 十')
+    expect(el('.q-number__text').textContent).toBe('問一 / 十')
     fireEvent.click(nextButton()!)
     await settle()
-    expect(el('.q-number').textContent).toBe('問二 / 十')
+    expect(el('.q-number__text').textContent).toBe('問二 / 十')
 
     // 残り 9 問は適当に埋めて、1 問目がパスとして記録されていることを確認する
     for (let i = 1; i < EXPECTED.questions.length; i++) await answerOne(EXPECTED.questions[i].answer)
@@ -653,10 +736,10 @@ describe('出題', () => {
 
     // 時間切れのあとは砂時計が止まり、「次へ」を押すまで次の問に進まない
     await settle(FEEDBACK_MS * 5)
-    expect(el('.q-number').textContent).toBe('問一 / 十')
+    expect(el('.q-number__text').textContent).toBe('問一 / 十')
     fireEvent.click(nextButton()!)
     await settle()
-    expect(el('.q-number').textContent).toBe('問二 / 十')
+    expect(el('.q-number__text').textContent).toBe('問二 / 十')
     expect(el('.timer__label').textContent).toContain('のこり 20 秒')
     expect(el('.timer__label')).not.toHaveClass('is-urgent')
   })
@@ -806,7 +889,7 @@ describe('通しフロー', () => {
 
     const setId = hash().replace('#/q/', '')
     const set = await buildQuestionSet('e', '12', setId.split('-')[3], FIXTURE_SOURCE)
-    expect(el('.q-number').textContent).toBe('問一 / 十')
+    expect(el('.q-number__text').textContent).toBe('問一 / 十')
     expect(el('.answer-input')).toBeInTheDocument()
 
     // 出題（全問正解）
@@ -949,7 +1032,7 @@ describe('もう一度', () => {
     await settle()
 
     expect(hash()).toMatch(new RegExp(`^#/q/${DATA_VERSION}-e-13-\\d{4}$`))
-    expect(el('.q-number').textContent).toBe('問一 / 十')
+    expect(el('.q-number__text').textContent).toBe('問一 / 十')
     expect(el('.answer-input')).toHaveValue('')
   })
 })
@@ -975,7 +1058,7 @@ describe('時間制限なし', () => {
 
     await settle(TIME_LIMIT_MS * 2)
     expect(all('.mark')).toHaveLength(0)
-    expect(el('.q-number').textContent).toBe('問一 / 十')
+    expect(el('.q-number__text').textContent).toBe('問一 / 十')
   })
 
   it('パスは 20000 ではなく実測の経過時間で記録される', async () => {
@@ -1143,7 +1226,7 @@ describe('共有リンクの着地', () => {
     fireEvent.click(startButton())
     await settle()
 
-    expect(el('.q-number').textContent).toBe('問一 / 十')
+    expect(el('.q-number__text').textContent).toBe('問一 / 十')
     expect(el('.q-kanji').textContent).toContain(EXPECTED.questions[0].display)
     expect(el('.timer__label').textContent).toContain('のこり 20 秒')
     expect(el('.paper__header').textContent).toContain('たろう')
@@ -1205,7 +1288,7 @@ describe('共有リンクの着地', () => {
     await settle()
 
     expect(screen.queryByRole('heading', { name: '挑戦状' })).toBeNull()
-    expect(el('.q-number').textContent).toBe('問一 / 十')
+    expect(el('.q-number__text').textContent).toBe('問一 / 十')
   })
 })
 

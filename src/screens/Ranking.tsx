@@ -15,7 +15,8 @@ import { useEffect, useMemo, useState } from 'react'
 import type { BankMeta, PrefectureStat, RankingMode, RankingRow } from '../engine/types.ts'
 import { ALL_RANKING_MODE } from '../engine/types.ts'
 import { RANKING_MODES, RANKING_MODE_LABELS, rankingModeName } from '../engine/modes.ts'
-import { isAllRow, rowCounts } from '../engine/score.ts'
+import { isAllRow, rowCounts, starsOfRow } from '../engine/score.ts'
+import { starsRowNote } from '../engine/stars.ts'
 import { loadMeta } from '../engine/bank.ts'
 import { scopeLabel } from '../engine/scope.ts'
 import { SCOPE_NATIONWIDE } from '../engine/setId.ts'
@@ -180,37 +181,42 @@ export default function Ranking({ prefCode }: { prefCode?: string } = {}) {
 
         {shown.length > 0 && (
           <ol className="ranking">
-            {shown.map((r, i) => (
-              <li className="ranking__row" key={r.entryId}>
-                <span className="ranking__rank">{i + 1}</span>
-                <span className="ranking__name">{r.nickname}</span>
-                <span className="ranking__score">
-                  {/* 全市区町村名は問題数が県ごとに違うので、正解数と問題数も見せる */}
-                  {isAllRow(r) && r.total !== undefined && (
-                    <span className="q-suffix">正解 {rowCounts(r).correct} / {r.total} 問・</span>
-                  )}
-                  {r.score}点
-                </span>
-                <span className="ranking__time">
-                  {formatDuration(r.timeMs)}
-                  {r.timeLimitMs !== undefined && r.timeLimitMs > 0 && (
-                    <>
-                      {' '}
-                      <span title="1 問あたりの制限つき">⏳{Math.round(r.timeLimitMs / 1000)}秒</span>
-                    </>
-                  )}
-                </span>
-                {/* 4 列グリッドの 2 行目として全幅に置く（科目・範囲・登録日・挑戦リンク） */}
-                <span className="q-pref" style={{ gridColumn: '1 / -1', margin: 0 }}>
-                  {isAllRow(r) ? rankingModeName(ALL_RANKING_MODE) : r.mode === undefined ? '—' : rankingModeName(r.mode)}{' '}
-                  ／ {labelOfScope(r.scope)} ／{' '}
-                  {formatDate(r.createdAt)}{' '}
-                  <a className="btn btn--ghost" href={quizPath(r.setId)}>
-                    この問題に挑戦
-                  </a>
-                </span>
-              </li>
-            ))}
+            {shown.map((r, i) => {
+              const rowStars = starsOfRow(r)
+              return (
+                <li className="ranking__row" key={r.entryId}>
+                  <span className="ranking__rank">{i + 1}</span>
+                  <span className="ranking__name">{r.nickname}</span>
+                  <span className="ranking__score">
+                    {/* 全市区町村名は問題数が県ごとに違うので、正解数と問題数も見せる */}
+                    {isAllRow(r) && r.total !== undefined && (
+                      <span className="q-suffix">正解 {rowCounts(r).correct} / {r.total} 問・</span>
+                    )}
+                    {r.score}点
+                    {/* 難易度で区分を分けない代わりに、絞ったセットの行にだけ「★★★のみ」と添える */}
+                    {rowStars !== null && <span className="q-suffix">［{starsRowNote(rowStars)}］</span>}
+                  </span>
+                  <span className="ranking__time">
+                    {formatDuration(r.timeMs)}
+                    {r.timeLimitMs !== undefined && r.timeLimitMs > 0 && (
+                      <>
+                        {' '}
+                        <span title="1 問あたりの制限つき">⏳{Math.round(r.timeLimitMs / 1000)}秒</span>
+                      </>
+                    )}
+                  </span>
+                  {/* 4 列グリッドの 2 行目として全幅に置く（科目・範囲・登録日・挑戦リンク） */}
+                  <span className="q-pref" style={{ gridColumn: '1 / -1', margin: 0 }}>
+                    {isAllRow(r) ? rankingModeName(ALL_RANKING_MODE) : r.mode === undefined ? '—' : rankingModeName(r.mode)}{' '}
+                    ／ {labelOfScope(r.scope)} ／{' '}
+                    {formatDate(r.createdAt)}{' '}
+                    <a className="btn btn--ghost" href={quizPath(r.setId)}>
+                      この問題に挑戦
+                    </a>
+                  </span>
+                </li>
+              )
+            })}
           </ol>
         )}
 

@@ -3,6 +3,7 @@ import type { AnswerRecord, Question, QuestionSet } from '../engine/types.ts'
 import { QUESTIONS_PER_SET, UNLIMITED_MAX_MS } from '../engine/types.ts'
 import { buildQuestionSet, defaultSource } from '../engine/bank.ts'
 import { modeName } from '../engine/modes.ts'
+import { starsAria, starsMark } from '../engine/stars.ts'
 import { grade } from '../engine/grading.ts'
 import { rangeLabelOf } from '../engine/scope.ts'
 import { SCOPE_NATIONWIDE, parseSetId } from '../engine/setId.ts'
@@ -72,7 +73,7 @@ export default function Quiz({ setId, direct = false }: { setId: string; direct?
   useEffect(() => {
     if (!parsed) return
     let alive = true
-    buildQuestionSet(parsed.mode, parsed.scope, parsed.seed, defaultSource(), parsed.all)
+    buildQuestionSet(parsed.mode, parsed.scope, parsed.seed, defaultSource(), parsed.all, parsed.stars)
       .then((s) => {
         if (alive) setSet(s)
       })
@@ -195,6 +196,7 @@ export default function Quiz({ setId, direct = false }: { setId: string; direct?
         mode={set.mode}
         total={set.questions.length}
         all={set.all}
+        stars={set.stars}
         widened={set.widened}
         nickname={nickname}
         onNicknameChange={setNickname}
@@ -257,7 +259,18 @@ export default function Quiz({ setId, direct = false }: { setId: string; direct?
           </div>
 
           <div className="q-number">
-            問{questionNumber(index + 1, set.questions.length)} / {questionNumber(set.questions.length, set.questions.length)}
+            {/* 番号は独立した要素にする（★ が混ざっても「問三 / 十」だけを読み取れるように） */}
+            <span className="q-number__text">
+              問{questionNumber(index + 1, set.questions.length)} /{' '}
+              {questionNumber(set.questions.length, set.questions.length)}
+            </span>
+            {/* その問の難易度。★ を持つのは市区町村名だけなので、町名の問には出ない。
+                role="img" + aria-label で「★★★」ではなく「難易度 3」と読ませる */}
+            {question.stars !== undefined && (
+              <span className="stars q-number__stars" role="img" aria-label={starsAria(question.stars)}>
+                {starsMark(question.stars)}
+              </span>
+            )}
           </div>
           <p className="q-prompt">次の地名の読みを書け。</p>
 

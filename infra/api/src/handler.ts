@@ -419,7 +419,7 @@ export function createHandler(deps: HandlerDeps): (event: HttpApiEvent) => Promi
     let set
     try {
       // 全市区町村名（`-all` 付きの setId）はその都道府県の市区町村を全部出すセット
-      set = await buildQuestionSet(parsed.mode, parsed.scope, parsed.seed, bank, parsed.all)
+      set = await buildQuestionSet(parsed.mode, parsed.scope, parsed.seed, bank, parsed.all, parsed.stars)
     } catch (e: unknown) {
       if (e instanceof BankUnavailableError) throw e
       return invalid(e instanceof Error ? e.message : '問題セットを再導出できませんでした。', cors)
