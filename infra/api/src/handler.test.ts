@@ -430,6 +430,62 @@ describe('CORS', () => {
   })
 })
 
+describe('難易度つきの setId', () => {
+  /**
+   * フィクスチャの ★ は 1→2→3 の循環なので、全国（千葉 25 ＋ 東京 5）の ★2 はちょうど 10 件。
+   * サーバーも同じ setId から **同じ 10 問**を導き直せることと、
+   * 順位表の区分は 'e' のまま（難易度では分けない）ことを押さえる
+   */
+  const SET_STARS = `${DATA_VERSION}-e-00-1234-s2`
+
+  it('-s{n} の setId を受け付け、その難易度だけで再採点する', async () => {
+    const set = await buildQuestionSet('e', '00', '1234', fixtureSource(), false, 2)
+    expect(set.setId).toBe(SET_STARS)
+    expect(set.questions.every((q) => q.stars === 2)).toBe(true)
+
+    const handler = makeHandler(memoryDdb())
+    const answers = set.questions.map((q, i) => ({
+      questionId: q.id,
+      input: i < 6 ? q.answer : 'ちがう',
+      ms: 3000,
+      passed: false,
+    }))
+    const res = await handler(postEvent({ setId: SET_STARS, nickname: 'たろう', clientToken: 'tok-s', answers }))
+    expect(res.statusCode).toBe(201)
+    const out = parse(res)
+    expect(out.ok).toBe(true)
+    // 難易度は区分を分けない（mode は 'e' のまま・all も付かない）
+    expect(out.entry).toMatchObject({ setId: SET_STARS, score: 60, correct: 6, total: 10, mode: 'e', scope: '00' })
+  })
+
+  it('組めない難易度の setId は断る（★3 は 9 件しかない）', async () => {
+    const handler = makeHandler(memoryDdb())
+    const res = await handler(
+      postEvent({
+        setId: `${DATA_VERSION}-e-00-1234-s3`,
+        nickname: 'たろう',
+        clientToken: 'tok-x',
+        answers: answersFor(7),
+      }),
+    )
+    expect(res.statusCode).toBe(400)
+  })
+
+  it('町名（d）に難易度を付けた setId は読めない', async () => {
+    const handler = makeHandler(memoryDdb())
+    const res = await handler(
+      postEvent({
+        setId: `${DATA_VERSION}-d-12-1234-s3`,
+        nickname: 'たろう',
+        clientToken: 'tok-y',
+        answers: answersFor(7),
+      }),
+    )
+    expect(res.statusCode).toBe(400)
+    expect(String(parse(res).detail)).toContain('setId が読めません')
+  })
+})
+
 // --------------------------------------------------------- 都道府県インデックス
 
 describe('都道府県別の集計', () => {

@@ -1,12 +1,16 @@
 /** テスト用の小さな問題バンク。public/ には置かない。 */
-import type { BankMeta, Question } from '../types.ts'
+import type { BankMeta, Question, Stars } from '../types.ts'
 import type { BankSource } from '../bank.ts'
 
 export function lgCodeOf(prefCode: string, seq: number): string {
   return `${prefCode}${String(seq).padStart(4, '0')}`
 }
 
-/** 市区町村名（easy）を count 件 */
+/**
+ * 市区町村名（easy）を count 件。難易度 ★ は ★1 → ★2 → ★3 の繰り返しで振る
+ * （実データと同じく **全問が 1〜3 を持つ**状態を作る。どの値かは問わないテストが多いので、
+ * 偏りのない既定として循環させる）。特定の分布が要るテストは withStars() で上書きする
+ */
 export function makeEasy(prefCode: string, pref: string, count: number): Question[] {
   return Array.from({ length: count }, (_, i) => {
     const seq = i + 1
@@ -20,8 +24,17 @@ export function makeEasy(prefCode: string, pref: string, count: number): Questio
       display,
       suffix: '市',
       answer: `し${seq}`,
+      stars: ((i % 3) + 1) as Stars,
     } satisfies Question
   })
+}
+
+/**
+ * 難易度を並び順どおりに振り直す（先頭から starsList の値を当てる。足りない分は最後の値）。
+ * 「★3 が 11 件・★2 が 3 件・★1 が 1 件」のような狙った分布を作るのに使う
+ */
+export function withStars(questions: Question[], starsList: Stars[]): Question[] {
+  return questions.map((q, i) => ({ ...q, stars: starsList[i] ?? starsList[starsList.length - 1] }))
 }
 
 /** ある自治体の大字・町名（difficult）を count 件 */

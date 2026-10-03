@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DATA_VERSION } from './bank.ts'
-import { allRowNote, isAllRow, rowCounts, scoreOf } from './score.ts'
+import { allRowNote, isAllRow, rowCounts, scoreOf, starsOfRow } from './score.ts'
 
 const SET = `${DATA_VERSION}-e-12-1234`
 const SET_ALL = `${DATA_VERSION}-e-12-1234-all`
@@ -52,5 +52,20 @@ describe('isAllRow / allRowNote', () => {
     expect(allRowNote({ setId: SET, score: 80, correct: 8, total: 10 })).toBeNull()
     expect(allRowNote({ setId: SET_ALL, score: 87, correct: 20, total: 23 })).toBe('全市区町村名（23 問）')
     expect(allRowNote({ setId: SET_ALL, score: 87 })).toBe('全市区町村名')
+  })
+})
+
+describe('starsOfRow', () => {
+  it('setId の -s{n} から難易度を読む（絞っていなければ null）', () => {
+    expect(starsOfRow({ setId: 'abr20260925r2-e-12-1234-s3' })).toBe(3)
+    expect(starsOfRow({ setId: 'abr20260925r2-e-12-1234-all-s1' })).toBe(1)
+    expect(starsOfRow({ setId: 'abr20260925r2-e-12-1234' })).toBeNull()
+    expect(starsOfRow({ setId: 'abr20260925r2-e-12-1234-all' })).toBeNull()
+    expect(starsOfRow({ setId: 'abr20260925r2-d-12-1234' })).toBeNull()
+  })
+
+  it('setId が読めない古い行は null（注記を出さない）', () => {
+    expect(starsOfRow({ setId: 'こわれた-id' })).toBeNull()
+    expect(starsOfRow({ setId: '' })).toBeNull()
   })
 })

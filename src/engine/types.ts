@@ -27,13 +27,24 @@ export interface Question {
   suffix?: string
   /** 正解（ひらがなの幹）。例 'そうさ'、'はなてんひがし' */
   answer: string
+  /**
+   * 難易度 ★1〜3。**easy（市区町村名）だけが持つ**。difficult（大字・町名）には無い。
+   * 付け方は data/build_stars.py（A1 人口 × B2 音訓分解 × B4 漢字の難しさ）が正本で、
+   * meta.json の starsNote にも軸の要約が入る。版の古い問題バンクには無いので任意
+   */
+  stars?: Stars
 }
+
+/** 難易度。★ の数（1 = やさしい／3 = むずかしい）。市区町村名の出題だけが持つ */
+export type Stars = 1 | 2 | 3
 
 /** meta.json */
 export interface BankMeta {
   dataVersion: string // 'abr20260925'
   generatedAt: string // ISO 8601
   source: string // 出典の一文
+  /** 難易度 stars の付け方（軸と出典）の一文。stars を入れる前の版には無い */
+  starsNote?: string
   prefectures: { code: string; name: string; easyCount: number; difficultCount: number }[]
   /**
    * 市区町村の一覧（全 1,741 件）。easy.json は r2 以降かなだけの名前を除くので、こちらの方が多い。
@@ -44,7 +55,7 @@ export interface BankMeta {
 }
 
 export interface QuestionSet {
-  setId: string // `${dataVersion}-${mode}-${scope}-${seed}`（全市区町村名なら末尾に `-all`）
+  setId: string // `${dataVersion}-${mode}-${scope}-${seed}`（全市区町村名なら `-all`、難易度を絞れば `-s{1,2,3}`）
   dataVersion: string
   mode: Mode
   /** '00' = 全国、2 桁 = 都道府県、3 文字 = 都道府県の中の地域（src/geo/subregions.ts）、6 桁 = 市区町村 */
@@ -58,6 +69,11 @@ export interface QuestionSet {
    * 順位表は 10 問とは別区分（RankingMode の 'all'）
    */
   all: boolean
+  /**
+   * 難易度の絞り込み。null ＝ 全部（絞っていない）。
+   * 市区町村名（'e'）のときだけ値が入り、母集団を `q.stars === stars` で絞ってある
+   */
+  stars: Stars | null
   questions: Question[] // 出題順。all でなければ QUESTIONS_PER_SET 件
 }
 

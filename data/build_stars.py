@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
-"""市区町村名（mode e）の難易度 ★（1〜3）を機械的に付ける試作（Issue #33・外部ライブラリ不使用）。
+"""市区町村名（mode e）の難易度 ★（1〜3）を機械的に付ける（Issue #33・外部ライブラリ不使用）。
 
 Issue #33 の軸のうち **A1（人口による知名度）**・**B2（漢字の音訓辞書で公式読みを
 分解できるか）**・**B4（漢字の難しさ）** の 3 軸を実装し、B2×A1 の表で素点を出して
-B4 で加算する。まだ `build_questions.py` には組み込まない
-（`easy.json` に `stars` を書かない）試作。
+B4 で加算する。
+
+**この判定が easy.json の `stars` の正本。** `build_questions.py` が judge_all() を
+呼んで各問に書き込む（＝ここを直すと問題バンクの難易度が変わるので、変更後は
+`npm run build:questions` で easy.json を作り直す）。このスクリプト単体では
+easy.json を書き換えず、分布・クロス集計・アンカーの検算だけを出す。
 
 入力
     public/questions/{DATA_VERSION}/easy.json … display / answer / lgCode / pref

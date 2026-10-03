@@ -24,6 +24,7 @@
 | `.pref-grid` / `.pref-grid__item` / `.is-selected` | 都道府県の選択グリッド |
 | `.mode-switch` / `.mode-switch__item` / `.is-selected` | 科目（市区町村名 / 町名も）・問題数・時間制限の切替。`.switch-row` で 2 つを 1 行に並べられる |
 | `.mode-switch--compact` | `.mode-switch` の修飾子。選択肢が 4〜5 個ある切替（地域: 全道｜道央｜道南｜道北｜道東）用に、狭い画面で左右余白と文字（`--fs-sm`）を 1 段落とす |
+| `.mode-switch--fit` | `.mode-switch` の修飾子。選択肢ごとに幅が違う切替（難易度: 全部｜★｜★★｜★★★）用に、項目を等分せず中身の幅で置く。`.switch-row` の中では相手に残りの幅を譲る |
 | `.review` / `.review__row` | 答案の見直し（1 行 1 問） |
 | `.ranking` / `.ranking__row` / `.is-me` | 順位表 |
 | `.footer-credit` | 出典表記 |
@@ -109,3 +110,19 @@ Dela Gothic One は字幅を詰めた極太デザインで、1.4rem 前後の漢
 
 - `src/components/HiraganaInput.tsx` が `.answer-input` ＋ `.answer-hint` を出す。値は常にひらがな＋「ー」
 - 変換規則は `src/components/hiragana.ts`（`splitHiragana` / `toHiraganaStrict`）。`wanakana` の `toKana({ IMEMode: 'toHiragana' })` を使う
+
+## v1 追加（2026-10-03 / 難易度 ★）
+
+| クラス | 役割 |
+|---|---|
+| `.stars` | 難易度の ★（★ / ★★ / ★★★）。蛍光黄を鉛筆色で細く縁取ってクリーム地でも沈まないようにしたもの |
+| `.q-number__text` | `.q-number` の中の問番号そのもの（「問三 / 十」）。★ と同じ行に並べるための入れ物で、装飾は `.q-number` 側 |
+| `.q-number__stars` | 問番号の横に添える `.stars`（小さく・下寄せ） |
+| `.review__stars` | 答案の見直しの行で出題の後ろに添える `.stars` |
+
+実装上の約束:
+
+- **難易度は ★ の「数」で示す。** 色（蛍光黄）は補助で、色が見えなくても ★ の数で区別できる（○× と同じ考え）。
+- **記号そのものは読み上げさせない。** `.stars` を単独で置くときは `role="img"` ＋ `aria-label="難易度 3"` にし、
+  ボタンの中に置くときは `aria-hidden="true"` にしてボタン側の `aria-label` に任せる。
+- ★ を持つのは**市区町村名の問だけ**。町名（`d`）の問には `.stars` を出さない。

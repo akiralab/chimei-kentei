@@ -294,6 +294,36 @@ describe('全市区町村名', () => {
     expect(rows()[0].querySelector('.ranking__score')?.textContent).toBe('87点［全市区町村名（23 問）］')
   })
 
+  it('難易度で絞ったセットは帯と答案に ★ が出て、順位表の行に「★★★のみ」と添える', async () => {
+    // フィクスチャの makeEasy は ★ を 1→2→3 で循環させるので、千葉県の ★3 は 8 件。
+    // 10 問は組めないが全市区町村名なら組める（＝実データの鳥取県 × ★3 と同じ形）
+    const setStars = `${DATA_VERSION}-e-12-1234-all-s3`
+    const stars3 = EASY_12.filter((q) => q.stars === 3)
+    writeAnswerSheet(setStars, answerAll(5, stars3.length))
+    put(setStars, [
+      entry({ entryId: 'a', setId: setStars, nickname: 'たろう', score: 75, answers: answerAll(6, stars3.length) }),
+    ])
+    render(<Result setId={setStars} />)
+
+    await waitFor(() => {
+      expect(document.querySelectorAll('.review__row')).toHaveLength(stars3.length)
+    })
+    // 帯（答案の見出し）に難易度
+    expect(document.querySelector('.paper__subtitle')?.textContent).toContain('難易度: ★★★')
+    // 答案の各行に ★（出題したのは ★3 だけなので全行 ★★★）
+    const marks = [...document.querySelectorAll('.review__row .stars')]
+    expect(marks).toHaveLength(stars3.length)
+    expect(marks.every((m) => m.textContent === '★★★')).toBe(true)
+    expect(marks[0].getAttribute('aria-label')).toBe('難易度 3')
+    // 順位表は難易度で分けないので、同じ一覧に注記付きで並ぶ
+    await waitFor(() => {
+      expect(rows()).toHaveLength(1)
+    })
+    expect(rows()[0].querySelector('.ranking__score')?.textContent).toBe(
+      `75点［全市区町村名（${String(stars3.length)} 問）］［★★★のみ］`,
+    )
+  })
+
   it('10 問のセットでは従来どおり正答数 × 10 点で、正解数も添える', async () => {
     putThree()
     render(<Result setId={SET} />)

@@ -3,10 +3,11 @@
  * fetch 層は BankSource として差し替え可能（テストではフィクスチャを注入する）。
  */
 import { subregionById, subregionOf } from '../geo/subregions.ts'
-import type { BankMeta, Mode, Question, QuestionSet } from './types.ts'
+import type { BankMeta, Mode, Question, QuestionSet, Stars } from './types.ts'
 import { MIN_POOL_FOR_SCOPE, QUESTIONS_PER_SET } from './types.ts'
 import { modeName } from './modes.ts'
-import { SCOPE_NATIONWIDE, buildSetId, canBeAll } from './setId.ts'
+import { starsMark } from './stars.ts'
+import { SCOPE_NATIONWIDE, buildSetId, canBeAll, canHaveStars } from './setId.ts'
 import { sampleQuestions } from './sampler.ts'
 
 /**
@@ -178,8 +179,28 @@ function poolRangeName(scope: string, questions: Question[]): string {
 }
 
 /**
+ * 難易度で母集団を絞る。★ を持つのは市区町村名（easy）だけなので、
+ * stars が null のときは何もしない。
+ *
+ * **絞った結果が足りなくても範囲を広げない。**「★3 を選んだのに ★1 が出た」は
+ * 「道東を選んだのに全道が出た」と同じく選んだ条件に反するため（Issue #34 と同じ理屈）
+ */
+function filterByStars(questions: Question[], stars: Stars | null): Question[] {
+  if (stars === null) return questions
+  return questions.filter((q) => q.stars === stars)
+}
+
+/** 足りないときの案内に出す条件名。「市区町村名」または「市区町村名（★★★）」 */
+function poolConditionName(mode: Mode, stars: Stars | null): string {
+  return stars === null ? modeName(mode) : `${modeName(mode)}（${starsMark(stars)}）`
+}
+
+/**
  * 問題セットを組み立てる。all なら「その範囲の市区町村名を全部」（seed は出題順のシャッフルだけに効く）、
  * そうでなければ母集団から QUESTIONS_PER_SET 件を決定論的に抽出する。
+ *
+ * stars を渡すと母集団をその難易度だけに絞る（市区町村名のみ。all でも効いて
+ * 「その範囲の ★3 を全部」になる）。絞って足りなくても範囲は広げず、案内して止める。
  */
 export async function buildQuestionSet(
   mode: Mode,
@@ -187,14 +208,21 @@ export async function buildQuestionSet(
   seed: string,
   source: BankSource = defaultSource(),
   all = false,
+  stars: Stars | null = null,
 ): Promise<QuestionSet> {
+  if (stars !== null && !canHaveStars(mode)) {
+    throw new Error('難易度は市区町村名のときだけ選べます。')
+  }
   if (all) {
     if (!canBeAll(mode, scope)) {
       throw new Error('全市区町村名は、市区町村名で都道府県か地域を選んだときだけ出題できます。')
     }
-    const setId = buildSetId(DATA_VERSION, mode, scope, seed, true)
-    const questions = await municipalityQuestions(scope, source)
-    if (questions.length === 0) throw new Error('この範囲には出題できる市区町村がありませんでした。')
+    const setId = buildSetId(DATA_VERSION, mode, scope, seed, true, stars ?? undefined)
+    const questions = filterByStars(await municipalityQuestions(scope, source), stars)
+    if (questions.length === 0) {
+      const what = stars === null ? '市区町村' : `${starsMark(stars)}の市区町村`
+      throw new Error(`この範囲には出題できる${what}がありませんでした。`)
+    }
     return {
       setId,
       dataVersion: DATA_VERSION,
@@ -203,20 +231,24 @@ export async function buildQuestionSet(
       seed,
       widened: false,
       all: true,
+      stars,
       questions: sampleQuestions(questions, setId, questions.length),
     }
   }
-  const setId = buildSetId(DATA_VERSION, mode, scope, seed)
+  const setId = buildSetId(DATA_VERSION, mode, scope, seed, false, stars ?? undefined)
   const pool = await buildPool(mode, scope, source)
   if (pool.questions.length === 0) {
     throw new Error('この範囲には出題できる地名がありませんでした。')
   }
-  // 地域は都道府県へ広げないので、ここで初めて「10 問に足りない」が起こり得る（例 島しょ × 市区町村名 9 件）
-  if (pool.questions.length < QUESTIONS_PER_SET) {
+  // 難易度で絞るのは広げ判定（buildPool）の **あと**。絞って足りなくても広げない
+  const narrowed = filterByStars(pool.questions, stars)
+  // 地域は都道府県へ広げないので、ここで初めて「10 問に足りない」が起こり得る（例 島しょ × 市区町村名 9 件）。
+  // 難易度で絞ったときも同じ案内に乗せる（例 鳥取県 × ★★★ は 4 件）
+  if (narrowed.length < QUESTIONS_PER_SET) {
     const hint = mode === 'e' ? '全市区町村名で解いてください。' : '範囲を広げてください。'
     throw new Error(
-      `${poolRangeName(scope, pool.questions)}の${modeName(mode)}は ${pool.questions.length} 件しかないので、` +
-        `${QUESTIONS_PER_SET} 問を組めません。${hint}`,
+      `${poolRangeName(pool.scope, pool.questions)}の${poolConditionName(mode, stars)}は ` +
+        `${narrowed.length} 件しかないので、${QUESTIONS_PER_SET} 問を組めません。${hint}`,
     )
   }
   return {
@@ -227,6 +259,7 @@ export async function buildQuestionSet(
     seed,
     widened: pool.widened,
     all: false,
-    questions: sampleQuestions(pool.questions, setId, QUESTIONS_PER_SET),
+    stars,
+    questions: sampleQuestions(narrowed, setId, QUESTIONS_PER_SET),
   }
 }

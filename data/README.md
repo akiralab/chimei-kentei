@@ -7,20 +7,29 @@
 ```sh
 npm run build:questions                      # = python3 data/build_questions.py
 python3 data/build_questions.py --abr-dir <dir> --out-dir <dir>   # 入出力を差し替える場合
+python3 data/build_questions.py --kanjidic <path> --download      # 難易度に使う KANJIDIC2 の場所／取得
 python3 -m unittest discover -s data -p 'test_*.py'               # 前処理ルールの単体テスト
 ```
+
+**難易度 ★ を付けるため、生成には KANJIDIC2 と人口データが要る**（→ [難易度 stars](#難易度-stars)）。
+どちらかが無いと直し方を添えて止まる（黙って `stars` 無しの JSON を書くことはしない）。
 
 ## 入力（`~/workspace/abr-data/processed/`）
 
 - `abr_city_reading.csv`（1,892 行）… 市区町村＋政令市の区。`ward` 非空＝政令市の区
 - `abr_name_reading.csv`（441,539 行）… `level` = 市区町村 / 大字・町 / 小字
+- `public/geo/municipalities.json`（`build_geo.py` の出力）… 難易度 A1 の人口
+- KANJIDIC2（既定 `~/workspace/abr-data/raw/kanjidic2/kanjidic2.xml.gz`）… 難易度 B2・B4 の音訓と配当学年。
+  **リポジトリには含めない。** 無ければ `--download` か `curl -A 'Mozilla/5.0' -L -o <cache> https://www.edrdg.org/kanjidic/kanjidic2.xml.gz`
 
 ## 出力（型は `src/engine/types.ts` の `Question` / `BankMeta`。`ensure_ascii=False`・インデントなし・キー順は宣言順）
 
 - `easy.json` … 市区町村 **1,700 件**（id 昇順）。全 1,741 件から、ルール e で幹に漢字が 1 字も無い 41 件を除いたもの。
-  都道府県別の最小は 富山県・福井県・香川県の各 15 件（1 セット 10 問に対して十分）
+  都道府県別の最小は 富山県・福井県・香川県の各 15 件（1 セット 10 問に対して十分）。
+  各問の末尾に難易度 `stars`（1〜3）が付く（→ [難易度 stars](#難易度-stars)）
 - `difficult/{prefCode}.json` … 大字・町 107,681 件を 47 都道府県に分割（id 昇順。最小 沖縄県 665／最大 愛知県 6,743）
-- `meta.json` … dataVersion / generatedAt / source / prefectures[47] / cities[1,741]。
+- `meta.json` … dataVersion / generatedAt / source / starsNote / prefectures[47] / cities[1,741]。
+  `starsNote` は難易度の軸を 1 文で書いたもの（JSON だけ見ても出自を辿れるようにするための覚え書き）。
   `prefectures[].easyCount` は**除外後**の件数。`cities` は**除外前の全 1,741 件**を残す
   （範囲選択の市区町村検索と difficult の絞り込みに使うため。easy の出題集合とは一致しない）
 
@@ -38,6 +47,20 @@ python3 -m unittest discover -s data -p 'test_*.py'               # 前処理ル
     かなだけで書かれた 41 件は、読む問題にならず見ただけで得点できてしまうので除外する（Issue #14）。
     「鎌ケ谷」「ふじみ野」「南アルプス」のように漢字とかなが混ざるものは読みとして成立するので残す。
 - **f** 丁目は対応表で分離済みのため何もしない。**g** `status_flg` は対応表に無いため何もしない。
+
+## 難易度 stars
+
+`easy.json` の各問に付く ★1〜3。**判定の正本は [`build_stars.py`](build_stars.py)**（Issue #33 / PR #38）で、
+`build_questions.py` は `judge_all()` を呼んで結果を書き込むだけ。**軸・表・閾値はここにも写さない**
+（写すと必ず食い違う）。要点だけ:
+
+- A1 人口 × B2 漢字の音訓で公式の読みを分解できるか × B4 幹の中で最も難しい漢字、の 3 軸。
+  B2×A1 の素点に B4 を足して ★3 で打ち切る
+- **A1 の分位点は渡した問題全体から取る**ので、`judge_all()` には **easy 全件をまとめて渡す**こと。
+  都道府県ごとに呼ぶと帯の境界がずれる
+- 既定（`--major-exempt` なし）での分布は ★ 566 / ★★ 601 / ★★★ 533 件
+- `build_stars.py` を単体で動かすと easy.json は書き換えず、分布・クロス集計・アンカーの検算だけを出す。
+  **軸を変えたら `npm run build:questions` で easy.json を作り直す**
 - 同一 `lgCode`・同一 `display` の重複は、`answer` が一致すれば 1 件に集約（1,715 件を除外）。
   `answer` が割れて正解を一意にできない 115 display（242 行）はキーごと全件落とす。
 

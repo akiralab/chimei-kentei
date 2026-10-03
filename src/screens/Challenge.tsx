@@ -1,5 +1,6 @@
-import type { Mode } from '../engine/types.ts'
+import type { Mode, Stars } from '../engine/types.ts'
 import { modeName } from '../engine/modes.ts'
+import { starsHeaderNote } from '../engine/stars.ts'
 import { isValidNickname } from '../engine/ranking.ts'
 import { TIME_LIMIT_CHOICES, useTimeLimit } from '../hooks/useTimeLimit.ts'
 
@@ -15,6 +16,7 @@ export default function Challenge({
   mode,
   total,
   all,
+  stars,
   widened,
   nickname,
   onNicknameChange,
@@ -25,6 +27,8 @@ export default function Challenge({
   total: number
   /** 全市区町村名（その都道府県の市区町村を全部） */
   all: boolean
+  /** 難易度の絞り込み。null ＝ 絞っていない（そのときは帯に出さない） */
+  stars: Stars | null
   widened: boolean
   nickname: string
   onNicknameChange: (value: string) => void
@@ -53,8 +57,9 @@ export default function Challenge({
         <h1 className="paper__title cover__title">挑戦状</h1>
         <p className="paper__subtitle cover__subtitle">地名読み検定 ― この地名、読めますか</p>
         <p className="paper__subtitle">
-          範囲: {rangeLabel} ／ 科目: {modeName(mode)} ／ 問題数: {all ? `全市区町村名（${total} 問）` : `${total} 問`} ／
-          制限: {timeLimitLabel}
+          範囲: {rangeLabel} ／ 科目: {modeName(mode)}
+          {stars !== null && ` ／ ${starsHeaderNote(stars)}`} ／ 問題数:{' '}
+          {all ? `全市区町村名（${total} 問）` : `${total} 問`} ／ 制限: {timeLimitLabel}
         </p>
       </div>
 
