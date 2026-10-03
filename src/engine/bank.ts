@@ -154,54 +154,22 @@ export async function buildPool(mode: Mode, scope: string, source: BankSource = 
   return { scope: prefCode, questions: wider, widened: true }
 }
 
-/** 接尾辞ごとの読みの末尾（data/build_questions.py のルール b と同じ。長い方から当てる） */
-const SUFFIX_KANA: Record<string, string[]> = { 市: ['し'], 区: ['く'], 町: ['ちょう', 'まち'], 村: ['そん', 'むら'] }
-
 /**
- * meta.cities の 1 件を easy と同じ形の Question にする（接尾辞と読みの末尾を外す）。
- * easy.json に無い市区町村（r2 で除いた、かなだけの名前）を「全市区町村名」で出すために使う。
- * 接尾辞か読みの末尾が合わなければ null（ABR 由来のデータでは起きない）
- */
-export function questionFromCity(city: BankMeta['cities'][number], pref: string): Question | null {
-  const suffix = city.name.slice(-1)
-  const display = city.name.slice(0, -1)
-  const tails = SUFFIX_KANA[suffix]
-  if (!tails || display === '') return null
-  const tail = tails.find((t) => city.kana.endsWith(t))
-  if (tail === undefined || city.kana.length <= tail.length) return null
-  return {
-    id: `c:${city.lgCode}:${display}`,
-    prefCode: city.prefCode,
-    pref,
-    lgCode: city.lgCode,
-    display,
-    suffix,
-    answer: city.kana.slice(0, -tail.length),
-  }
-}
-
-/**
- * ある範囲の市区町村名を **全部**（easy.json の件に、meta.cities にしか無い件を足す）。
+ * ある範囲の市区町村名を **全部**。母集団は **easy.json にあるものだけ**で、
+ * 問題バンクが除いた市区町村（ひらがなの さいたま・ニセコ・むかわ など）は出さない
+ * ＝「問題バンクで除外した市区町村はクイズに出さない」に揃える。
+ *
  * scope は 2 桁（都道府県）か 3 文字（その中の地域）。並びは lgCode 順。
  * 母集団なので出題順はここでは決めない
  */
 export async function municipalityQuestions(scope: string, source: BankSource = defaultSource()): Promise<Question[]> {
   const prefCode = scope.slice(0, 2)
-  const sub = scope.length === 3 ? subregionById(scope) : undefined
-  if (scope.length === 3 && !sub) throw new Error(`地域コードがありません: ${scope}`)
+  if (scope.length === 3 && !subregionById(scope)) throw new Error(`地域コードがありません: ${scope}`)
   const [easy, meta] = await Promise.all([source.easy(), source.meta()])
-  const pref = meta.prefectures.find((p) => p.code === prefCode)
-  if (!pref) throw new Error(`都道府県コードが問題バンクにありません: ${prefCode}`)
-  const inScope = (lgCode: string): boolean => (sub ? subregionOf(lgCode)?.id === sub.id : true)
-  const inBank = easy.filter((q) => q.prefCode === prefCode && inScope(q.lgCode))
-  const have = new Set(inBank.map((q) => q.lgCode))
-  const extra: Question[] = []
-  for (const city of meta.cities) {
-    if (city.prefCode !== prefCode || have.has(city.lgCode) || !inScope(city.lgCode)) continue
-    const q = questionFromCity(city, pref.name)
-    if (q) extra.push(q)
+  if (!meta.prefectures.some((p) => p.code === prefCode)) {
+    throw new Error(`都道府県コードが問題バンクにありません: ${prefCode}`)
   }
-  return [...inBank, ...extra].sort((a, b) => (a.lgCode < b.lgCode ? -1 : a.lgCode > b.lgCode ? 1 : 0))
+  return easy.filter(scopeMatcher(scope)).sort((a, b) => (a.lgCode < b.lgCode ? -1 : a.lgCode > b.lgCode ? 1 : 0))
 }
 
 /** 母集団が足りないときの案内に使う範囲名。地域は「島しょ」、都道府県は出題の pref から */

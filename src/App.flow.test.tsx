@@ -79,7 +79,12 @@ const META: BankMeta = {
     { code: '12', name: '千葉県', easyCount: EASY_12.length, difficultCount: DIFFICULT_12.length },
     { code: '13', name: '東京都', easyCount: EASY_13.length, difficultCount: DIFFICULT_13.length },
   ],
-  cities: EASY_ALL.map((q) => ({ lgCode: q.lgCode, prefCode: q.prefCode, name: q.display, kana: q.answer })),
+  cities: [
+    ...EASY_ALL.map((q) => ({ lgCode: q.lgCode, prefCode: q.prefCode, name: q.display, kana: q.answer })),
+    // 問題バンクが除いた市区町村（実データの さいたま・ニセコ・むかわ の代わり）。
+    // 市区町村の数には入るが、問題にはならない ＝ 全市区町村名でも出題されない
+    { lgCode: '129901', prefCode: '12', name: 'さいたま市', kana: 'さいたまし' },
+  ],
 }
 
 /** 画面側は fetch 経由で読むので、同じ中身を直接返す BankSource も用意して期待値を組み立てる */
@@ -363,7 +368,7 @@ describe('範囲・科目', () => {
     expect(hash()).toMatch(new RegExp(`^#/q/${DATA_VERSION}-d-12-\\d{4}$`))
   })
 
-  it('都道府県を選ぶと「全15市町村」が出て、全市区町村名で始めると -all のセットになる', async () => {
+  it('都道府県を選ぶと市区町村の数が出て、全市区町村名（問題バンクの件数）で -all のセットになる', async () => {
     await openSelect()
 
     // 全国のあいだは「全市区町村名」を選べない（都道府県ごとの出題なので）
@@ -371,8 +376,9 @@ describe('範囲・科目', () => {
     expect(screen.queryByText(/全15市町村/)).toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: '千葉県' }))
-    // フィクスチャの千葉県は meta.cities が 15 件。見出し行の余白に件数が出る
-    expect(el('.jp-map__note').textContent).toBe('千葉県 全15市町村')
+    // 見出し行の余白には **市区町村の数**（meta.cities の 16 件）が出る。
+    // 一方で問題数は問題バンクの件数（easy の 15 件）— 除外した「さいたま市」は出題しない
+    expect(el('.jp-map__note').textContent).toBe('千葉県 全16市町村')
     const allButton = screen.getByRole('button', { name: '問題数: 全市区町村名（15 問）' })
     expect(allButton).toBeEnabled()
     fireEvent.click(allButton)
@@ -393,6 +399,7 @@ describe('範囲・科目', () => {
     // 10 問を超えるので問番号は算用数字（fake timers なので waitFor ではなく settle で流す）
     await settle()
     expect(el('.q-number').textContent).toBe('問1 / 15')
+    expect(all('.q-kanji').every((e) => !e.textContent?.includes('さいたま'))).toBe(true)
   })
 
   // ---- 地域（北海道 4・東京都 3。Issue #34） ----

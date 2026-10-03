@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { BankMeta, Mode } from '../engine/types.ts'
 import { QUESTIONS_PER_SET } from '../engine/types.ts'
-import { DATA_VERSION, loadMeta } from '../engine/bank.ts'
+import { DATA_VERSION, loadEasy, loadMeta } from '../engine/bank.ts'
 import { MODES, MODE_LABELS, modeName } from '../engine/modes.ts'
 import { scopeLabel } from '../engine/scope.ts'
 import { SCOPE_NATIONWIDE, buildSetId, canBeAll, randomSeed } from '../engine/setId.ts'
@@ -13,8 +13,9 @@ import { subregionById, subregionOf, subregionsOf, wholePrefLabel } from '../geo
 import RegionPicker from '../components/RegionPicker.tsx'
 
 /**
- * 「全54市町村」の添え書き。政令市の区は市にまとめてあるので、区が混じるのは東京都（特別区）だけ。
- * 件数は問題バンクではなく meta.cities（全市区町村）で数える。全市区町村名モードもこの集合を出す。
+ * 地図の見出しに出す「全54市町村」。政令市の区は市にまとめてあるので、区が混じるのは
+ * 東京都（特別区）だけ。これは **市区町村の数** なので meta.cities で数える
+ * （問題数ではない。全市区町村名が出すのは問題バンクにある easy の件数 = easyCount）。
  * scope は 2 桁（都道府県）でも 3 文字（地域。北海道 4・東京都 3）でもよい
  */
 function municipalityCount(meta: BankMeta, scope: string): { n: number; label: string; unit: string } {
@@ -37,6 +38,12 @@ export default function Select() {
   // 地図（地方 → 都道府県の 2 段階）。読めなくても RegionPicker がボタングリッドで成立させる
   const [japan, setJapan] = useState<PrefectureCollection | null>(null)
   const [mapLoading, setMapLoading] = useState(true)
+  /**
+   * 全市区町村名の問題数。範囲（都道府県コード・地域 ID）→ easy.json の件数。
+   * 市区町村の数ではなく **問題バンクにある件数** を出す（ひらがなの地名などは除かれている）。
+   * easy.json は出題でどのみち読むので、ここで先に読んでもキャッシュに乗るだけ
+   */
+  const [easyCount, setEasyCount] = useState<Map<string, number> | null>(null)
 
   useEffect(() => {
     let alive = true
@@ -46,6 +53,28 @@ export default function Select() {
       })
       .catch((e: unknown) => {
         if (alive) setError(e instanceof Error ? e.message : String(e))
+      })
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  // 全市区町村名の件数。読めなくても範囲選択は成立する（件数が出ないだけ）
+  useEffect(() => {
+    let alive = true
+    loadEasy()
+      .then((easy) => {
+        if (!alive) return
+        const counts = new Map<string, number>()
+        for (const q of easy) {
+          counts.set(q.prefCode, (counts.get(q.prefCode) ?? 0) + 1)
+          const sub = subregionOf(q.lgCode)
+          if (sub) counts.set(sub.id, (counts.get(sub.id) ?? 0) + 1)
+        }
+        setEasyCount(counts)
+      })
+      .catch(() => {
+        /* 出題時に同じ読み込みで失敗が分かるので、ここでは黙って件数を出さない */
       })
     return () => {
       alive = false
@@ -83,6 +112,8 @@ export default function Select() {
     () => (meta && selectedPref ? municipalityCount(meta, scope) : null),
     [meta, selectedPref, scope],
   )
+  /** 全市区町村名の問題数（＝その範囲の easy の件数）。読めていなければ null */
+  const allCount = nationwide ? null : (easyCount?.get(scope) ?? null)
   /**
    * 全国 × 町名は母集団を組めない（町名は都道府県ごとのファイル）。
    * 科目の切替自体は全国のままでも押せるようにし、「始める」だけを止めて案内を出す。
@@ -94,7 +125,7 @@ export default function Select() {
    * 10 問を組めない範囲（島しょ × 市区町村名の 9 件だけ）。
    * 地域は都道府県へ広げない仕様（Issue #34）なので、ここで全市区町村名に固定する
    */
-  const tooFewForSet = mode === 'e' && count !== null && count.n < QUESTIONS_PER_SET
+  const tooFewForSet = mode === 'e' && allCount !== null && allCount < QUESTIONS_PER_SET
   const allSelected = allAvailable && (all || tooFewForSet)
 
   /** 地図で光らせる県。地域を選んでいても親の都道府県を光らせる */
@@ -106,7 +137,7 @@ export default function Select() {
   const timeLimitLabel = shortLimit(
     TIME_LIMIT_CHOICES.find((c) => c.value === timeLimitMs)?.label ?? TIME_LIMIT_CHOICES[0].label,
   )
-  const countLabel = allSelected && count ? `全 ${count.n} 問` : `${QUESTIONS_PER_SET} 問`
+  const countLabel = allSelected && allCount !== null ? `全 ${allCount} 問` : `${QUESTIONS_PER_SET} 問`
 
   const choosePref = (prefCode: string) => setScope(prefCode)
   const chooseNationwide = () => {
@@ -241,16 +272,16 @@ export default function Select() {
             type="button"
             className={allSelected ? 'mode-switch__item is-selected' : 'mode-switch__item'}
             aria-pressed={allSelected}
-            aria-label={count ? `問題数: 全市区町村名（${count.n} 問）` : '問題数: 全市区町村名'}
+            aria-label={allCount === null ? '問題数: 全市区町村名' : `問題数: 全市区町村名（${allCount} 問）`}
             title={allAvailable ? undefined : '市区町村名で都道府県か地域を選ぶと選べます'}
             disabled={!allAvailable}
             onClick={() => setAll(true)}
           >
             <span className="mode-switch__full" aria-hidden="true">
-              全市区町村名{count && `（${count.n}問）`}
+              全市区町村名{allCount !== null && `（${allCount}問）`}
             </span>
             <span className="mode-switch__abbr" aria-hidden="true">
-              全部{count && `（${count.n}）`}
+              全部{allCount !== null && `（${allCount}）`}
             </span>
           </button>
         </div>

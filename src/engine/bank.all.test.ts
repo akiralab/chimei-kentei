@@ -1,43 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import type { BankMeta, Question } from './types.ts'
+import type { BankMeta } from './types.ts'
 import type { BankSource } from './bank.ts'
-import { DATA_VERSION, buildQuestionSet, municipalityQuestions, questionFromCity } from './bank.ts'
+import { DATA_VERSION, buildQuestionSet, municipalityQuestions } from './bank.ts'
 import { EASY_12, EASY_13, META, fixtureSource } from './__fixtures__/questions.ts'
 
-describe('questionFromCity', () => {
-  it('接尾辞と読みの末尾を外して easy と同じ形にする', () => {
-    expect(questionFromCity({ lgCode: '122165', prefCode: '12', name: '匝瑳市', kana: 'そうさし' }, '千葉県')).toEqual({
-      id: 'c:122165:匝瑳',
-      prefCode: '12',
-      pref: '千葉県',
-      lgCode: '122165',
-      display: '匝瑳',
-      suffix: '市',
-      answer: 'そうさ',
-    })
-    expect(questionFromCity({ lgCode: '131016', prefCode: '13', name: '千代田区', kana: 'ちよだく' }, '東京都')?.answer).toBe(
-      'ちよだ',
-    )
-    expect(questionFromCity({ lgCode: '473481', prefCode: '47', name: '読谷村', kana: 'よみたんそん' }, '沖縄県')?.answer).toBe(
-      'よみたん',
-    )
-    // 町は ちょう / まち の両方。長い方（ちょう）から当てる
-    expect(questionFromCity({ lgCode: '414411', prefCode: '41', name: '大町町', kana: 'おおまちちょう' }, '佐賀県')?.answer).toBe(
-      'おおまち',
-    )
-    expect(questionFromCity({ lgCode: '082201', prefCode: '08', name: 'つくば市', kana: 'つくばし' }, '茨城県')?.display).toBe(
-      'つくば',
-    )
-  })
-
-  it('接尾辞や読みの末尾が合わなければ null', () => {
-    expect(questionFromCity({ lgCode: '000001', prefCode: '00', name: '千市1', kana: 'し1' }, 'x')).toBeNull()
-    expect(questionFromCity({ lgCode: '000002', prefCode: '00', name: '謎村', kana: 'なぞ' }, 'x')).toBeNull()
-    expect(questionFromCity({ lgCode: '000003', prefCode: '00', name: '市', kana: 'し' }, 'x')).toBeNull()
-  })
-})
-
-/** フィクスチャの千葉県（easy 25 件）に、easy.json に無い市区町村（r2 で除いた かなだけの名前の想定）を 2 件足す */
+/**
+ * フィクスチャの meta.cities に「easy.json には無い市区町村」を 2 件足す。
+ * 実データでいう さいたま・ニセコ・むかわ のような、問題バンクが除いた市区町村の代わり。
+ * 全市区町村名はこれらを **出さない**（問題バンクで除外したものはクイズに出さない）
+ */
 function sourceWithExtraCities(): BankSource {
   const base = fixtureSource()
   const meta: BankMeta = {
@@ -52,34 +23,41 @@ function sourceWithExtraCities(): BankSource {
 }
 
 describe('municipalityQuestions', () => {
-  it('easy.json の件に meta.cities にしか無い件を足し、lgCode 順に並べる', async () => {
+  it('easy.json にある市区町村だけを lgCode 順に返す（meta.cities にしか無い件は出さない）', async () => {
     const qs = await municipalityQuestions('12', sourceWithExtraCities())
-    expect(qs).toHaveLength(EASY_12.length + 2)
+    expect(qs).toHaveLength(EASY_12.length)
     expect(qs.map((q) => q.lgCode)).toEqual(qs.map((q) => q.lgCode).slice().sort())
-    const extra = qs.filter((q) => q.lgCode.startsWith('1299'))
-    expect(extra.map((q) => q.display)).toEqual(['つくば', 'いすみ'])
-    expect(extra[0]).toMatchObject({ id: 'c:129901:つくば', pref: '千葉県', suffix: '市', answer: 'つくば' })
-    // easy.json にある件は問題バンクのものをそのまま使う（二重にしない）
+    expect(qs.filter((q) => q.lgCode.startsWith('1299'))).toEqual([])
+    expect(qs.some((q) => q.display === 'つくば')).toBe(false)
     expect(qs.filter((q) => q.prefCode !== '12')).toHaveLength(0)
     expect(new Set(qs.map((q) => q.id)).size).toBe(qs.length)
   })
 
-  it('東京都は easy の 5 件だけ（meta.cities に余分が無い）', async () => {
+  it('東京都は easy の 5 件だけ', async () => {
     const qs = await municipalityQuestions('13', sourceWithExtraCities())
     expect(qs).toHaveLength(EASY_13.length)
+  })
+
+  it('問題バンクに無い都道府県は読めない', async () => {
+    await expect(municipalityQuestions('47', sourceWithExtraCities())).rejects.toThrow(/都道府県コード/)
+  })
+
+  it('実在しない地域コードは読めない', async () => {
+    await expect(municipalityQuestions('01z', sourceWithExtraCities())).rejects.toThrow(/地域コード/)
   })
 })
 
 describe('buildQuestionSet / all', () => {
   const src = sourceWithExtraCities()
 
-  it('都道府県の市区町村を全部、seed で決まる順に出す', async () => {
+  it('都道府県の市区町村名を全部、seed で決まる順に出す', async () => {
     const set = await buildQuestionSet('e', '12', '0417', src, true)
     expect(set.setId).toBe(`${DATA_VERSION}-e-12-0417-all`)
     expect(set.all).toBe(true)
     expect(set.widened).toBe(false)
-    expect(set.questions).toHaveLength(EASY_12.length + 2)
-    expect(set.questions.some((q) => q.display === 'つくば')).toBe(true)
+    expect(set.questions).toHaveLength(EASY_12.length)
+    // 問題バンクが除いた市区町村は出さない
+    expect(set.questions.some((q) => q.display === 'つくば')).toBe(false)
 
     const again = await buildQuestionSet('e', '12', '0417', src, true)
     expect(again.questions.map((q) => q.id)).toEqual(set.questions.map((q) => q.id))
@@ -101,8 +79,6 @@ describe('buildQuestionSet / all', () => {
   })
 
   it('問題バンクに無い都道府県は読めない', async () => {
-    const q: Question[] = []
-    void q
     await expect(buildQuestionSet('e', '47', '0417', src, true)).rejects.toThrow(/都道府県コード/)
   })
 })

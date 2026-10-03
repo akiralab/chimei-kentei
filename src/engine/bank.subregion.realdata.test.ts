@@ -6,6 +6,9 @@
  *  - 地域の母集団が Issue の表と一致する（市区町村名・市区町村名＋町名の両方）
  *  - 地域は都道府県へ広げない（widened が立たない）
  *  - 母集団が 10 問に足りない島しょ × 市区町村名は、10 問が組めず全市区町村名なら 9 問になる
+ *
+ * `cities`（市区町村数）と `easy`（問題バンクの件数）がずれるのは、ひらがなの地名など
+ * 問題バンクが除いた市区町村があるため。全市区町村名が出すのは easy の方
  */
 import { beforeAll, describe, expect, it } from 'vitest'
 import { subregionOf } from '../geo/subregions.ts'
@@ -63,8 +66,9 @@ describe('地域の母集団（実データ）', () => {
     expect(difficult.questions.every((q) => subregionOf(q.lgCode)?.id === row.scope)).toBe(true)
   })
 
-  it.each(EXPECTED)('$name の全市区町村名は $cities 件（easy.json に無い名前も含む）', async (row) => {
-    expect(await municipalityQuestions(row.scope, source)).toHaveLength(row.cities)
+  // 全市区町村名の母集団は easy.json にあるものだけ（問題バンクが除いた市区町村は出さない）
+  it.each(EXPECTED)('$name の全市区町村名は easy と同じ $easy 件（市区町村数 $cities ではない）', async (row) => {
+    expect(await municipalityQuestions(row.scope, source)).toHaveLength(row.easy)
   })
 
   it('地域は都道府県へ広げない（島しょは 9 件でも widened が立たない）', async () => {

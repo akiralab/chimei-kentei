@@ -35,7 +35,11 @@ export interface BankMeta {
   generatedAt: string // ISO 8601
   source: string // 出典の一文
   prefectures: { code: string; name: string; easyCount: number; difficultCount: number }[]
-  /** 市区町村の一覧（全 1,741 件）。easy.json は r2 以降かなだけの名前を除くので、こちらの方が多い */
+  /**
+   * 市区町村の一覧（全 1,741 件）。easy.json は r2 以降かなだけの名前を除くので、こちらの方が多い。
+   * 使い道は **範囲選択の「全54市町村」表示と difficult の絞り込み**。出題はしない
+   * （全市区町村名が出すのも easy.json にある件だけ）
+   */
   cities: { lgCode: string; prefCode: string; name: string; kana: string }[]
 }
 
@@ -48,7 +52,10 @@ export interface QuestionSet {
   seed: string
   /** 範囲が狭すぎて都道府県へ広げたとき true */
   widened: boolean
-  /** 全市区町村名: その範囲（都道府県か地域）の市区町村を全部（かなだけの名前も含む）。順位表の対象外 */
+  /**
+   * 全市区町村名: その範囲（都道府県か地域）の市区町村名を全部。
+   * 母集団は easy.json にあるものだけで、問題バンクが除いた市区町村は出さない
+   */
   all: boolean
   questions: Question[] // 出題順。all でなければ QUESTIONS_PER_SET 件
 }
