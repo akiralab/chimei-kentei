@@ -14,17 +14,18 @@ import { subregionById, subregionOf, subregionsOf, wholePrefLabel } from '../geo
 import RegionPicker from '../components/RegionPicker.tsx'
 
 /**
- * 地図の見出しに出す「全54市町村」。政令市の区は市にまとめてあるので、区が混じるのは
- * 東京都（特別区）だけ。これは **市区町村の数** なので meta.cities で数える
- * （問題数ではない。全市区町村名が出すのは問題バンクにある easy の件数 = easyCount）。
+ * その範囲の **市区町村の数**（「東京都・島しょは 9 市町村」）。政令市の区は市にまとめてあるので、
+ * 区が混じるのは東京都（特別区）だけ。meta.cities で数える。
+ * 使い道は「10 問を組めない理由」の一文だけで、**地図の見出しには出さない**
+ * （見出しは難易度で変わる出題数を出す。問題バンクにある easy の件数 = easyCount）。
  * scope は 2 桁（都道府県）でも 3 文字（地域。北海道 4・東京都 3）でもよい
  */
-function municipalityCount(meta: BankMeta, scope: string): { n: number; label: string; unit: string } {
+function municipalityCount(meta: BankMeta, scope: string): { n: number; unit: string } {
   const prefCode = scope.slice(0, 2)
   const sub = scope.length === 3 ? subregionById(scope) : undefined
   const cities = meta.cities.filter((c) => c.prefCode === prefCode && (!sub || subregionOf(c.lgCode)?.id === sub.id))
   const unit = cities.some((c) => c.name.endsWith('区')) ? '市区町村' : '市町村'
-  return { n: cities.length, label: `全${cities.length}${unit}`, unit }
+  return { n: cities.length, unit }
 }
 
 /** 選んでいる難易度。0 ＝ 絞らない（全部） */
@@ -183,6 +184,23 @@ export default function Select() {
     : count ? `${rangeName}は ${count.n} ${count.unit}`
     : null
 
+  /**
+   * 地図の見出し行に出す添え書き。「いまの範囲 × いまの難易度」の **問題数**（「67問」「★★★ 26問」）。
+   * 市区町村の数（meta.cities）ではなく easy.json の件数なので、難易度の切替と一緒に動く。
+   * 町名（'d'）は easy の件数ではないので出さない（都道府県なら meta の difficultCount で出せるが、
+   * 地域（3 文字 scope）では取れず、科目によって出る／出ないが混ざるため一律で出さない）
+   */
+  const noteCount = mode === 'e' && !nationwide ? countAt(starsSelected) : null
+  const selectedNote =
+    noteCount === null ? undefined
+    : starsParam === undefined ? `${noteCount}問`
+    : `${starsMark(starsParam)} ${noteCount}問`
+  /** 上の添え書きの読み上げ・ツールチップ用。記号だけでは何の数か分からないので言い換える */
+  const selectedNoteLabel =
+    noteCount === null ? undefined
+    : starsParam === undefined ? `問題数 ${noteCount} 問`
+    : `${starsMark(starsParam)} の問題数 ${noteCount} 問`
+
   const choosePref = (prefCode: string) => setScope(prefCode)
   const chooseNationwide = () => {
     setScope(SCOPE_NATIONWIDE)
@@ -237,7 +255,8 @@ export default function Select() {
         collection={japan}
         prefectures={meta.prefectures.map((p) => ({ code: p.code, name: p.name }))}
         selected={mapSelected}
-        selectedNote={count?.label}
+        selectedNote={selectedNote}
+        selectedNoteLabel={selectedNoteLabel}
         loading={mapLoading}
         nationwide={nationwide}
         onNationwide={chooseNationwide}

@@ -35,8 +35,13 @@ interface Props {
   prefectures: PrefOption[]
   /** 選択中の都道府県コード。全国なら undefined */
   selected?: string
-  /** 選択中の都道府県の添え書き（例「全54市町村」）。見出し行の余白に出す */
+  /** 選択中の都道府県の添え書き（例「67問」「★★★ 26問」）。見出し行の余白に出す */
   selectedNote?: string
+  /**
+   * 上の添え書きの読み上げ・ツールチップ用の言い換え（例「★★★ の問題数 26 問」）。
+   * 添え書きは幅が無いので記号で詰めるが、それだけでは何の数か分からないため別に名前を付ける
+   */
+  selectedNoteLabel?: string
   onSelect: (prefCode: string, name: string) => void
   /** 「全国」が選ばれているか。見出し行に全国ボタンを同居させて 1 行ぶん節約する */
   nationwide?: boolean
@@ -171,6 +176,7 @@ export default function RegionPicker({
   prefectures,
   selected,
   selectedNote,
+  selectedNoteLabel,
   onSelect,
   nationwide,
   onNationwide,
@@ -303,7 +309,13 @@ export default function RegionPicker({
       <div className="jp-map__head">
         <p className="jp-map__step">{activeRegion ? `${activeRegion.name}の都道府県をえらぶ` : '地方をえらぶ'}</p>
         {selected && selectedNote && (
-          <span className="jp-map__note">
+          <span
+            className="jp-map__note"
+            // ★ の記号は読み上げに向かないので、読み上げ名とツールチップは言い換えた方を出す
+            role={selectedNoteLabel === undefined ? undefined : 'note'}
+            aria-label={selectedNoteLabel}
+            title={selectedNoteLabel}
+          >
             {/* 県名は広い画面だけ。狭い画面は選んだセルが光っているので件数だけで足りる */}
             <span className="jp-map__note-name">{nameOf.get(selected) ?? selected} </span>
             {selectedNote}

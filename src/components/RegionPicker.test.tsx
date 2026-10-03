@@ -162,14 +162,28 @@ describe('RegionPicker', () => {
 })
 
 describe('選択中の都道府県の添え書き', () => {
-  it('selected と selectedNote が揃うと見出し行に「千葉県 全54市町村」が出る', () => {
-    renderPicker({ selected: '12', selectedNote: '全54市町村' })
+  it('selected と selectedNote が揃うと見出し行に「千葉県 54問」が出る', () => {
+    renderPicker({ selected: '12', selectedNote: '54問' })
     // 県名と件数は別の span（狭い画面では県名を CSS で隠す）なので、要素のテキスト全体で見る
-    expect(document.querySelector('.jp-map__note')?.textContent).toBe('千葉県 全54市町村')
+    expect(document.querySelector('.jp-map__note')?.textContent).toBe('千葉県 54問')
+  })
+
+  it('selectedNoteLabel があれば読み上げ名とツールチップに言い換えを出す', () => {
+    renderPicker({ selected: '12', selectedNote: '★★★ 26問', selectedNoteLabel: '★★★ の問題数 26 問' })
+
+    // ★ の記号だけでは何の数か分からないので、読み上げ名は言い換えた方を使う
+    const note = screen.getByRole('note', { name: '★★★ の問題数 26 問' })
+    expect(note.textContent).toBe('千葉県 ★★★ 26問')
+    expect(note).toHaveAttribute('title', '★★★ の問題数 26 問')
+  })
+
+  it('selectedNoteLabel が無ければ role を付けない（添え書きがそのまま読める）', () => {
+    renderPicker({ selected: '12', selectedNote: '54問' })
+    expect(document.querySelector('.jp-map__note')).not.toHaveAttribute('role')
   })
 
   it('全国（selected なし）のときは出ない', () => {
-    renderPicker({ selectedNote: '全54市町村', nationwide: true, onNationwide: vi.fn() })
+    renderPicker({ selectedNote: '54問', nationwide: true, onNationwide: vi.fn() })
     expect(document.querySelector('.jp-map__note')).toBeNull()
   })
 })

@@ -143,6 +143,21 @@ describe('登録する前の順位表', () => {
     expect(screen.getByRole('heading', { name: '今日の10問（2026-10-02）の順位表' })).toBeInTheDocument()
   })
 
+  it('難易度の `-s3` が付いても seed は 8 桁のままなので日付の見出しが出る', async () => {
+    // 表紙の「今日の10問」は全国 × ★★★（`-e-00-{日付}-s3`）。このフィクスチャは全国の ★3 が
+    // 9 件で 10 問を組めないので、同じ 8 桁シード ＋ `-s3` を全市区町村名の形で確かめる
+    // （全国 × ★★★ が出題として成立することは App.flow.test.tsx 側で通す）
+    const setId = `${DATA_VERSION}-e-12-20261002-all-s3`
+    writeAnswerSheet(setId, answerSheet())
+    putThree(setId)
+    render(<Result setId={setId} />)
+
+    await waitFor(() => {
+      expect(rows()).toHaveLength(3)
+    })
+    expect(screen.getByRole('heading', { name: '今日の10問（2026-10-02）の順位表' })).toBeInTheDocument()
+  })
+
   it('seed が 4 桁なら従来どおり「この問題の順位表」', async () => {
     putThree()
     render(<Result setId={SET} />)
