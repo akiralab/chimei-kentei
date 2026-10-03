@@ -3,7 +3,7 @@ import { isValidNickname } from '../engine/ranking.ts'
 import { SCOPE_NATIONWIDE, buildSetId, todaySeed } from '../engine/setId.ts'
 import { starsAria, starsMark } from '../engine/stars.ts'
 import { useNickname } from '../hooks/useNickname.ts'
-import { RANKING_PATH, REVIEW_PATH, SELECT_PATH, navigate, quizPath } from '../router.ts'
+import { ATLAS_PATH, RANKING_PATH, REVIEW_PATH, SELECT_PATH, navigate, quizPath } from '../router.ts'
 
 /**
  * 表紙。「小テストが配られた瞬間」の 1 枚。
@@ -95,6 +95,9 @@ export default function Cover() {
         </a>
         <a className="btn btn--ghost" href={REVIEW_PATH}>
           間違えた問題
+        </a>
+        <a className="btn btn--ghost" href={ATLAS_PATH}>
+          地名帳
         </a>
       </p>
 
