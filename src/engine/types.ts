@@ -35,7 +35,11 @@ export interface BankMeta {
   generatedAt: string // ISO 8601
   source: string // 出典の一文
   prefectures: { code: string; name: string; easyCount: number; difficultCount: number }[]
-  /** 市区町村の一覧（全 1,741 件）。easy.json は r2 以降かなだけの名前を除くので、こちらの方が多い */
+  /**
+   * 市区町村の一覧（全 1,741 件）。easy.json は r2 以降かなだけの名前を除くので、こちらの方が多い。
+   * 使い道は **範囲選択の「全54市町村」表示と difficult の絞り込み**。出題はしない
+   * （全市区町村名が出すのも easy.json にある件だけ）
+   */
   cities: { lgCode: string; prefCode: string; name: string; kana: string }[]
 }
 
@@ -43,12 +47,15 @@ export interface QuestionSet {
   setId: string // `${dataVersion}-${mode}-${scope}-${seed}`（全市区町村名なら末尾に `-all`）
   dataVersion: string
   mode: Mode
-  /** '00' = 全国、2 桁 = 都道府県、6 桁 = 市区町村 */
+  /** '00' = 全国、2 桁 = 都道府県、3 文字 = 都道府県の中の地域（src/geo/subregions.ts）、6 桁 = 市区町村 */
   scope: string
   seed: string
   /** 範囲が狭すぎて都道府県へ広げたとき true */
   widened: boolean
-  /** 全市区町村名: その都道府県の市区町村を全部（かなだけの名前も含む）。順位表の対象外 */
+  /**
+   * 全市区町村名: その範囲（都道府県か地域）の市区町村名を全部。
+   * 母集団は easy.json にあるものだけで、問題バンクが除いた市区町村は出さない
+   */
   all: boolean
   questions: Question[] // 出題順。all でなければ QUESTIONS_PER_SET 件
 }
@@ -95,6 +102,10 @@ export interface RankingStore {
 export const QUESTIONS_PER_SET = 10
 /** 「20 秒」を選んだときの 1 問の持ち時間 */
 export const TIME_LIMIT_MS = 20_000
+/**
+ * 母集団がこれ未満の市区町村 scope は都道府県まで広げる（widened）。
+ * **都道府県と地域（3 文字）は広げない** — 選んだ範囲の外から出すと意図に反するため
+ */
 export const MIN_POOL_FOR_SCOPE = 20
 
 /** 時間制限の設定として許す下限・上限（0 ＝ 制限なしは別扱い） */
@@ -148,7 +159,7 @@ export interface RankingRow {
   createdAt: string
   /** setId から導ける出題条件。都道府県別の一覧で科目・範囲を見せるために添える */
   mode?: Mode
-  /** '00' = 全国、2 桁 = 都道府県、6 桁 = 市区町村 */
+  /** '00' = 全国、2 桁 = 都道府県、3 文字 = 都道府県の中の地域、6 桁 = 市区町村 */
   scope?: string
   /** その回の時間制限。0 または省略 ＝ 制限なし。順位表の ⏳ 印に使う */
   timeLimitMs?: number
@@ -165,6 +176,7 @@ export interface ModeCount {
 /**
  * 都道府県ごとの登録状況（`GET /stats/prefectures`）。
  * prefCode は setId の scope の先頭 2 桁。全国（scope '00'）は '00' に集める。
+ * 地域（3 文字）のセットも先頭 2 桁が親の都道府県なので、その都道府県の一覧に入る。
  */
 export interface PrefectureStat {
   prefCode: string

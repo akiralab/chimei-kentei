@@ -23,6 +23,7 @@
 | `.btn` / `.btn--primary` / `.btn--ghost` | ボタン |
 | `.pref-grid` / `.pref-grid__item` / `.is-selected` | 都道府県の選択グリッド |
 | `.mode-switch` / `.mode-switch__item` / `.is-selected` | 科目（市区町村名 / 町名も）・問題数・時間制限の切替。`.switch-row` で 2 つを 1 行に並べられる |
+| `.mode-switch--compact` | `.mode-switch` の修飾子。選択肢が 4〜5 個ある切替（地域: 全道｜道央｜道南｜道北｜道東）用に、狭い画面で左右余白と文字（`--fs-sm`）を 1 段落とす |
 | `.review` / `.review__row` | 答案の見直し（1 行 1 問） |
 | `.ranking` / `.ranking__row` / `.is-me` | 順位表 |
 | `.footer-credit` | 出典表記 |

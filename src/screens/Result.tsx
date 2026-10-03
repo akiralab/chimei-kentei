@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { QuestionSet, RankingRow } from '../engine/types.ts'
 import { buildQuestionSet, defaultSource } from '../engine/bank.ts'
+import { rangeLabelOf } from '../engine/scope.ts'
 import { parseSetId } from '../engine/setId.ts'
 import { defaultStorage, getClientToken, isValidNickname, provisionalRank } from '../engine/ranking.ts'
 import { defaultRankingStore, isRemoteRanking } from '../engine/ranking-factory.ts'
@@ -236,7 +237,8 @@ export default function Result({ setId }: { setId: string }) {
           <span className="field__input">{nickname || '名無し'}</span>
         </span>
         <span className="paper__subtitle">
-          正解 {correct} / {total} 問 ／ 所要時間 {formatDuration(timeMs)} ／ 制限{' '}
+          {/* 範囲は出題を組み直せたときだけ（セットが読めない経路でも帯が崩れないように） */}
+          {set && `範囲 ${rangeLabelOf(set)} ／ `}正解 {correct} / {total} 問 ／ 所要時間 {formatDuration(timeMs)} ／ 制限{' '}
           {timeLimitMs > 0 ? `${Math.round(timeLimitMs / 1000)}秒` : 'なし'}
         </span>
       </div>

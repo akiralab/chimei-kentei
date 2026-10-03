@@ -12,6 +12,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { BankMeta, Mode, PrefectureStat, RankingRow } from '../engine/types.ts'
 import { modeName } from '../engine/modes.ts'
 import { loadMeta } from '../engine/bank.ts'
+import { scopeLabel } from '../engine/scope.ts'
 import { SCOPE_NATIONWIDE } from '../engine/setId.ts'
 import { defaultRankingStore } from '../engine/ranking-factory.ts'
 import { useRankingMode } from '../hooks/useRankingMode.ts'
@@ -91,13 +92,13 @@ export default function Ranking({ prefCode }: { prefCode?: string } = {}) {
   const cityName = useMemo(() => new Map((meta?.cities ?? []).map((c) => [c.lgCode, c.name])), [meta])
   const prefName = useMemo(() => new Map((meta?.prefectures ?? []).map((p) => [p.code, p.name])), [meta])
 
-  /** '00' → 全国 ／ 2 桁 → 都道府県名 ／ 6 桁 → 市区町村名 */
-  const scopeLabel = (scope: string | undefined): string => {
-    if (scope === undefined) return '—'
-    if (scope === SCOPE_NATIONWIDE) return '全国'
-    if (scope.length === 2) return prefName.get(scope) ?? scope
-    return cityName.get(scope) ?? scope
-  }
+  /** '00' → 全国 ／ 2 桁 → 都道府県名 ／ 3 文字 → 「東京都・多摩」 ／ 6 桁 → 市区町村名 */
+  const labelOfScope = (scope: string | undefined): string =>
+    scopeLabel(
+      scope,
+      (code) => prefName.get(code),
+      (lgCode) => cityName.get(lgCode),
+    )
 
   const titleOf = (code: string): string =>
     code === SCOPE_NATIONWIDE ? '全国' : (prefName.get(code) ?? `都道府県 ${code}`)
@@ -173,7 +174,7 @@ export default function Ranking({ prefCode }: { prefCode?: string } = {}) {
                 </span>
                 {/* 4 列グリッドの 2 行目として全幅に置く（科目・範囲・登録日・挑戦リンク） */}
                 <span className="q-pref" style={{ gridColumn: '1 / -1', margin: 0 }}>
-                  {r.mode === undefined ? '—' : modeName(r.mode)} ／ {scopeLabel(r.scope)} ／{' '}
+                  {r.mode === undefined ? '—' : modeName(r.mode)} ／ {labelOfScope(r.scope)} ／{' '}
                   {formatDate(r.createdAt)}{' '}
                   <a className="btn btn--ghost" href={quizPath(r.setId)}>
                     この問題に挑戦

@@ -2,8 +2,10 @@
  * 問題バンク（public/questions/{dataVersion}/）の読み込みと母集団の組み立て。
  * fetch 層は BankSource として差し替え可能（テストではフィクスチャを注入する）。
  */
+import { subregionById, subregionOf } from '../geo/subregions.ts'
 import type { BankMeta, Mode, Question, QuestionSet } from './types.ts'
 import { MIN_POOL_FOR_SCOPE, QUESTIONS_PER_SET } from './types.ts'
+import { modeName } from './modes.ts'
 import { SCOPE_NATIONWIDE, buildSetId, canBeAll } from './setId.ts'
 import { sampleQuestions } from './sampler.ts'
 
@@ -107,85 +109,76 @@ function uniqueById(list: Question[]): Question[] {
   return out
 }
 
+/**
+ * scope が受け持つ範囲に入るかの判定。
+ * 2 桁 = 都道府県 ／ 3 文字 = 都道府県の中の地域（src/geo/subregions.ts）／ 6 桁 = 市区町村
+ */
+function scopeMatcher(scope: string): (q: Question) => boolean {
+  if (scope.length === 2) return (q) => q.prefCode === scope
+  if (scope.length === 3) return (q) => subregionOf(q.lgCode)?.id === scope
+  return (q) => q.lgCode === scope
+}
+
 async function poolFor(mode: Mode, scope: string, source: BankSource): Promise<Question[]> {
   if (mode === 'e') {
     const easy = await source.easy()
     if (scope === SCOPE_NATIONWIDE) return easy.slice()
-    if (scope.length === 2) return easy.filter((q) => q.prefCode === scope)
-    return easy.filter((q) => q.lgCode === scope)
+    return easy.filter(scopeMatcher(scope))
   }
   // difficult
   if (scope === SCOPE_NATIONWIDE) {
     throw new Error('全国 × difficult はこのデモでは対応していません。都道府県を選んでください。')
   }
+  // 地域（3 文字）も 6 桁と同じく、都道府県ファイルを読んでから絞る
   const prefCode = scope.slice(0, 2)
   const [easy, difficult] = await Promise.all([source.easy(), source.difficult(prefCode)])
-  if (scope.length === 2) {
-    return uniqueById([...easy.filter((q) => q.prefCode === scope), ...difficult.filter((q) => q.prefCode === scope)])
-  }
-  return uniqueById([...easy.filter((q) => q.lgCode === scope), ...difficult.filter((q) => q.lgCode === scope)])
+  const inScope = scopeMatcher(scope)
+  return uniqueById([...easy.filter(inScope), ...difficult.filter(inScope)])
 }
 
 /**
  * 母集団を組み立てる。MIN_POOL_FOR_SCOPE 未満なら都道府県（scope 先頭 2 桁）まで広げ widened: true。
  * 既に都道府県以上の範囲なら、足りなくてもそのまま返す（widened: false）。
+ *
+ * **地域（3 文字）は都道府県と同じ扱いで広げない。**「道東を選んだのに全道が出た」は
+ * 範囲を選んだ意図に反するため（Issue #34）。足りなければ buildQuestionSet が案内して止める
  */
 export async function buildPool(mode: Mode, scope: string, source: BankSource = defaultSource()): Promise<Pool> {
   const questions = await poolFor(mode, scope, source)
   if (questions.length >= MIN_POOL_FOR_SCOPE) return { scope, questions, widened: false }
   const prefCode = scope.slice(0, 2)
-  if (scope === SCOPE_NATIONWIDE || prefCode === scope) return { scope, questions, widened: false }
+  if (scope === SCOPE_NATIONWIDE || prefCode === scope || scope.length === 3) {
+    return { scope, questions, widened: false }
+  }
   const wider = await poolFor(mode, prefCode, source)
   return { scope: prefCode, questions: wider, widened: true }
 }
 
-/** 接尾辞ごとの読みの末尾（data/build_questions.py のルール b と同じ。長い方から当てる） */
-const SUFFIX_KANA: Record<string, string[]> = { 市: ['し'], 区: ['く'], 町: ['ちょう', 'まち'], 村: ['そん', 'むら'] }
-
 /**
- * meta.cities の 1 件を easy と同じ形の Question にする（接尾辞と読みの末尾を外す）。
- * easy.json に無い市区町村（r2 で除いた、かなだけの名前）を「全市区町村名」で出すために使う。
- * 接尾辞か読みの末尾が合わなければ null（ABR 由来のデータでは起きない）
+ * ある範囲の市区町村名を **全部**。母集団は **easy.json にあるものだけ**で、
+ * 問題バンクが除いた市区町村（ひらがなの さいたま・ニセコ・むかわ など）は出さない
+ * ＝「問題バンクで除外した市区町村はクイズに出さない」に揃える。
+ *
+ * scope は 2 桁（都道府県）か 3 文字（その中の地域）。並びは lgCode 順。
+ * 母集団なので出題順はここでは決めない
  */
-export function questionFromCity(city: BankMeta['cities'][number], pref: string): Question | null {
-  const suffix = city.name.slice(-1)
-  const display = city.name.slice(0, -1)
-  const tails = SUFFIX_KANA[suffix]
-  if (!tails || display === '') return null
-  const tail = tails.find((t) => city.kana.endsWith(t))
-  if (tail === undefined || city.kana.length <= tail.length) return null
-  return {
-    id: `c:${city.lgCode}:${display}`,
-    prefCode: city.prefCode,
-    pref,
-    lgCode: city.lgCode,
-    display,
-    suffix,
-    answer: city.kana.slice(0, -tail.length),
-  }
-}
-
-/**
- * ある都道府県の市区町村名を **全部**（easy.json の件に、meta.cities にしか無い件を足す）。
- * 並びは lgCode 順。母集団なので出題順はここでは決めない
- */
-export async function municipalityQuestions(prefCode: string, source: BankSource = defaultSource()): Promise<Question[]> {
+export async function municipalityQuestions(scope: string, source: BankSource = defaultSource()): Promise<Question[]> {
+  const prefCode = scope.slice(0, 2)
+  if (scope.length === 3 && !subregionById(scope)) throw new Error(`地域コードがありません: ${scope}`)
   const [easy, meta] = await Promise.all([source.easy(), source.meta()])
-  const pref = meta.prefectures.find((p) => p.code === prefCode)
-  if (!pref) throw new Error(`都道府県コードが問題バンクにありません: ${prefCode}`)
-  const inBank = easy.filter((q) => q.prefCode === prefCode)
-  const have = new Set(inBank.map((q) => q.lgCode))
-  const extra: Question[] = []
-  for (const city of meta.cities) {
-    if (city.prefCode !== prefCode || have.has(city.lgCode)) continue
-    const q = questionFromCity(city, pref.name)
-    if (q) extra.push(q)
+  if (!meta.prefectures.some((p) => p.code === prefCode)) {
+    throw new Error(`都道府県コードが問題バンクにありません: ${prefCode}`)
   }
-  return [...inBank, ...extra].sort((a, b) => (a.lgCode < b.lgCode ? -1 : a.lgCode > b.lgCode ? 1 : 0))
+  return easy.filter(scopeMatcher(scope)).sort((a, b) => (a.lgCode < b.lgCode ? -1 : a.lgCode > b.lgCode ? 1 : 0))
+}
+
+/** 母集団が足りないときの案内に使う範囲名。地域は「島しょ」、都道府県は出題の pref から */
+function poolRangeName(scope: string, questions: Question[]): string {
+  return subregionById(scope)?.name ?? questions[0]?.pref ?? scope
 }
 
 /**
- * 問題セットを組み立てる。all なら「その都道府県の市区町村名を全部」（seed は出題順のシャッフルだけに効く）、
+ * 問題セットを組み立てる。all なら「その範囲の市区町村名を全部」（seed は出題順のシャッフルだけに効く）、
  * そうでなければ母集団から QUESTIONS_PER_SET 件を決定論的に抽出する。
  */
 export async function buildQuestionSet(
@@ -197,11 +190,11 @@ export async function buildQuestionSet(
 ): Promise<QuestionSet> {
   if (all) {
     if (!canBeAll(mode, scope)) {
-      throw new Error('全市区町村名は、市区町村名で都道府県を選んだときだけ出題できます。')
+      throw new Error('全市区町村名は、市区町村名で都道府県か地域を選んだときだけ出題できます。')
     }
     const setId = buildSetId(DATA_VERSION, mode, scope, seed, true)
     const questions = await municipalityQuestions(scope, source)
-    if (questions.length === 0) throw new Error('この都道府県には出題できる市区町村がありませんでした。')
+    if (questions.length === 0) throw new Error('この範囲には出題できる市区町村がありませんでした。')
     return {
       setId,
       dataVersion: DATA_VERSION,
@@ -217,6 +210,14 @@ export async function buildQuestionSet(
   const pool = await buildPool(mode, scope, source)
   if (pool.questions.length === 0) {
     throw new Error('この範囲には出題できる地名がありませんでした。')
+  }
+  // 地域は都道府県へ広げないので、ここで初めて「10 問に足りない」が起こり得る（例 島しょ × 市区町村名 9 件）
+  if (pool.questions.length < QUESTIONS_PER_SET) {
+    const hint = mode === 'e' ? '全市区町村名で解いてください。' : '範囲を広げてください。'
+    throw new Error(
+      `${poolRangeName(scope, pool.questions)}の${modeName(mode)}は ${pool.questions.length} 件しかないので、` +
+        `${QUESTIONS_PER_SET} 問を組めません。${hint}`,
+    )
   }
   return {
     setId,
