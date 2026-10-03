@@ -67,6 +67,23 @@ describe('MunicipalityInfo', () => {
     expect(screen.getByText('？')).toBeInTheDocument()
   })
 
+  it('プレースホルダーの文言は画面ごとに差し替えられる（地名帳は「行を選ぶと出ます」）', async () => {
+    render(
+      <MunicipalityInfo lgCode="" revealed placeholder="行を選ぶと出ます" source={fixtureGeoSource()} />,
+    )
+
+    await waitFor(() => {
+      expect(document.querySelector('.info-card--placeholder')).not.toBeNull()
+    })
+    expect(document.querySelector('.info-card__reading')?.textContent).toBe('行を選ぶと出ます')
+    // 既定は出題画面の文言のまま
+    cleanup()
+    render(<MunicipalityInfo lgCode="" revealed source={fixtureGeoSource()} />)
+    await waitFor(() => {
+      expect(document.querySelector('.info-card__reading')?.textContent).toBe('解答すると出ます')
+    })
+  })
+
   it('統計が読めない・その自治体の行が無いときもプレースホルダーで高さを保つ', async () => {
     render(<MunicipalityInfo lgCode="120001" revealed source={emptyGeoSource()} />)
     await waitFor(() => {

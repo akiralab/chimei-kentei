@@ -35,6 +35,18 @@ describe('MunicipalityMap', () => {
     })
   })
 
+  it('lgCode を省くと県の形だけを描く（塗り・縁取り・照準リングを出さない）', async () => {
+    // 地名帳（#/atlas/12）で行を選ぶ前の状態
+    render(<MunicipalityMap prefCode="12" prefName="千葉県" source={fixtureGeoSource()} />)
+
+    await waitFor(() => {
+      expect(document.querySelectorAll('.map-muni__path')).toHaveLength(3)
+    })
+    expect(document.querySelector('.map-muni__path--target')).toBeNull()
+    expect(document.querySelector('.map-muni__halo')).toBeNull()
+    expect(document.querySelector('.map-muni__pin')).toBeNull()
+  })
+
   it('地図が読めなければ 1 行の注記にとどめ、パネルは残す', async () => {
     render(<MunicipalityMap prefCode="12" lgCode="120001" source={emptyGeoSource()} />)
 
