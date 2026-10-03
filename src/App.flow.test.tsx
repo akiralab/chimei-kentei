@@ -42,10 +42,31 @@ function kanaizeAnswers(questions: Question[]): Question[] {
   return questions.map((q) => ({ ...q, answer: q.answer.replace(/\d/g, (d) => KANA_DIGITS[Number(d)]) }))
 }
 
-// 千葉県は easy 15 件・大字 30 件、東京都は easy 14 件。どちらも 10 問に足りる
+/**
+ * 地域（北海道 4・東京都 3）の判定は団体コードの先頭 5 桁で行う（src/geo/subregions.ts）ので、
+ * 北海道・東京都のフィクスチャは makeEasy の連番コードではなく **実在コード**に差し替える。
+ * 千葉県は地域を持たないので連番のままでよい
+ */
+function withLgCodes(questions: Question[], lgCodes: string[]): Question[] {
+  if (questions.length !== lgCodes.length) throw new Error('lgCode の数が合いません')
+  return questions.map((q, i) => ({ ...q, lgCode: lgCodes[i], id: `c:${lgCodes[i]}:${q.display}` }))
+}
+
+// 千葉県は easy 15 件・大字 30 件、東京都・北海道は easy 14 件。どれも 10 問に足りる
 const EASY_12 = kanaizeAnswers(makeEasy('12', '千葉県', 15))
-const EASY_13 = kanaizeAnswers(makeEasy('13', '東京都', 14))
-const EASY_ALL: Question[] = [...EASY_12, ...EASY_13]
+// 道央 12（札幌・小樽・室蘭…）＋ 道南 2（函館・北斗）。道央だけで 10 問に足りる
+const EASY_01 = withLgCodes(kanaizeAnswers(makeEasy('01', '北海道', 14)), [
+  '011002', '012033', '012050', '012092', '012106', '012131',
+  '012157', '012165', '012173', '012181', '012220', '012246',
+  '012025', '012360',
+])
+// 島しょ 9（大島〜小笠原の全 9 町村）＋ 23区 3 ＋ 多摩 2。島しょは 9 件なので 10 問を組めない
+const EASY_13 = withLgCodes(kanaizeAnswers(makeEasy('13', '東京都', 14)), [
+  '133612', '133621', '133639', '133647', '133817', '133825', '134015', '134023', '134210',
+  '131016', '131024', '131032',
+  '132012', '132021',
+])
+const EASY_ALL: Question[] = [...EASY_12, ...EASY_13, ...EASY_01]
 const DIFFICULT_12 = kanaizeAnswers(makeDifficult('12', '千葉県', 1, 30))
 const DIFFICULT_13 = kanaizeAnswers(makeDifficult('13', '東京都', 1, 30))
 
@@ -54,6 +75,7 @@ const META: BankMeta = {
   generatedAt: '2026-09-25T00:00:00.000Z',
   source: 'テスト用フィクスチャ',
   prefectures: [
+    { code: '01', name: '北海道', easyCount: EASY_01.length, difficultCount: 0 },
     { code: '12', name: '千葉県', easyCount: EASY_12.length, difficultCount: DIFFICULT_12.length },
     { code: '13', name: '東京都', easyCount: EASY_13.length, difficultCount: DIFFICULT_13.length },
   ],
@@ -371,6 +393,87 @@ describe('範囲・科目', () => {
     // 10 問を超えるので問番号は算用数字（fake timers なので waitFor ではなく settle で流す）
     await settle()
     expect(el('.q-number').textContent).toBe('問1 / 15')
+  })
+
+  // ---- 地域（北海道 4・東京都 3。Issue #34） ----
+
+  it('地域の切替は北海道・東京都のときだけ出る', async () => {
+    await openSelect()
+
+    expect(screen.queryByRole('button', { name: '地域: 道央' })).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: '千葉県' }))
+    expect(screen.queryByRole('button', { name: '地域: 道央' })).toBeNull()
+    expect(screen.queryByRole('group', { name: '地域' })).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: '北海道' }))
+    expect(screen.getByRole('group', { name: '地域' })).toBeInTheDocument()
+    // 既定は「全道」（scope は 2 桁のまま）
+    expect(screen.getByRole('button', { name: '地域: 全道' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getAllByRole('button', { name: /^地域: / }).map((b) => b.textContent)).toEqual([
+      '全道',
+      '道央',
+      '道南',
+      '道北',
+      '道東',
+    ])
+
+    // 都道府県を選び直すと地域は外れる（全国に戻せば切替そのものが消える）
+    fireEvent.click(screen.getByRole('button', { name: '地域: 道東' }))
+    expect(el('.paper__subtitle').textContent).toContain('いまの範囲: 北海道・道東')
+    fireEvent.click(screen.getByRole('button', { name: '東京都' }))
+    expect(screen.getByRole('button', { name: '地域: 全域' })).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(screen.getByRole('button', { name: '全国' }))
+    expect(screen.queryByRole('group', { name: '地域' })).toBeNull()
+  })
+
+  it('北海道→道央で始めると scope が 01c になり、出題の範囲に「北海道・道央」が出る', async () => {
+    await openSelect()
+
+    fireEvent.click(screen.getByRole('button', { name: '北海道' }))
+    fireEvent.click(screen.getByRole('button', { name: '地域: 道央' }))
+    // 地図の見出しの件数は地域の件数（フィクスチャの道央は 12 市町村）
+    expect(el('.jp-map__note').textContent).toBe('北海道 全12市町村')
+    expect(el('.paper__subtitle').textContent).toContain('いまの範囲: 北海道・道央')
+
+    fireEvent.click(screen.getByRole('button', { name: '始める' }))
+    await settle()
+
+    expect(hash()).toMatch(new RegExp(`^#/q/${DATA_VERSION}-e-01c-\\d{4}$`))
+    expect(el('.paper__header').textContent).toContain('範囲: 北海道・道央')
+    expect(el('.q-number').textContent).toBe('問一 / 十')
+  })
+
+  it('東京都→島しょ × 市区町村名は 10 問が押せず、全市区町村名（9 問）になる', async () => {
+    await openSelect()
+
+    fireEvent.click(screen.getByRole('button', { name: '東京都' }))
+    fireEvent.click(screen.getByRole('button', { name: '地域: 島しょ' }))
+
+    // 母集団 9 件なので 10 問は組めない。全市区町村名に固定され、理由が 1 行で出る
+    expect(screen.getByRole('button', { name: '問題数: 10 問' })).toBeDisabled()
+    const allButton = screen.getByRole('button', { name: '問題数: 全市区町村名（9 問）' })
+    expect(allButton).toHaveAttribute('aria-pressed', 'true')
+    // 理由は行を足さずに伝える（読み上げ専用テキスト ＋ 押せない 10 問ボタンの title）
+    expect(el('.sr-only').textContent).toBe('東京都・島しょは 9 市町村なので、10 問ではなく全市区町村名で解きます')
+    expect(screen.getByRole('button', { name: '問題数: 10 問' })).toHaveAttribute(
+      'title',
+      '東京都・島しょは 9 市町村なので全市区町村名で解きます',
+    )
+    expect(el('.paper__subtitle').textContent).toContain('問題数: 全 9 問')
+
+    // 市区町村名＋町名なら 40 件あるので 10 問に戻れる（制限は科目側の事情ではない）
+    fireEvent.click(screen.getByRole('button', { name: '市区町村名＋町名' }))
+    expect(screen.getByRole('button', { name: '問題数: 10 問' })).toBeEnabled()
+    expect(document.querySelector('.sr-only')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '市区町村名' }))
+
+    fireEvent.click(screen.getByRole('button', { name: '始める' }))
+    await settle()
+
+    expect(hash()).toMatch(new RegExp(`^#/q/${DATA_VERSION}-e-13i-\\d{4}-all$`))
+    expect(el('.paper__header').textContent).toContain('範囲: 東京都・島しょ')
+    expect(el('.q-number').textContent).toBe('問一 / 九')
   })
 })
 
@@ -751,7 +854,7 @@ describe('出題の表示', () => {
     await openQuiz(`${DATA_VERSION}-e-00-20261002`)
 
     expect(el('.paper__header').textContent).toContain('範囲: 全国')
-    expect(['千葉県', '東京都']).toContain(el('.q-pref').textContent)
+    expect(['千葉県', '東京都', '北海道']).toContain(el('.q-pref').textContent)
     expect(el('.q-suffix').textContent).toBe('［市］')
   })
 

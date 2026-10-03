@@ -862,6 +862,28 @@ body {
   cursor: not-allowed;
 }
 
+/* 選択肢が 4〜5 個ある切替（地域: 全道｜道央｜道南｜道北｜道東）。
+   375px でも 1 行に収めるため、狭い画面では左右の余白と文字を 1 段落とす（略称は作らない） */
+.mode-switch--compact .mode-switch__item {
+  padding-inline: var(--space-2);
+}
+
+@media (max-width: 719px) {
+  .mode-switch--compact .mode-switch__item {
+    padding-inline: var(--space-1);
+    font-size: var(--fs-sm);
+  }
+}
+
+/* 広い画面では 1 段低くする。範囲選択の副操作なので、用紙 1 枚に収める方を取る
+   （狭い画面は 44px のタップ領域を守るため据え置き） */
+@media (min-width: 720px) {
+  .mode-switch--compact .mode-switch__item {
+    padding-block: var(--space-1);
+    min-height: 30px;
+  }
+}
+
 /* 2 つの切替を 1 行に並べる（問題数 ＋ 時間制限）。縦を 1 段ぶん節約して 1 画面に収める */
 .switch-row {
   display: flex;

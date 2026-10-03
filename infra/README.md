@@ -57,6 +57,12 @@ AWS_PROFILE=<あなたのプロファイル> npm run deploy:api
 > 更新前のあいだ、新しい版の setId は共有ランキングに登録できない。手順の正本は
 > [data/README.md の「版の扱い」](../data/README.md#版の扱い)。
 
+> **セットIDの形式（`{範囲}` の種類）を増やしたときも同じく再デプロイが要る。**
+> Lambda は `src/engine/setId.ts` の `parseSetId` をバンドルしているので、
+> 知らない形式の scope は `invalid` で弾かれる。地域（`01c`・`13i` などの 3 文字 scope）を
+> 足した 2026-10-03 の変更はこれに当たる。`prefCodeOfScope` は先頭 2 桁を取るので
+> 集計側の変更は不要（地域のセットは親の都道府県の順位表に入る）。
+
 `infra/deploy.sh` が順にやること（何度流しても同じ結果になる）:
 
 1. アーティファクト用 S3 バケット `chimei-kentei-artifacts-{アカウントID}` を無ければ作る（公開ブロック・暗号化・30日で失効）

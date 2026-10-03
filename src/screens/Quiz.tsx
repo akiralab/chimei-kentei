@@ -4,6 +4,7 @@ import { QUESTIONS_PER_SET, UNLIMITED_MAX_MS } from '../engine/types.ts'
 import { buildQuestionSet, defaultSource } from '../engine/bank.ts'
 import { modeName } from '../engine/modes.ts'
 import { grade } from '../engine/grading.ts'
+import { rangeLabelOf } from '../engine/scope.ts'
 import { SCOPE_NATIONWIDE, parseSetId } from '../engine/setId.ts'
 import { useNickname } from '../hooks/useNickname.ts'
 import { answerSheetKey, writeAnswerSheet } from '../hooks/answerSheet.ts'
@@ -22,14 +23,6 @@ const URGENT_MS = 5000
 function questionNumber(n: number, total: number): string {
   if (total > KANJI_NUM.length) return String(n)
   return KANJI_NUM[n - 1] ?? String(n)
-}
-
-function rangeLabel(set: QuestionSet): string {
-  if (set.scope === SCOPE_NATIONWIDE) return '全国'
-  const first = set.questions[0]
-  if (!first) return set.scope
-  if (set.widened || set.scope.length === 2) return first.pref
-  return first.city ?? first.pref
 }
 
 /** 添え書き。町名（'d'）は常に所属自治体、市区町村名（'e'）は全国のときだけ都道府県 */
@@ -198,7 +191,7 @@ export default function Quiz({ setId, direct = false }: { setId: string; direct?
   if (pending) {
     return (
       <Challenge
-        rangeLabel={rangeLabel(set)}
+        rangeLabel={rangeLabelOf(set)}
         mode={set.mode}
         total={set.questions.length}
         all={set.all}
@@ -248,7 +241,7 @@ export default function Quiz({ setId, direct = false }: { setId: string; direct?
           {set.widened && <p className="pen-comment">範囲が狭いため都道府県に広げました</p>}
 
           <div className="paper__header">
-            <span>範囲: {rangeLabel(set)}</span>
+            <span>範囲: {rangeLabelOf(set)}</span>
             <span>科目: {modeName(set.mode)}</span>
             <span>制限: {limited ? `${Math.round(timeLimitMs / 1000)}秒` : 'なし'}</span>
             <span className="field">

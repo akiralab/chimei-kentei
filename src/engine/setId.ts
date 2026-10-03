@@ -3,10 +3,11 @@
  * 形式: `${dataVersion}-${mode}-${scope}-${seed}` に、全市区町村名のときだけ `-all` が付く
  *  - dataVersion: 問題バンクの版（例 'abr20260925'）。英小文字と数字のみ
  *  - mode: 'e' | 'd'
- *  - scope: '00'（全国）| 2 桁（都道府県）| 6 桁（市区町村）
+ *  - scope: '00'（全国）| 2 桁（都道府県）| 3 文字 `\d{2}[a-z]`（都道府県の中の地域。src/geo/subregions.ts）| 6 桁（市区町村）
  *  - seed: 4〜8 桁の数字
- *  - all: 都道府県の市区町村名を全部出す（mode 'e'・2 桁 scope のみ）。seed は出題順にだけ効く
+ *  - all: その範囲の市区町村名を全部出す（mode 'e'・都道府県か地域のみ）。seed は出題順にだけ効く
  */
+import { isSubregionScope } from '../geo/subregions.ts'
 import type { Mode } from './types.ts'
 
 export interface ParsedSetId {
@@ -22,7 +23,7 @@ export interface ParsedSetId {
 export const ALL_SEGMENT = 'all'
 
 const DATA_VERSION_RE = /^[0-9a-z]+$/
-const SCOPE_RE = /^(?:\d{2}|\d{6})$/
+const SCOPE_RE = /^(?:\d{2}|\d{2}[a-z]|\d{6})$/
 const SEED_RE = /^\d{4,8}$/
 
 /** 全国を表す scope */
@@ -33,16 +34,23 @@ export function isMode(v: string): v is Mode {
 }
 
 export function isScope(v: string): boolean {
-  return SCOPE_RE.test(v)
+  if (!SCOPE_RE.test(v)) return false
+  // 3 文字は綴りが合っていても実在しなければ受け付けない（'01z' のような scope を作らせない）
+  return v.length === 3 ? isSubregionScope(v) : true
 }
 
 export function isSeed(v: string): boolean {
   return SEED_RE.test(v)
 }
 
-/** all を立てられる条件: 市区町村名（'e'）で、都道府県（2 桁・全国以外）を選んでいる */
+/**
+ * all を立てられる条件: 市区町村名（'e'）で、都道府県（2 桁・全国以外）か
+ * その中の地域（3 文字）を選んでいる
+ */
 export function canBeAll(mode: Mode, scope: string): boolean {
-  return mode === 'e' && scope.length === 2 && scope !== SCOPE_NATIONWIDE
+  if (mode !== 'e') return false
+  if (scope.length === 3) return isSubregionScope(scope)
+  return scope.length === 2 && scope !== SCOPE_NATIONWIDE
 }
 
 export function buildSetId(dataVersion: string, mode: Mode, scope: string, seed: string, all = false): string {
@@ -51,7 +59,7 @@ export function buildSetId(dataVersion: string, mode: Mode, scope: string, seed:
   if (!isMode(m)) throw new Error(`mode が不正です: ${m}`)
   if (!isScope(scope)) throw new Error(`scope が不正です: ${scope}`)
   if (!isSeed(seed)) throw new Error(`seed が不正です: ${seed}`)
-  if (all && !canBeAll(m, scope)) throw new Error('全市区町村名は市区町村名 × 都道府県のときだけです')
+  if (all && !canBeAll(m, scope)) throw new Error('全市区町村名は市区町村名 × 都道府県／地域のときだけです')
   return `${dataVersion}-${m}-${scope}-${seed}${all ? `-${ALL_SEGMENT}` : ''}`
 }
 
