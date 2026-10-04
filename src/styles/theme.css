@@ -246,8 +246,6 @@ body {
 
 .field__input {
   flex: 1 1 5.5rem;
-  /* 行高まかせだと 30〜36px にしかならない（select は特に低い）。指で押せる高さを与える */
-  min-height: var(--tap-min);
   min-width: 4rem;
   max-width: 12rem;
   padding: 0 var(--space-1) 2px;
@@ -259,6 +257,14 @@ body {
   border-bottom: 1.5px solid var(--color-rule-strong);
   border-radius: 0;
   appearance: none;
+}
+
+/* 行高まかせだと 30〜36px にしかならない（select は特に低い）。指で押せる高さを与える。
+   出題画面の帯は同じクラスを「表示するだけの <span>」にも使っているので、
+   押せる部品（input / select）だけに効かせる */
+input.field__input,
+select.field__input {
+  min-height: var(--tap-min);
 }
 
 .field__input::placeholder {
@@ -838,6 +844,9 @@ body {
    .switch-row の中では相手（科目）に残りを譲る */
 .mode-switch--fit .mode-switch__item {
   flex: 0 0 auto;
+  /* ★ は 1〜3 文字しかなく 21px まで痩せる。等分のための min-width: 0
+     （@media max-width: 719px）より詳細度が高いので、ここで下限を戻す */
+  min-width: var(--tap-min);
 }
 
 @media (max-width: 719px) {
