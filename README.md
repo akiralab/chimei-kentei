@@ -109,6 +109,8 @@ npm run build -- --mode capacitor  # ネイティブの殻向けビルド（base
 - **計測**は `npm run build` のあとに `npm run measure`。自分で `vite preview` を立て、ヘッドレス Chrome で
   巡回して `measure.json`・`network.json`・`shots/` を吐く。前後で比べるときは
   `npm run measure -- --json measure-after.json --out shots-after` のように出力先を分ける。
+  1 画面に収まっているかは `paper.overY`（0 が正常）で見るが、**用紙ごと縦スクロールする 2 画面**
+  （結果・間違えた問題＝`.board--scroll`）だけは `docOverY`・`lastButtonCut`・`reviewVisibleFirstView` で見る。
 
 共有ランキングをつないで手元で試すとき:
 

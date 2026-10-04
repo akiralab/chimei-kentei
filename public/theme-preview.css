@@ -167,10 +167,17 @@
   --font-stamp: 'Dela Gothic One', 'Hiragino Sans', 'Yu Gothic', sans-serif;
 
   /* ---- 文字サイズ（clamp で 375px〜1024px+ を 1 本化）----------------- */
-  --fs-xs: 0.75rem;
+  /* 表示中の文字の下限（13px）。これより小さい値をトークンに置かない。
+     2026-10-05 に 0.75rem（12px）から引き上げた（出典クレジット・情報カードの
+     ラベル・注記がここに乗っていて、全画面で 12px が残っていたため） */
+  --fs-xs: 0.8125rem;
   --fs-sm: 0.8125rem;
-  /* 本文（明朝）の大きさ。ここは触らない */
-  --fs-md: 0.9375rem;
+  /* 本文（明朝）の大きさ。0.9375rem（15px）から 1rem（16px）へ（2026-10-05）。
+     長く「ここは触らない」としていたが、iOS の本文（HIG 17pt）に対して小さく、
+     App Store 配信に向けた読みやすさを優先する判断（設計ノート §13.6 決定 3）。
+     増えたぶんのはみ出しは 1 画面契約の回復（.board--scroll・地図の折りたたみ・
+     @media (max-height: 940px) の段）と同じ波で吸収する */
+  --fs-md: 1rem;
   /* 氏名欄・得点欄・見直しの出題。2026-10-02 に 1.0625rem から 1 段上げた */
   --fs-lg: 1.1875rem;
   /* 節見出し（問番号・順位表・答案の見直し）。375px でも 1.4rem を割らない */
@@ -213,6 +220,21 @@
   --paper-max: 720px;
   /* 表紙のタイトル。見出しより更に一段大きい（表紙にしか使わない）*/
   --fs-cover: clamp(2.25rem, 1.6rem + 2.8vw, 3.25rem);
+}
+
+/* --------------------------------------------------------------------------
+   縦に余裕のない画面の 1 段目。740px 段より **緩く**、出題の漢字・解答欄・○× と
+   飾りの左位置だけを 1 段落とす。本文（--fs-md）と見出しは触らない。
+   940px で切るのは iPhone Pro Max（430x932）の出題が解答後に 1 枚へ収まらないため。
+   iPhone 15/16（844）・PC（1280x800）もここに入る。
+   -------------------------------------------------------------------------- */
+@media (max-height: 940px) {
+  :root {
+    --space-7: 2.25rem;
+    --fs-kanji: clamp(2.2rem, 1.3rem + 5.4vw, 3.9rem);
+    --fs-answer: clamp(1.4rem, 1.05rem + 2.1vw, 2.05rem);
+    --fs-mark: clamp(1.6rem, 1.15rem + 2.1vw, 2.5rem);
+  }
 }
 
 /* --------------------------------------------------------------------------
@@ -318,6 +340,43 @@ body {
     radial-gradient(ellipse 50% 35% at 82% 78%, var(--color-chalk), transparent 70%),
     radial-gradient(ellipse 120% 90% at 50% 50%, transparent 55%, var(--color-board-deep) 100%);
   background-repeat: no-repeat;
+}
+
+/* 1 画面契約の例外（結果・間違えた問題の 2 画面だけ。CONTRACT.md「1 画面運用」）。
+   内容が本質的に「10 行＋操作」で、どう詰めても 1 画面に入らない。用紙を内側で
+   スクロールさせると底のボタンが切れるので、**用紙ごと**縦に伸ばしてページを動かす。
+   画面側は useBoardModifier(BOARD_SCROLL) で宣言する */
+html:has(.board--scroll),
+body:has(.board--scroll) {
+  height: auto;
+  overflow: visible;
+}
+
+.board--scroll {
+  height: auto;
+  min-height: 100dvh;
+  overflow-y: auto;
+  /* 伸びた用紙は上から積む（中央寄せのままだと先頭が画面の上に隠れる）*/
+  justify-content: flex-start;
+}
+
+/* 用紙は中身の高さそのまま。内側スクロールをやめる */
+.board--scroll > .paper {
+  flex: none;
+  height: auto;
+  max-height: none;
+  overflow: visible;
+  /* ホームインジケータの上に最後のボタンが来ないように（.board の padding とは別に用紙側でも見る）*/
+  padding-bottom: calc(var(--space-6) + env(safe-area-inset-bottom));
+}
+
+/* 一覧も内側スクロールをやめる。行はすべて用紙に並び、ページごと流れる */
+.board--scroll > .paper > .review,
+.board--scroll > .paper > .ranking {
+  flex: none;
+  min-height: 0;
+  max-height: none;
+  overflow: visible;
 }
 
 /* --------------------------------------------------------------------------
@@ -482,8 +541,6 @@ body {
 
 .field__input {
   flex: 1 1 5.5rem;
-  /* 行高まかせだと 30〜36px にしかならない（select は特に低い）。指で押せる高さを与える */
-  min-height: var(--tap-min);
   min-width: 4rem;
   max-width: 12rem;
   padding: 0 var(--space-1) 2px;
@@ -495,6 +552,14 @@ body {
   border-bottom: 1.5px solid var(--color-rule-strong);
   border-radius: 0;
   appearance: none;
+}
+
+/* 行高まかせだと 30〜36px にしかならない（select は特に低い）。指で押せる高さを与える。
+   出題画面の帯は同じクラスを「表示するだけの <span>」にも使っているので、
+   押せる部品（input / select）だけに効かせる */
+input.field__input,
+select.field__input {
+  min-height: var(--tap-min);
 }
 
 .field__input::placeholder {
@@ -810,7 +875,8 @@ body {
 .stars {
   /* 等幅にして ★ / ★★ / ★★★ の幅が揃うようにする（行がぶれない） */
   font-family: var(--font-body);
-  font-size: 0.9em;
+  /* em は親が小さい場所（--fs-sm の帯・地名帳の行）で 11.7px まで潰れるので下限を置く */
+  font-size: max(0.9em, 0.8125rem);
   letter-spacing: 0.02em;
   line-height: 1;
   white-space: nowrap;
@@ -828,14 +894,14 @@ body {
 /* 出題の問番号の横。見出しと同じ行なので少し小さく、下に揃える */
 .q-number__stars {
   margin-left: var(--space-2);
-  font-size: 0.62em;
+  font-size: max(0.62em, 0.8125rem);
   vertical-align: 0.12em;
 }
 
 /* 答案の見直しの行。出題のすぐ後ろに小さく添える */
 .review__stars {
   margin-left: var(--space-1);
-  font-size: 0.7em;
+  font-size: max(0.7em, 0.8125rem);
   vertical-align: 0.1em;
 }
 
@@ -1074,6 +1140,9 @@ body {
    .switch-row の中では相手（科目）に残りを譲る */
 .mode-switch--fit .mode-switch__item {
   flex: 0 0 auto;
+  /* ★ は 1〜3 文字しかなく 21px まで痩せる。等分のための min-width: 0
+     （@media max-width: 719px）より詳細度が高いので、ここで下限を戻す */
+  min-width: var(--tap-min);
 }
 
 @media (max-width: 719px) {
@@ -1149,6 +1218,10 @@ body {
   .review__row {
     grid-template-columns: auto minmax(0, 1fr);
     align-items: start;
+    /* 1 行が 4 段に折り返すので、本文 16px のままだと 1 問で 143px を使ってしまう。
+       段と段の間だけ詰めて、375x667 の最初の画面に 3 問が見えるようにする */
+    padding-block: var(--space-2);
+    line-height: 1.5;
   }
 
   .review__row .mark {
@@ -1354,11 +1427,14 @@ body {
   margin: var(--space-1) 0 0;
 }
 
-/* 副ボタンが 3 つ（ランキング・間違えた問題・地名帳）になったので、360px 幅の端末では
-   既定の左右余白だと 2 行に折れて用紙が 22px あふれる。この行だけ左右を詰めて 1 行に保つ */
-@media (max-width: 374px) {
+/* 副ボタンが 3 つ（ランキング・間違えた問題・地名帳）あるので、スマホ幅では
+   既定の左右余白だと 2 行に折れて用紙があふれる。本文を 16px にしたことで
+   375px でも折れるようになったため、詰める範囲を 430px まで広げた（2026-10-05）。
+   この行だけ左右と文字を 1 段落として 1 行に保つ */
+@media (max-width: 430px) {
   .cover__sub-actions .btn {
-    padding-inline: var(--space-3);
+    padding-inline: var(--space-2);
+    font-size: var(--fs-sm);
   }
 }
 
@@ -1464,6 +1540,53 @@ body {
 }
 
 /* --------------------------------------------------------------------------
+   16.5 .skeleton — 読み込み中の答案（PaperSkeleton）
+   用紙の罫線（.paper の背景）をそのまま活かし、薄い長方形を数行置くだけ。
+   色は罫線色 1 色で作る（新しい色は増やさない）。
+   -------------------------------------------------------------------------- */
+
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  /* 罫線の 1 行（--rule-height）にちょうど 1 本ずつ乗る */
+  gap: calc(var(--rule-height) - 1rem);
+  margin: var(--space-4) 0;
+}
+
+.skeleton__line {
+  height: 1rem;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-paper-line) 70%, var(--color-paper));
+}
+
+/* 長さを少しずつ変えて「書きかけの答案」に見せる */
+.skeleton__line:nth-child(3n + 2) {
+  width: 92%;
+}
+
+.skeleton__line:nth-child(3n + 3) {
+  width: 64%;
+}
+
+/* 明滅は動きを嫌う設定でないときだけ（§18 の一括指定でも止まるが、意図を明示する）*/
+@media (prefers-reduced-motion: no-preference) {
+  .skeleton__line {
+    animation: skeleton-pulse 1.2s ease-in-out infinite;
+  }
+}
+
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* --------------------------------------------------------------------------
    17. .footer-credit — 出典表記
    -------------------------------------------------------------------------- */
 
@@ -1472,7 +1595,9 @@ body {
   margin: 0 auto;
   font-family: var(--font-body);
   font-size: var(--fs-xs);
-  line-height: 1.7;
+  /* 13px にすると 375px 幅で 2 行に折れる。行間を詰めて折れたぶんの縦を取り返す
+     （出典そのものを 1 か所へ集約するのは第 3 波 D3）*/
+  line-height: 1.45;
   text-align: center;
   color: rgba(255, 255, 255, 0.55); /* 黒板の上に載るため白系 */
 }
@@ -1488,6 +1613,25 @@ body {
    tokens.css 側で余白トークンを縮めたうえで、出題画面が 375x667 で
    1 枚に収まるよう部品の margin も落とす。文字サイズは触らない。
    -------------------------------------------------------------------------- */
+
+/* 1 段目（844・932・800）。余白だけを落とし、帯は sticky のまま残す */
+@media (max-height: 940px) {
+  .q-prompt {
+    margin-bottom: var(--space-3);
+  }
+
+  .q-kanji {
+    line-height: 1.2;
+  }
+
+  .answer-input {
+    margin-top: var(--space-3);
+  }
+
+  .q-pref {
+    margin-top: var(--space-1);
+  }
+}
 
 @media (max-height: 740px) {
   .q-prompt {
@@ -1516,6 +1660,15 @@ body {
     position: static;
     padding-bottom: var(--space-2);
     margin-bottom: var(--space-3);
+  }
+
+  /* 本文 16px で表紙の副ボタンが 1 行に収まらなくなった分の詰め（375x667）*/
+  .cover__actions {
+    margin-top: 0;
+  }
+
+  .cover__sub-actions {
+    margin-top: 0;
   }
 }
 
@@ -1555,8 +1708,11 @@ body {
   gap: var(--space-3);
 }
 
-/* 低くて狭い画面（スマホ縦）では補助文を省き、解答ボタンまでスクロールなしで収める */
-@media (max-width: 600px) and (max-height: 740px) {
+/* 狭い画面（スマホ縦）では補助文を省き、解答ボタンまでスクロールなしで収める。
+   2026-10-05: 高さの条件（max-height: 740px）を外した。帯が折り返すのも
+   「タイトルへ戻る」が 1 行を食うのも **幅** が原因で、背の高いスマホ（390x844・
+   430x932）でも同じだけ縦を失っていたため */
+@media (max-width: 600px) {
   .answer-hint,
   .q-note {
     display: none;
@@ -1575,7 +1731,11 @@ body {
     right: var(--space-3);
     z-index: 3;
   }
-  /* 地図パネルを少し低くして解答ボタンまで収める（map.css の 24dvh を上書き） */
+}
+
+/* 地図パネルを少し低くして解答ボタンまで収める（map.css の 24dvh を上書き）。
+   畳んでいる間は map.css の .board .layout__map--folded が勝つ（44px）*/
+@media (max-width: 600px) and (max-height: 940px) {
   .board .layout__map {
     height: 20dvh;
   }

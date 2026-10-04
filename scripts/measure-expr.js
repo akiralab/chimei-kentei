@@ -1,10 +1,17 @@
 // measure-expr.js — ページ内で走る計測式（scripts/measure.mjs が読み込んで Runtime.evaluate に渡す）
 //
 // 返す JSON のキーと受け入れ条件の対応は README「計測」節と Issue #42 を参照。
-//   tapUnder44 … 44x44px 未満の操作要素（受け入れ条件 1）
-//   fontUnder16 … 16px 未満のテキスト要素。13px 未満が無いことを見る（受け入れ条件 2）
-//   paper.overY … .paper の縦はみ出し（受け入れ条件 6）
-//   fonts … 読み込めた書体（受け入れ条件 5）
+//   tapUnder44 … 44x44px 未満の操作要素（#42 受け入れ条件 1）
+//   fontUnder16 … 16px 未満のテキスト要素。13px 未満が無いことを見る（#42 条件 2 / #44 条件 4）
+//                 除外は作らない。`.footer-credit a` も数える（#44 で 13px に上げたため）
+//   paper.overY … .paper の縦はみ出し（#42 条件 6 / #44 条件 1）
+//   fonts … 読み込めた書体（#42 条件 5）
+//
+// 用紙ごと縦スクロールする 2 画面（.board--scroll ＝ 結果・間違えた問題。#44 条件 2）は
+// paper.overY が 0 でも「切れていない」とは言えないので、専用の 3 つで判定する。
+//   docOverY … ページのスクロール量（スクロールする画面では > 0 が正常）
+//   lastButtonCut … 最後の .btn が、スクロールしても届かない位置にはみ出していないか
+//   reviewVisibleFirstView … スクロール前（最初のビューポート）に見える .review__row の数
 (() => {
   const vis = (el) => {
     const cs = getComputedStyle(el)
@@ -76,8 +83,38 @@
     }
   }
 
+  // --- 用紙ごとスクロールする画面（.board--scroll）の指標
+  //
+  // スクロールの主体は .board--scroll のときは文書（body の overflow を開けてある）。
+  // 最後の .btn が scrollHeight を超えていれば、どれだけスクロールしても届かない＝切れている
+  const scroller = document.scrollingElement ?? document.documentElement
+  const allBtns = [...document.querySelectorAll('.btn')].filter((b) => {
+    const cs = getComputedStyle(b)
+    return cs.display !== 'none' && cs.visibility !== 'hidden'
+  })
+  const lastBtn = allBtns[allBtns.length - 1] ?? null
+  const lastButtonCut =
+    lastBtn === null ? null : Math.round(lastBtn.getBoundingClientRect().bottom + scroller.scrollTop) > scroller.scrollHeight + 1
+
+  // スクロールしていない状態（最初のビューポート）に収まっている見直しの行数
+  const reviewVisibleFirstView = [...document.querySelectorAll('.review__row')].filter((r) => {
+    const b = r.getBoundingClientRect()
+    return b.top - scroller.scrollTop >= 0 && b.bottom - scroller.scrollTop <= innerHeight
+  }).length
+
+  // キーボード近似（390x508）で「解答」が画面内に残っているか（#44 条件 3）
+  const answerBtn = [...document.querySelectorAll('button.btn')].find((b) => b.textContent.trim() === '解答') ?? null
+  const answerBtnVisible = answerBtn === null ? null : answerBtn.getBoundingClientRect().bottom <= innerHeight
+
   return JSON.stringify({
     vw: innerWidth, vh: innerHeight,
+    boardScroll: !!document.querySelector('.board--scroll'),
+    lastButtonCut,
+    lastButtonBottom: lastBtn === null ? null : Math.round(lastBtn.getBoundingClientRect().bottom + scroller.scrollTop),
+    scrollHeight: scroller.scrollHeight,
+    reviewVisibleFirstView,
+    answerBtnVisible,
+    skeleton: document.querySelectorAll('.skeleton').length,
     paper: paper ? { overY: over(paper), overX: paper.scrollWidth - paper.clientWidth, h: Math.round(paper.getBoundingClientRect().height) } : null,
     paperCount: document.querySelectorAll('.paper').length,
     bodyOverX: document.body.scrollWidth - document.body.clientWidth,
