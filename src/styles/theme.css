@@ -960,6 +960,10 @@ select.field__input {
   .review__row {
     grid-template-columns: auto minmax(0, 1fr);
     align-items: start;
+    /* 1 行が 4 段に折り返すので、本文 16px のままだと 1 問で 143px を使ってしまう。
+       段と段の間だけ詰めて、375x667 の最初の画面に 3 問が見えるようにする */
+    padding-block: var(--space-2);
+    line-height: 1.5;
   }
 
   .review__row .mark {
