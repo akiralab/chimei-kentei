@@ -37,11 +37,43 @@
   min-width: 0;
   min-height: 0;
   /* スマホは地図を上に積む。情報カードは地図に重ねるので、ここは地図ぶんだけ。
-     高さを **確定値** にするのが要点。auto のままだと中の flex:1 1 0 な SVG が 0 に潰れる */
+     高さを **確定値** にするのが要点。auto のままだと中の flex:1 1 0 な SVG が 0 に潰れる。
+     出題画面の解答前は .layout__map--folded で 1 行（--tap-min）に畳む */
   flex: 0 0 auto;
   height: 24dvh;
   /* スマホで .info-card を地図の下端に重ねるための基準 */
   position: relative;
+}
+
+/* 解答前（899px 以下）は 1 行に畳む。24dvh ぶんが空くので、ソフトキーボードが
+   出ても「解答」が画面内に残る（設計ノート §13.6 決定 4）。
+   .board を前置するのは theme.css の `.board .layout__map { height: 20dvh }`
+   （狭くて低い画面の詰め）に勝つため。畳んでいる間は中身も描かない（Quiz.tsx）*/
+.board .layout__map--folded {
+  height: var(--tap-min);
+  flex: 0 0 auto;
+  justify-content: center;
+  padding: 0 var(--space-3);
+  background-color: var(--color-paper);
+  border: 1.5px solid var(--color-paper-line);
+  border-radius: var(--radius-paper);
+  box-shadow: var(--shadow-chip);
+}
+
+/* 畳んだときに出す範囲名（「東京都」だけ。「どこ？」のヒントは出さない）*/
+.layout__map-label {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  letter-spacing: 0.04em;
+  color: var(--color-pencil);
+}
+
+/* 開くときだけ軽く伸ばす。動きを止める設定では theme.css の一括指定で 0 になる */
+@media (max-width: 899px) {
+  .layout__map {
+    transition: height 150ms ease-out;
+  }
 }
 
 .layout__quiz {
@@ -588,7 +620,9 @@
    --------------------------------------------------------------------------
    高さの扱いが画面幅で変わる:
    - スマホ: 地図の下端に **重ねる**（半透明の帯）。積んだときに縦を食わないため。
-     未解答のプレースホルダーは出さない（重ねているので高さは動かない）
+     未解答のプレースホルダーは出さない（重ねているので高さは動かない）。
+     出題画面は解答前にパネルごと畳む（.layout__map--folded）ので、そもそもカードを描かない。
+     地名帳の詳細（.atlas-detail）は畳まないのでプレースホルダーの出番が残る
    - PC(>=900px): 地図の下に通常フローで置き、未解答でも枠を確保する
      （解答した瞬間に 2 カラムの高さが動かないように）
    -------------------------------------------------------------------------- */

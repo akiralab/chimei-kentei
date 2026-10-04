@@ -7,6 +7,7 @@ import { starsAria, starsMark } from '../engine/stars.ts'
 import { grade } from '../engine/grading.ts'
 import { rangeLabelOf } from '../engine/scope.ts'
 import { SCOPE_NATIONWIDE, parseSetId } from '../engine/setId.ts'
+import { useMediaQuery, WIDE_QUERY } from '../hooks/useMediaQuery.ts'
 import { useNickname } from '../hooks/useNickname.ts'
 import { answerSheetKey, writeAnswerSheet } from '../hooks/answerSheet.ts'
 import { readTimeLimit, writeQuizTimeLimit } from '../hooks/useTimeLimit.ts'
@@ -66,6 +67,14 @@ export default function Quiz({ setId, direct = false }: { setId: string; direct?
   const startedAt = useRef(0)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const [nickname, setNickname] = useNickname()
+  /** 900px 以上は 2 カラム。地図は左に常駐するので畳まない */
+  const wide = useMediaQuery(WIDE_QUERY)
+  /**
+   * 解答前に地図を畳むか（899px 以下だけ）。畳むのは「県内のどこか」のヒントより、
+   * ソフトキーボードが出たときに「解答」が画面内に残ることを採ったため（設計ノート §13.6 決定 4）。
+   * 解答した瞬間に地図と情報カードが開く＝答え合わせの演出も兼ねる
+   */
+  const folded = !wide && feedback === null
 
   const error =
     parsed === null ? `セットIDが読めません: ${setId}`
@@ -234,16 +243,22 @@ export default function Quiz({ setId, direct = false }: { setId: string; direct?
 
   return (
     <div className="layout">
-      {/* 左（スマホでは上）: 県内のどこか ＋ 解答後の自治体情報 */}
-      <aside className="layout__map">
-        <MunicipalityMap prefCode={question.prefCode} lgCode={question.lgCode} prefName={question.pref} />
-        {/* カードは常に置く（中身は解答後だけ）。出入りで全体の高さが動くと 1 画面に収まらなくなる */}
-        <MunicipalityInfo
-          lgCode={question.lgCode}
-          revealed={feedback !== null}
-          reading={set.mode === 'e' ? question.answer : undefined}
-          prefName={set.scope === SCOPE_NATIONWIDE ? question.pref : undefined}
-        />
+      {/* 左（スマホでは上）: 県内のどこか ＋ 解答後の自治体情報。
+          スマホの解答前は 1 行に畳み、地図とカードは描かない（開いた瞬間に答え合わせになる） */}
+      <aside className={folded ? 'layout__map layout__map--folded' : 'layout__map'}>
+        {folded ?
+          <p className="layout__map-label">{question.pref}</p>
+        : <>
+            <MunicipalityMap prefCode={question.prefCode} lgCode={question.lgCode} prefName={question.pref} />
+            {/* 開いている間はカードも置く。中身は解答後だけ（地名帳と同じ部品） */}
+            <MunicipalityInfo
+              lgCode={question.lgCode}
+              revealed={feedback !== null}
+              reading={set.mode === 'e' ? question.answer : undefined}
+              prefName={set.scope === SCOPE_NATIONWIDE ? question.pref : undefined}
+            />
+          </>
+        }
       </aside>
 
       <div className="layout__quiz">
