@@ -27,9 +27,16 @@ export default function App() {
           lgCode={route.name === 'atlasRow' ? route.lgCode : undefined}
         />
       )}
-      {/* .footer-credit は黒板の上に載る（白系の文字色）ため .paper の外に置く */}
+      {/* .footer-credit は黒板の上に載る（白系の文字色）ため .paper の外に置く。
+          狭い画面（480px 以下）では正式名が 2 行に折れて用紙の高さを食うので、
+          略称 ABR に差し替える。正式名は <abbr title> に残す（どちらを見せるかは CSS） */}
       <p className="footer-credit">
-        出典: デジタル庁 アドレス・ベース・レジストリ（
+        出典: デジタル庁{' '}
+        <span className="footer-credit__full">アドレス・ベース・レジストリ</span>
+        <abbr className="footer-credit__abbr" title="アドレス・ベース・レジストリ">
+          ABR
+        </abbr>
+        （
         <a href="https://creativecommons.org/licenses/by/4.0/deed.ja" target="_blank" rel="noreferrer">
           CC BY 4.0
         </a>

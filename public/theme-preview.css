@@ -176,7 +176,7 @@
      長く「ここは触らない」としていたが、iOS の本文（HIG 17pt）に対して小さく、
      App Store 配信に向けた読みやすさを優先する判断（設計ノート §13.6 決定 3）。
      増えたぶんのはみ出しは 1 画面契約の回復（.board--scroll・地図の折りたたみ・
-     @media (max-height: 940px) の段）と同じ波で吸収する */
+     @media (max-height: 940px) and (max-width: 899px) の段）と同じ波で吸収する */
   --fs-md: 1rem;
   /* 氏名欄・得点欄・見直しの出題。2026-10-02 に 1.0625rem から 1 段上げた */
   --fs-lg: 1.1875rem;
@@ -226,9 +226,10 @@
    縦に余裕のない画面の 1 段目。740px 段より **緩く**、出題の漢字・解答欄・○× と
    飾りの左位置だけを 1 段落とす。本文（--fs-md）と見出しは触らない。
    940px で切るのは iPhone Pro Max（430x932）の出題が解答後に 1 枚へ収まらないため。
-   iPhone 15/16（844）・PC（1280x800）もここに入る。
+   **幅も 899px 以下に限る**: 縦が苦しいのは地図を用紙の上に積む狭い画面だけで、
+   900px 以上は 2 カラム（地図は左）なので PC の 1280x800 を巻き込む理由がない。
    -------------------------------------------------------------------------- */
-@media (max-height: 940px) {
+@media (max-height: 940px) and (max-width: 899px) {
   :root {
     --space-7: 2.25rem;
     --fs-kanji: clamp(2.2rem, 1.3rem + 5.4vw, 3.9rem);
@@ -1086,7 +1087,7 @@ select.field__input {
    `.mode-switch--compact` が先に同じことをしているので、扱いを揃えた（2026-10-05）*/
 @media (max-width: 480px) {
   .mode-switch__item {
-    font-size: var(--fs-sm);
+    font-size: 0.875rem;
   }
 }
 
@@ -1611,10 +1612,36 @@ select.field__input {
   color: rgba(255, 255, 255, 0.55); /* 黒板の上に載るため白系 */
 }
 
+/* 正式名と略称。どちらか 1 つだけを見せる（markup は両方持つ）*/
+.footer-credit__abbr {
+  display: none;
+}
+
+/* 480px 以下では「アドレス・ベース・レジストリ」が 2 行に折れて用紙の高さを食う。
+   略称に差し替えて 1 行に収める。正式名は abbr の title に残る */
+@media (max-width: 480px) {
+  .footer-credit__full {
+    display: none;
+  }
+
+  .footer-credit__abbr {
+    display: inline;
+    /* 既定の点線下線は CC BY リンクの下線と紛らわしいので消す */
+    text-decoration: none;
+  }
+}
+
 .footer-credit a {
   color: inherit;
   text-decoration: underline;
   text-underline-offset: 2px;
+  /* 指で押せる 44px を、行の高さを増やさずに確保する。
+     inline-block の baseline は中の行のベースラインなので文字の位置はずれず、
+     負の margin で line box への寄与を元の 1 行ぶん（1.45em）に戻している */
+  display: inline-block;
+  min-height: var(--tap-min);
+  line-height: var(--tap-min);
+  margin-block: calc((1.45em - var(--tap-min)) / 2);
 }
 
 /* --------------------------------------------------------------------------
@@ -1623,7 +1650,9 @@ select.field__input {
    1 枚に収まるよう部品の margin も落とす。文字サイズは触らない。
    -------------------------------------------------------------------------- */
 
-/* 1 段目（844・932・800）。余白だけを落とし、帯は sticky のまま残す */
+/* 1 段目（844・932・PC の 800）。**余白だけ**を落とし、帯は sticky のまま残す。
+   文字サイズを落とす tokens.css 側の段は 899px 以下に限ってあるが（PC の出題漢字は
+   4.4rem のまま）、余白の詰めは高さが足りない PC でも要るので幅で切らない */
 @media (max-height: 940px) {
   .q-prompt {
     margin-bottom: var(--space-3);
@@ -1739,14 +1768,6 @@ select.field__input {
     top: var(--space-3);
     right: var(--space-3);
     z-index: 3;
-  }
-}
-
-/* 地図パネルを少し低くして解答ボタンまで収める（map.css の 24dvh を上書き）。
-   畳んでいる間は map.css の .board .layout__map--folded が勝つ（44px）*/
-@media (max-width: 600px) and (max-height: 940px) {
-  .board .layout__map {
-    height: 20dvh;
   }
 }
 

@@ -828,7 +828,7 @@ select.field__input {
    `.mode-switch--compact` が先に同じことをしているので、扱いを揃えた（2026-10-05）*/
 @media (max-width: 480px) {
   .mode-switch__item {
-    font-size: var(--fs-sm);
+    font-size: 0.875rem;
   }
 }
 
@@ -1353,10 +1353,36 @@ select.field__input {
   color: rgba(255, 255, 255, 0.55); /* 黒板の上に載るため白系 */
 }
 
+/* 正式名と略称。どちらか 1 つだけを見せる（markup は両方持つ）*/
+.footer-credit__abbr {
+  display: none;
+}
+
+/* 480px 以下では「アドレス・ベース・レジストリ」が 2 行に折れて用紙の高さを食う。
+   略称に差し替えて 1 行に収める。正式名は abbr の title に残る */
+@media (max-width: 480px) {
+  .footer-credit__full {
+    display: none;
+  }
+
+  .footer-credit__abbr {
+    display: inline;
+    /* 既定の点線下線は CC BY リンクの下線と紛らわしいので消す */
+    text-decoration: none;
+  }
+}
+
 .footer-credit a {
   color: inherit;
   text-decoration: underline;
   text-underline-offset: 2px;
+  /* 指で押せる 44px を、行の高さを増やさずに確保する。
+     inline-block の baseline は中の行のベースラインなので文字の位置はずれず、
+     負の margin で line box への寄与を元の 1 行ぶん（1.45em）に戻している */
+  display: inline-block;
+  min-height: var(--tap-min);
+  line-height: var(--tap-min);
+  margin-block: calc((1.45em - var(--tap-min)) / 2);
 }
 
 /* --------------------------------------------------------------------------
