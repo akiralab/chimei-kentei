@@ -823,6 +823,15 @@ select.field__input {
   }
 }
 
+/* スマホ幅では切替のラベルを 1 段落とす。本文を 16px にしたら「市区町村｜町名も」が
+   互いにくっついて 1 語に見えるようになった（375px）。短いラベルなので 13px でも読める。
+   `.mode-switch--compact` が先に同じことをしているので、扱いを揃えた（2026-10-05）*/
+@media (max-width: 480px) {
+  .mode-switch__item {
+    font-size: var(--fs-sm);
+  }
+}
+
 .mode-switch__item.is-selected {
   color: var(--color-ink);
   background: var(--color-paper);
