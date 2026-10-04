@@ -29,3 +29,8 @@ infra/api/dist/
 
 # フォントの原本（npm run build:fonts が google/fonts から落とす。再取得できるので持たない）
 scripts/.font-cache/
+
+# 計測の出力（npm run measure が作る。前後比較のたびに書き換わるのでコミットしない）
+measure*.json
+network*.json
+shots*/
