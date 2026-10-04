@@ -29,6 +29,7 @@ import AtlasNav from '../components/AtlasNav.tsx'
 import MunicipalityInfo from '../components/MunicipalityInfo.tsx'
 import MunicipalityMap from '../components/MunicipalityMap.tsx'
 import RegionPicker from '../components/RegionPicker.tsx'
+import PaperSkeleton from '../components/PaperSkeleton.tsx'
 
 /** meta.cities の 1 件（段階 2 で町名を混ぜても壊れないよう、必要な列だけを見る） */
 interface City {
@@ -245,7 +246,7 @@ export default function Atlas({ scope, lgCode }: Props) {
     return (
       <div className="paper">
         <h1 className="paper__title">地名帳</h1>
-        <p>読み込み中…</p>
+        <PaperSkeleton lines={5} />
       </div>
     )
   }

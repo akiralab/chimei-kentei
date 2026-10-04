@@ -14,6 +14,7 @@ import { readTimeLimit, writeQuizTimeLimit } from '../hooks/useTimeLimit.ts'
 import { COVER_PATH, SELECT_PATH, navigate, resultPath } from '../router.ts'
 import MunicipalityMap from '../components/MunicipalityMap.tsx'
 import MunicipalityInfo from '../components/MunicipalityInfo.tsx'
+import PaperSkeleton from '../components/PaperSkeleton.tsx'
 import HiraganaInput from '../components/HiraganaInput.tsx'
 import Challenge from './Challenge.tsx'
 
@@ -201,7 +202,7 @@ export default function Quiz({ setId, direct = false }: { setId: string; direct?
     return (
       <div className="paper">
         <h1 className="paper__title">地名読み検定</h1>
-        <p>問題を用意しています…</p>
+        <PaperSkeleton lines={4} />
       </div>
     )
   }
@@ -232,7 +233,7 @@ export default function Quiz({ setId, direct = false }: { setId: string; direct?
     return (
       <div className="paper">
         <h1 className="paper__title">地名読み検定</h1>
-        <p>採点しています…</p>
+        <PaperSkeleton lines={3} />
       </div>
     )
   }

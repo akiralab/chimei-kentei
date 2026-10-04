@@ -11,7 +11,7 @@
  * 区分は localStorage（useRankingMode）でトップと詳細を引き継ぐ。
  * 絞り込みはストア側（Remote なら API の `?mode=`）で行うので、画面は受け取った順に並べるだけ。
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { BankMeta, PrefectureStat, RankingMode, RankingRow } from '../engine/types.ts'
 import { ALL_RANKING_MODE } from '../engine/types.ts'
 import { RANKING_MODES, RANKING_MODE_LABELS, rankingModeName } from '../engine/modes.ts'
@@ -21,11 +21,14 @@ import { loadMeta } from '../engine/bank.ts'
 import { scopeLabel } from '../engine/scope.ts'
 import { SCOPE_NATIONWIDE } from '../engine/setId.ts'
 import { defaultRankingStore } from '../engine/ranking-factory.ts'
+import { connectionMessage } from '../hooks/connection.ts'
 import { useRankingMode } from '../hooks/useRankingMode.ts'
+import PaperSkeleton from '../components/PaperSkeleton.tsx'
 import { COVER_PATH, RANKING_PATH, SELECT_PATH, navigate, quizPath, rankingPrefPath } from '../router.ts'
 
 /** 都道府県の詳細で一度に見せる件数 */
 const PREF_LIMIT = 30
+
 
 const store = defaultRankingStore()
 
@@ -61,6 +64,8 @@ export default function Ranking({ prefCode }: { prefCode?: string } = {}) {
   const [rows, setRows] = useState<RankingRow[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  /** 「もう一度ためす」を押した回数。増やすと下の useEffect が取り直す */
+  const [attempt, setAttempt] = useState(0)
 
   // 都道府県名・市区町村名の引き当てに使う
   useEffect(() => {
@@ -77,7 +82,8 @@ export default function Ranking({ prefCode }: { prefCode?: string } = {}) {
     }
   }, [])
 
-  // ランキング本体。詳細は科目が変わるたびに取り直す（絞り込みはストア側の仕事）
+  // ランキング本体。詳細は科目が変わるたびに取り直す（絞り込みはストア側の仕事）。
+  // attempt が増えると「もう一度ためす」としてもう一度同じ取得を走らせる
   useEffect(() => {
     let alive = true
     const load =
@@ -92,13 +98,31 @@ export default function Ranking({ prefCode }: { prefCode?: string } = {}) {
       })
       .catch(() => {
         if (!alive) return
-        setError('ランキングに接続できませんでした。')
+        setError(connectionMessage())
         setLoading(false)
       })
     return () => {
       alive = false
     }
-  }, [prefCode, mode])
+  }, [prefCode, mode, attempt])
+
+  const retry = useCallback(() => {
+    setLoading(true)
+    setError(null)
+    setAttempt((n) => n + 1)
+  }, [])
+
+  /** 失敗の表示。原因の 1 行と「もう一度ためす」をひと組で出す */
+  const errorBlock = error !== null && (
+    <>
+      <p className="pen-comment">{error}</p>
+      <p>
+        <button type="button" className="btn" onClick={retry}>
+          もう一度ためす
+        </button>
+      </p>
+    </>
+  )
 
   const statOf = useMemo(() => new Map((stats ?? []).map((s) => [s.prefCode, s])), [stats])
   const cityName = useMemo(() => new Map((meta?.cities ?? []).map((c) => [c.lgCode, c.name])), [meta])
@@ -174,8 +198,8 @@ export default function Ranking({ prefCode }: { prefCode?: string } = {}) {
 
         {modeSwitch}
 
-        {loading && <p>読み込み中…</p>}
-        {error && <p className="pen-comment">{error}</p>}
+        {loading && <PaperSkeleton lines={5} />}
+        {errorBlock}
 
         {!loading && !error && shown.length === 0 && <p>まだ登録がありません。</p>}
 
@@ -267,8 +291,8 @@ export default function Ranking({ prefCode }: { prefCode?: string } = {}) {
 
       {modeSwitch}
 
-      {loading && <p>読み込み中…</p>}
-      {error && <p className="pen-comment">{error}</p>}
+      {loading && <PaperSkeleton lines={5} />}
+      {errorBlock}
 
       {!loading && !error && (
         <ol className="pref-grid">

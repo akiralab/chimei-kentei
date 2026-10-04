@@ -236,6 +236,55 @@ describe('ランキングに届かないとき', () => {
     expect(screen.getByText('80')).toBeInTheDocument()
     spy.mockRestore()
   })
+
+  it('順位表の「もう一度ためす」で取り直す', async () => {
+    putThree()
+    const spy = vi
+      .spyOn(LocalRankingStore.prototype, 'list')
+      .mockRejectedValueOnce(new Error('ランキングを取得できませんでした（503）'))
+    render(<Result setId={SET} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('ランキングに接続できませんでした。')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'もう一度ためす' }))
+
+    await waitFor(() => {
+      expect(rows()).toHaveLength(3)
+    })
+    expect(screen.queryByText('ランキングに接続できませんでした。')).toBeNull()
+    spy.mockRestore()
+  })
+
+  it('登録が通信で失敗したら「もう一度ためす」が出て、押すと登録できる', async () => {
+    // 1 回目だけ network。2 回目は素通しなので、同じ clientToken で二重に積まれないことも見る
+    const spy = vi
+      .spyOn(LocalRankingStore.prototype, 'submit')
+      .mockResolvedValueOnce({ ok: false, reason: 'network' })
+    render(<Result setId={SET} />)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'ランキングに登録' })).toBeEnabled()
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'ランキングに登録' }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'もう一度ためす' })).toBeInTheDocument()
+    })
+    expect(penComments()).toContain('ランキングに接続できませんでした。')
+
+    fireEvent.click(screen.getByRole('button', { name: 'もう一度ためす' }))
+
+    await waitFor(() => {
+      expect(penComments()).toContain('1 位で登録しました。')
+    })
+    expect(screen.getByRole('button', { name: 'ランキングに登録' })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: 'もう一度ためす' })).toBeNull()
+    // 登録は 1 件だけ（clientToken による 1 セット 1 登録の約束は壊れていない）
+    expect(JSON.parse(localStorage.getItem(rankingKey(SET)) ?? '[]')).toHaveLength(1)
+    spy.mockRestore()
+  })
 })
 
 describe('全市区町村名', () => {

@@ -283,6 +283,48 @@ describe('ストアが失敗したとき', () => {
       spy.mockRestore()
     }
   })
+
+  it('「もう一度ためす」で取り直し、2 回目に成功すれば一覧が出る', async () => {
+    installFetchMock()
+    put(SET_12A, [entry({ entryId: 'a', setId: SET_12A, clientToken: 'tok-a' })])
+    const spy = vi
+      .spyOn(LocalRankingStore.prototype, 'prefectureStats')
+      .mockRejectedValueOnce(new Error('ランキングを取得できませんでした（503）'))
+    try {
+      render(<Ranking />)
+      await waitFor(() => {
+        expect(screen.getByText('ランキングに接続できませんでした。')).toBeInTheDocument()
+      })
+
+      fireEvent.click(screen.getByRole('button', { name: 'もう一度ためす' }))
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: '千葉県 1人が回答（市区町村名）' })).toBeInTheDocument()
+      })
+      expect(screen.queryByText('ランキングに接続できませんでした。')).toBeNull()
+      expect(screen.queryByRole('button', { name: 'もう一度ためす' })).toBeNull()
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it('オフラインのときは原因を言い分け、ボタンは残す', async () => {
+    installFetchMock()
+    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+    const spy = vi
+      .spyOn(LocalRankingStore.prototype, 'prefectureStats')
+      .mockRejectedValue(new Error('ランキングを取得できませんでした（503）'))
+    try {
+      render(<Ranking />)
+      await waitFor(() => {
+        expect(screen.getByText('いまオフラインです。順位表は後で見られます。')).toBeInTheDocument()
+      })
+      expect(screen.getByRole('button', { name: 'もう一度ためす' })).toBeInTheDocument()
+    } finally {
+      spy.mockRestore()
+      online.mockRestore()
+    }
+  })
 })
 
 describe('全市区町村名（3 つ目の区分）', () => {

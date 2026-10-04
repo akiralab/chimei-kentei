@@ -1278,6 +1278,53 @@ select.field__input {
 }
 
 /* --------------------------------------------------------------------------
+   16.5 .skeleton — 読み込み中の答案（PaperSkeleton）
+   用紙の罫線（.paper の背景）をそのまま活かし、薄い長方形を数行置くだけ。
+   色は罫線色 1 色で作る（新しい色は増やさない）。
+   -------------------------------------------------------------------------- */
+
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  /* 罫線の 1 行（--rule-height）にちょうど 1 本ずつ乗る */
+  gap: calc(var(--rule-height) - 1rem);
+  margin: var(--space-4) 0;
+}
+
+.skeleton__line {
+  height: 1rem;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-paper-line) 70%, var(--color-paper));
+}
+
+/* 長さを少しずつ変えて「書きかけの答案」に見せる */
+.skeleton__line:nth-child(3n + 2) {
+  width: 92%;
+}
+
+.skeleton__line:nth-child(3n + 3) {
+  width: 64%;
+}
+
+/* 明滅は動きを嫌う設定でないときだけ（§18 の一括指定でも止まるが、意図を明示する）*/
+@media (prefers-reduced-motion: no-preference) {
+  .skeleton__line {
+    animation: skeleton-pulse 1.2s ease-in-out infinite;
+  }
+}
+
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* --------------------------------------------------------------------------
    17. .footer-credit — 出典表記
    -------------------------------------------------------------------------- */
 

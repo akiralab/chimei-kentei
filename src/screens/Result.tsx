@@ -11,8 +11,10 @@ import { appendWrongFromEntry } from '../engine/wrongList.ts'
 import { readNickname } from '../hooks/useNickname.ts'
 import { readAnswerSheet } from '../hooks/answerSheet.ts'
 import { readQuizTimeLimit, readTimeLimit } from '../hooks/useTimeLimit.ts'
+import { connectionMessage } from '../hooks/connection.ts'
 import { BOARD_SCROLL, useBoardModifier } from '../hooks/useBoardModifier.ts'
 import { COVER_PATH, REVIEW_PATH, SELECT_PATH, absoluteUrl, navigate, quizPath } from '../router.ts'
+import PaperSkeleton from '../components/PaperSkeleton.tsx'
 
 const KANJI_NUM = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十']
 const RANKING_LIMIT = 20
@@ -66,6 +68,8 @@ export default function Result({ setId }: { setId: string }) {
   const [loadingRanking, setLoadingRanking] = useState(false)
   const [rankingError, setRankingError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  /** 登録が通信で失敗した直後だけ true。「もう一度ためす」を出す目印 */
+  const [submitFailed, setSubmitFailed] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const [shareUrl, setShareUrl] = useState<string | null>(null)
   const clientToken = useMemo(() => getClientToken(), [])
@@ -131,7 +135,7 @@ export default function Result({ setId }: { setId: string }) {
         }
       } catch {
         if (!alive()) return
-        setRankingError('ランキングに接続できませんでした。')
+        setRankingError(connectionMessage())
       } finally {
         if (alive()) setLoadingRanking(false)
       }
@@ -155,6 +159,12 @@ export default function Result({ setId }: { setId: string }) {
     }
   }, [setId, parsed, records, loadRanking])
 
+  /**
+   * ランキングに登録する。通信で失敗したときは「もう一度ためす」からこのまま再実行する。
+   * 二重登録にはならない: サーバーは `set#{setId}` / `token#{clientToken}` の予約を
+   * 条件付き書き込みで取るので、1 回目が実は通っていた場合の再送は 409（already_submitted）
+   * で跳ね返る（infra/api/src/handler.ts）。端末内ストアも clientToken で同じ判定をする。
+   */
   const register = async () => {
     if (!records || registered || submitting) return
     if (!isValidNickname(nickname)) {
@@ -162,6 +172,7 @@ export default function Result({ setId }: { setId: string }) {
       return
     }
     setSubmitting(true)
+    setSubmitFailed(false)
     const entry = {
       setId,
       nickname,
@@ -191,7 +202,8 @@ export default function Result({ setId }: { setId: string }) {
       return
     }
     if (res.reason === 'network') {
-      setNotice('ランキングに接続できませんでした。しばらくして試してください。')
+      setNotice(connectionMessage())
+      setSubmitFailed(true)
       return
     }
     setNotice('氏名が 1〜12 文字ではありません。')
@@ -292,6 +304,13 @@ export default function Result({ setId }: { setId: string }) {
       </ol>
 
       {notice && <p className="pen-comment">{notice}</p>}
+      {submitFailed && (
+        <p>
+          <button type="button" className="btn" disabled={submitting} onClick={() => void register()}>
+            もう一度ためす
+          </button>
+        </p>
+      )}
       {shareUrl && <p className="review__mine">{shareUrl}</p>}
 
       <p>
@@ -319,8 +338,17 @@ export default function Result({ setId }: { setId: string }) {
         </button>
       </p>
 
-      {remote && loadingRanking && <p className="pen-comment">順位表を読み込んでいます…</p>}
-      {rankingError && <p className="pen-comment">{rankingError}</p>}
+      {remote && loadingRanking && <PaperSkeleton lines={3} />}
+      {rankingError && (
+        <>
+          <p className="pen-comment">{rankingError}</p>
+          <p>
+            <button type="button" className="btn" onClick={() => void loadRanking(myEntryId)}>
+              もう一度ためす
+            </button>
+          </p>
+        </>
+      )}
 
       {entries && (
         <>
