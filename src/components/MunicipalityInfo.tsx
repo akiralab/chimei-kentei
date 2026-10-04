@@ -21,8 +21,15 @@ interface Props {
   reading?: string
   /** 全国モードのときだけ都道府県名を添える */
   prefName?: string
+  /**
+   * 中身がまだ無いときに読みの欄へ出す文言。出題画面は既定の「解答すると出ます」、
+   * 地名帳は「行を選ぶと出ます」のように画面ごとに言い換える
+   */
+  placeholder?: string
   source?: GeoSource
 }
+
+const DEFAULT_PLACEHOLDER = '解答すると出ます'
 
 const BLANK = '—'
 const LABELS = ['人口', '世帯数', '面積', '人口密度'] as const
@@ -43,6 +50,7 @@ export default function MunicipalityInfo({
   revealed,
   reading,
   prefName,
+  placeholder = DEFAULT_PLACEHOLDER,
   source = defaultGeoSource(),
 }: Props) {
   // どの自治体の結果かを添えて持つ。次の問に進んだ直後に前の問の数字を出さないため
@@ -72,7 +80,7 @@ export default function MunicipalityInfo({
           easy の読みは答えなので、解答後だけ出す */}
       <div className="info-card__head">
         <span className="info-card__name">{stats ? stats.name : '？'}</span>
-        <span className="info-card__reading">{stats ? reading : '解答すると出ます'}</span>
+        <span className="info-card__reading">{stats ? reading : placeholder}</span>
       </div>
       {/* 全国モードでは都道府県名を添える。答えではないので解答前から出す（行数を揃える） */}
       {prefName && <p className="info-card__pref">{prefName}</p>}

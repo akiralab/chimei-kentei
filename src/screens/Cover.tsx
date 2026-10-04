@@ -3,7 +3,7 @@ import { isValidNickname } from '../engine/ranking.ts'
 import { SCOPE_NATIONWIDE, buildSetId, todaySeed } from '../engine/setId.ts'
 import { starsAria, starsMark } from '../engine/stars.ts'
 import { useNickname } from '../hooks/useNickname.ts'
-import { RANKING_PATH, REVIEW_PATH, SELECT_PATH, navigate, quizPath } from '../router.ts'
+import { ATLAS_PATH, RANKING_PATH, REVIEW_PATH, SELECT_PATH, navigate, quizPath } from '../router.ts'
 
 /**
  * 表紙。「小テストが配られた瞬間」の 1 枚。
@@ -89,12 +89,17 @@ export default function Cover() {
         から出題。
       </p>
 
+      {/* 副ボタンは 3 つ。「ランキングを見る」のままだと 375px で「地名帳」が 2 行目に落ち、
+          表紙が 12px スクロールしたので見える字を「ランキング」に縮めた（読み上げ名は元のまま）*/}
       <p className="cover__sub-actions">
-        <a className="btn btn--ghost cover__ranking" href={RANKING_PATH}>
-          ランキングを見る
+        <a className="btn btn--ghost cover__ranking" href={RANKING_PATH} aria-label="ランキングを見る">
+          ランキング
         </a>
         <a className="btn btn--ghost" href={REVIEW_PATH}>
           間違えた問題
+        </a>
+        <a className="btn btn--ghost" href={ATLAS_PATH}>
+          地名帳
         </a>
       </p>
 
