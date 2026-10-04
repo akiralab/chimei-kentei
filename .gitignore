@@ -26,3 +26,6 @@ dist-ssr
 # 共有ランキング API のビルド成果物（npm run build:api / deploy:api が作る）
 infra/.packaged.yaml
 infra/api/dist/
+
+# フォントの原本（npm run build:fonts が google/fonts から落とす。再取得できるので持たない）
+scripts/.font-cache/

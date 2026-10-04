@@ -5,14 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>地名読み検定 — 答案用紙テーマ スタイルガイド</title>
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
-    <!-- フォント（index.html と同じ 5 書体） -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Klee+One:wght@400;600&family=Mochiy+Pop+One&family=Shippori+Mincho+B1:wght@400;700&family=Yusei+Magic&display=swap"
-      rel="stylesheet"
-    />
-    <!-- tokens.css + theme.css の結合コピー（正本は src/styles/）。相対パスなので file:// でも開ける -->
+    <!-- フォント（index.html と同じ 5 書体）は theme-preview.css の @font-face で同梱ぶんを読む -->
+    <!-- fonts.css + tokens.css + theme.css の結合コピー（正本は src/styles/）。相対パスなので file:// でも開ける
+         （file:// では public/fonts/ を辿れないので書体はフォールバックになる。配信先では読める） -->
     <link rel="stylesheet" href="./theme-preview.css" />
     <style>
       /* ここから下はプレビュー専用の飾り。テーマの部品ではない（.preview-* 接頭辞） */
