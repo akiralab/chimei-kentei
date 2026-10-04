@@ -98,8 +98,11 @@ for (const file of listFiles(path.join(geoDir, 'pref'), (n) => n.endsWith('.json
 
 // --- UI 文言。**コメントを落としてから**拾う（設計コメントの漢字まで UI 扱いにすると、
 //     表紙で読む kana スライスに地名以外の漢字が数百字混ざって初回ロードが重くなる）
+//     テストとフィクスチャも外す（期待値として地名を山ほど書いてあり、UI には出ないため）
 const stripComments = (code) => code.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^[ \t]*\/\/.*$/gm, ' ')
-for (const file of listFiles(path.join(root, 'src'), (n) => /\.tsx?$/.test(n))) {
+const isSource = (name) => /\.tsx?$/.test(name) && !/\.test\.tsx?$/.test(name)
+for (const file of listFiles(path.join(root, 'src'), isSource)) {
+  if (file.includes('__fixtures__')) continue
   add(uiChars, stripComments(fs.readFileSync(file, 'utf8')))
 }
 add(uiChars, fs.readFileSync(path.join(root, 'index.html'), 'utf8').replace(/<!--[\s\S]*?-->/g, ' '))
