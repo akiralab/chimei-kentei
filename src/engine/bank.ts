@@ -17,6 +17,18 @@ import { sampleQuestions } from './sampler.ts'
  */
 export const DATA_VERSION = 'abr20260925r2'
 
+/**
+ * 旧版のセットID（`abr20260925-...` など）を共有リンクで開いたときの案内。
+ * 同梱しているのは現行版だけなので、旧版の setId からは同じ 10 問を再現できない。
+ * 黙って現行版で組み直すと「共有された問題と違う 10 問」が出てしまうので、出題も結果も止める。
+ */
+export const OUTDATED_SET_MESSAGE = 'この問題セットは古い版のため開けません。'
+
+/** セットID の版が、いま同梱している問題バンクの版かどうか */
+export function isCurrentDataVersion(dataVersion: string): boolean {
+  return dataVersion === DATA_VERSION
+}
+
 export interface BankSource {
   meta(): Promise<BankMeta>
   easy(): Promise<Question[]>

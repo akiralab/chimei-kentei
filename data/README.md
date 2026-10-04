@@ -73,12 +73,14 @@ python3 -m unittest discover -s data -p 'test_*.py'               # 前処理ル
 
 | 版 | 出力先 | 中身 |
 |---|---|---|
-| `abr20260925` | `public/questions/abr20260925/` | 初版。easy 1,741 件 |
+| `abr20260925` | （削除済み） | 初版。easy 1,741 件。2026-10-04 に削除（Issue #42） |
 | `abr20260925r2` | `public/questions/abr20260925r2/`（現行） | easy 1,700 件（ルール e を easy にも適用し 41 件を除外）。difficult と `meta.cities` は初版と同一 |
 
-**旧版のディレクトリは削除も変更もしない。** 旧 setId の順位表を閲覧専用で残すため（Issue #11）と、
-API（Lambda）が旧版を読んでいる移行期間のため。difficult の JSON は内容が同一なので
-git の blob は初版と共有され、リポジトリは重くならない。
+**同梱するのは現行版 1 つだけにする。** スマホアプリ（Capacitor の殻）に `public/` をまるごと
+入れる都合で、使っていない版を 17MB ぶん抱えると配信サイズが倍になるため（設計ノート §13.6 決定 6）。
+旧版の setId を `#/q/` や `#/result/` で開いたときは、黙って現行版で組み直さず
+「この問題セットは古い版のため開けません」と出して止める（`src/engine/bank.ts` の
+`OUTDATED_SET_MESSAGE`）。順位表に残っている旧版の行は触らない（Issue #11 の範囲）。
 
 ### 版を上げたときの手順（順序が大事）
 
@@ -89,7 +91,7 @@ git の blob は初版と共有され、リポジトリは重くならない。
 
 そのうえで:
 
-1. `npm run build:questions` で新しい版のディレクトリを生成する（旧版はそのまま置く）
+1. `npm run build:questions` で新しい版のディレクトリを生成し、**旧版のディレクトリを消す**
 2. マージ → GitHub Pages のデプロイ（新しい版の JSON が公開される）
 3. **`npm run deploy:api` で Lambda を更新する**（`infra/README.md` の「デプロイ」）
 

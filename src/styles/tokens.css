@@ -29,7 +29,8 @@
   --color-red-pen-faint: rgba(224, 54, 44, 0.14);
 
   /* ---- フォント ------------------------------------------------------- */
-  /* index.html の Google Fonts <link> で読み込む。必ずフォールバックを添える */
+  /* src/styles/fonts.css が public/fonts/ の woff2 から読み込む（同梱。外部通信なし）。
+     サブセットなので収録外の字はフォールバックへ落ちる。必ず和文のシステムフォントで締める */
   --font-body: 'Shippori Mincho B1', 'Hiragino Mincho ProN', 'Yu Mincho', 'YuMincho', serif;
   /* 見出し。Dela Gothic One から Mochiy Pop One へ（2026-10-02）。
      Dela は字幅を詰めた極太デザインで、2 文字熟語の漢字（範囲・結果・匝瑳）が
@@ -66,8 +67,15 @@
   --space-4: 1rem;
   --space-5: 1.5rem;
   --space-6: 2rem;
+  /* .paper__prop の左位置（theme.css）だけが使う。clamp の上限なので
+     @media (max-height: 740px) で縮めると飾りが用紙の内側へ寄る */
   --space-7: 2.5rem;
   --space-8: 3rem;
+
+  /* ---- タップ領域 ------------------------------------------------------ */
+  /* 指で押せる最小の寸法。Apple HIG の 44pt に合わせる。
+     個別の部品でこれを下回らせない（下回してよいのは 720px 以上のマウス操作時だけ）*/
+  --tap-min: 44px;
 
   /* ---- 形 ------------------------------------------------------------- */
   --radius-paper: 6px;

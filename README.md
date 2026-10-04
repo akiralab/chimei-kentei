@@ -97,7 +97,18 @@ npm run build      # dist/ を生成
 npm run build:api  # Lambda のバンドル（infra/api/dist/handler.mjs）
 npm run deploy:api # 共有ランキング API を AWS へデプロイ（infra/README.md）
 npm run build:og   # リンクプレビュー用の public/og.png を og/og.html から撮り直す（Google Chrome が要る）
+npm run build:icons # アプリアイコン一式（public/icon-*.png・apple-touch-icon.png）を og/icon.html から撮り直す
+npm run build:fonts # 同梱フォント public/fonts/*.woff2 と src/styles/fonts.css を作り直す（uv か fontTools が要る）
+npm run measure    # 全画面 × 5 ビューポートの実測（タップ領域・文字・はみ出し・外部ホスト）
+npm run build -- --mode capacitor  # ネイティブの殻向けビルド（base を相対にする）
 ```
+
+- **フォントは同梱**（Google Fonts からは読まない）。5 書体の woff2 はこのアプリに出る字だけのサブセットで、
+  字種を増やす変更（UI 文言・問題バンクの版上げ）をしたら `npm run build:fonts` で作り直す。
+  ライセンス（SIL OFL 1.1）の全文は `public/fonts/{書体}/OFL.txt` に同梱している。
+- **計測**は `npm run build` のあとに `npm run measure`。自分で `vite preview` を立て、ヘッドレス Chrome で
+  巡回して `measure.json`・`network.json`・`shots/` を吐く。前後で比べるときは
+  `npm run measure -- --json measure-after.json --out shots-after` のように出力先を分ける。
 
 共有ランキングをつないで手元で試すとき:
 
@@ -123,7 +134,9 @@ src/engine/                  セットID・決定論的抽出・採点の正規�
 infra/                       共有ランキング API（Lambda / HTTP API / DynamoDB・CloudFormation）
 src/screens/                 表紙・範囲選択・出題・結果・ランキング・間違えた問題・地名帳
 src/styles/                  答案用紙テーマ（デザイントークン・部品）
-og/                          リンクプレビュー画像（OGP）の原稿 og.html と撮影スクリプト render.mjs → public/og.png
+og/                          リンクプレビュー画像（og.html → public/og.png）とアプリアイコン（icon.html → public/icon-*.png）の原稿と撮影スクリプト
+public/fonts/                同梱フォント（サブセット woff2 ＋ 各書体の OFL.txt）。@font-face は src/styles/fonts.css
+scripts/                     同梱フォントの生成（build-fonts.mjs・subset-font.py）と画面の実測（measure.mjs・measure-expr.js）
 ```
 
 設計の正本（画面・前処理ルール・セットIDの仕様・未決論点）は作者の個人ノートにあり、要点は Issues に分割して管理する。

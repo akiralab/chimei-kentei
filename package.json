@@ -10,6 +10,9 @@
     "preview": "vite preview",
     "test": "vitest",
     "build:og": "node og/render.mjs",
+    "build:icons": "node og/render-icons.mjs",
+    "build:fonts": "node scripts/build-fonts.mjs",
+    "measure": "node scripts/measure.mjs",
     "build:questions": "python3 data/build_questions.py",
     "build:api": "esbuild infra/api/src/handler.ts --bundle --platform=node --target=node22 --format=esm --outfile=infra/api/dist/handler.mjs --external:@aws-sdk/*",
     "deploy:api": "bash infra/deploy.sh"

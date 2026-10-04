@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <title>地名読み検定 アプリアイコンの原稿</title>
+    <style>
+      /* アプリアイコンの原稿（1024×1024）。og/render-icons.mjs がヘッドレス Chrome で撮る。
+         黒板色の地に答案用紙 1 枚と赤ペンの ○ だけ。文字は入れない（192px まで縮むと潰れるため）。
+         色は src/styles/tokens.css の --color-board / --color-paper / --color-red-pen と同じ値。 */
+      :root {
+        --board: #2e6b5e;
+        --board-deep: #245449;
+        --paper: #fbf7ec;
+        --paper-edge: #efe7d4;
+        --rule: #c9d7e8;
+        --rule-strong: #9bb2cd;
+        --red: #e0362c;
+        /* マスカブル版は 0.8。中央 80% の安全圏に収めるために中身だけ縮める */
+        --scale: 1;
+      }
+
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+      }
+
+      .icon {
+        position: relative;
+        width: 1024px;
+        height: 1024px;
+        overflow: hidden;
+        background-color: var(--board);
+        background-image:
+          radial-gradient(ellipse 60% 40% at 20% 14%, rgba(255, 255, 255, 0.08), transparent 70%),
+          radial-gradient(ellipse 120% 90% at 50% 50%, transparent 52%, var(--board-deep) 100%);
+      }
+
+      /* 中身だけをまとめて縮める入れ物。地（黒板）は縮めない */
+      .art {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        transform: scale(var(--scale));
+        transform-origin: 50% 50%;
+      }
+
+      /* 答案用紙。黒板に斜めに貼った 1 枚 */
+      .paper {
+        position: relative;
+        width: 660px;
+        height: 760px;
+        padding: 72px 64px 0;
+        box-sizing: border-box;
+        background-color: var(--paper);
+        background-image: repeating-linear-gradient(
+          to bottom,
+          transparent 0 86px,
+          var(--rule) 86px 90px
+        );
+        background-position: 0 150px;
+        border-radius: 28px;
+        box-shadow: 0 26px 60px rgba(0, 0, 0, 0.32);
+        transform: rotate(-5deg);
+      }
+
+      /* 用紙の上の帯（氏名欄・得点欄の名残）。線 2 本だけで表す */
+      .head {
+        height: 78px;
+        border-bottom: 6px double var(--rule-strong);
+      }
+
+      .head::before {
+        content: '';
+        display: block;
+        width: 300px;
+        height: 14px;
+        margin-top: 34px;
+        background: var(--paper-edge);
+        border-radius: 7px;
+      }
+
+      /* 赤ペンの ○。用紙からわずかにはみ出させて「採点した」感じを出す */
+      .circle {
+        position: absolute;
+        top: 214px;
+        left: 50%;
+        width: 620px;
+        height: 620px;
+        margin-left: -310px;
+        transform: rotate(-5deg);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="icon">
+      <div class="art">
+        <div class="paper">
+          <div class="head"></div>
+          <svg class="circle" viewBox="0 0 200 200" fill="none" aria-hidden="true">
+            <!-- 手書きの ○ に見せるため、真円ではなく少しつぶした楕円を回して描く -->
+            <ellipse
+              cx="100"
+              cy="100"
+              rx="74"
+              ry="64"
+              transform="rotate(-8 100 100)"
+              stroke="#e0362c"
+              stroke-width="13"
+              stroke-linecap="round"
+              stroke-dasharray="430 50"
+              stroke-dashoffset="18"
+            />
+          </svg>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

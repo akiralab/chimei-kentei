@@ -3,7 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- ホーム画面・ネイティブの殻（設計ノート §13 / Issue #42）。
+         href は public/ 直下のファイル。Vite が base（/chimei-kentei/ か、
+         --mode capacitor のときは相対）を付け直すので、ここでは / 始まりで書く -->
+    <meta name="theme-color" content="#2e6b5e" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="地名検定" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
     <title>地名読み検定</title>
     <meta name="description" content="難読地名をひらがなで答える検定。都道府県を選んで 10 問、順位表で競えます。" />
     <!-- リンクプレビュー（Slack・LINE・X 向け）。ハッシュルーティングなので全画面で共通の 1 枚。
@@ -24,13 +33,8 @@
     <meta name="twitter:title" content="地名読み検定" />
     <meta name="twitter:description" content="この地名、読めますか。難読地名をひらがなで答える検定。都道府県を選んで 10 問、順位表で競えます。" />
     <meta name="twitter:image" content="https://akiralab.github.io/chimei-kentei/og.png" />
-    <!-- 答案用紙テーマのフォント（役割と変数名は src/styles/tokens.css を参照） -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Klee+One:wght@400;600&family=Mochiy+Pop+One&family=Shippori+Mincho+B1:wght@400;700&family=Yusei+Magic&display=swap"
-      rel="stylesheet"
-    />
+    <!-- 答案用紙テーマのフォントは同梱（public/fonts/）。@font-face は src/styles/fonts.css、
+         作り直しは npm run build:fonts。外部ホストからは読まない（オフラインで書体が落ちないように） -->
   </head>
   <body>
     <div id="root"></div>

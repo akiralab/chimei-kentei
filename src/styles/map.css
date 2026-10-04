@@ -87,9 +87,17 @@
 }
 
 .layout__exit .btn {
-  min-height: 32px;
+  min-height: var(--tap-min);
   padding: var(--space-1) var(--space-3);
   font-size: var(--fs-xs);
+}
+
+/* 広い画面（マウス操作）だけ 1 段低くする。用紙 1 枚に収める方を取る。
+   --tap-min を下回ってよいのは 720px 以上だけ（src/styles/CONTRACT.md） */
+@media (min-width: 720px) {
+  .layout__exit .btn {
+    min-height: 32px;
+  }
 }
 
 /* --------------------------------------------------------------------------
@@ -262,7 +270,7 @@
 
 /* 見出し行に同居する「全国」。.pref-grid__item と同じ見た目だが縦を詰めている */
 .jp-map__all {
-  min-height: 32px;
+  min-height: var(--tap-min);
   padding: var(--space-1) var(--space-4);
   font-family: var(--font-hand);
   font-size: var(--fs-md);

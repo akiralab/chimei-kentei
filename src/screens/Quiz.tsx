@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AnswerRecord, Question, QuestionSet } from '../engine/types.ts'
 import { QUESTIONS_PER_SET, UNLIMITED_MAX_MS } from '../engine/types.ts'
-import { buildQuestionSet, defaultSource } from '../engine/bank.ts'
+import { OUTDATED_SET_MESSAGE, buildQuestionSet, defaultSource, isCurrentDataVersion } from '../engine/bank.ts'
 import { modeName } from '../engine/modes.ts'
 import { starsAria, starsMark } from '../engine/stars.ts'
 import { grade } from '../engine/grading.ts'
@@ -67,11 +67,14 @@ export default function Quiz({ setId, direct = false }: { setId: string; direct?
   const inputRef = useRef<HTMLInputElement | null>(null)
   const [nickname, setNickname] = useNickname()
 
-  const error = parsed ? loadError : `セットIDが読めません: ${setId}`
+  const error =
+    parsed === null ? `セットIDが読めません: ${setId}`
+    : isCurrentDataVersion(parsed.dataVersion) ? loadError
+    : OUTDATED_SET_MESSAGE
 
   // 問題セットの読み込み（setId から決定論的に再現する）。App 側で key={setId} なので setId は不変
   useEffect(() => {
-    if (!parsed) return
+    if (!parsed || !isCurrentDataVersion(parsed.dataVersion)) return
     let alive = true
     buildQuestionSet(parsed.mode, parsed.scope, parsed.seed, defaultSource(), parsed.all, parsed.stars)
       .then((s) => {
@@ -174,6 +177,11 @@ export default function Quiz({ setId, direct = false }: { setId: string; direct?
         <p>
           <button type="button" className="btn btn--primary" onClick={() => navigate(SELECT_PATH)}>
             範囲をえらび直す
+          </button>
+        </p>
+        <p>
+          <button type="button" className="btn btn--ghost" onClick={() => navigate(COVER_PATH)}>
+            タイトルへ戻る
           </button>
         </p>
       </div>
