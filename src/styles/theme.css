@@ -243,6 +243,8 @@ body {
 
 .field__input {
   flex: 1 1 5.5rem;
+  /* 行高まかせだと 30〜36px にしかならない（select は特に低い）。指で押せる高さを与える */
+  min-height: var(--tap-min);
   min-width: 4rem;
   max-width: 12rem;
   padding: 0 var(--space-1) 2px;
@@ -307,6 +309,13 @@ body {
   letter-spacing: 0.04em;
   color: var(--color-pencil);
   vertical-align: 0.5em;
+}
+
+/* 見直しの行の中では親（.review__q）が小さいので、0.42em の掛け算で 8px まで潰れる。
+   ここだけ絶対値に切り替えて読める大きさを保つ */
+.review__q .q-suffix {
+  font-size: var(--fs-sm);
+  vertical-align: 0.1em;
 }
 
 .q-pref {
@@ -605,7 +614,7 @@ body {
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-  min-height: 44px; /* タップ領域 */
+  min-height: var(--tap-min); /* タップ領域 */
   padding: var(--space-2) var(--space-5);
   font-family: var(--font-display);
   font-size: var(--fs-md);
@@ -678,7 +687,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 40px;
+  min-height: var(--tap-min);
   padding: var(--space-1) var(--space-2);
   font-family: var(--font-hand);
   font-size: var(--fs-md);
@@ -721,9 +730,12 @@ body {
 
 .mode-switch__item {
   padding: var(--space-2) var(--space-4);
-  min-height: 38px;
+  min-height: var(--tap-min);
+  /* 難易度の ★ は 1〜3 文字しかなく、幅が 21px まで痩せる。横も下限を引く */
+  min-width: var(--tap-min);
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: var(--space-1);
   font-family: var(--font-body);
   font-size: var(--fs-md);
@@ -789,8 +801,9 @@ body {
   }
 }
 
-/* 広い画面では 1 段低くする。範囲選択の副操作なので、用紙 1 枚に収める方を取る
-   （狭い画面は 44px のタップ領域を守るため据え置き） */
+/* 広い画面では 1 段低くする。範囲選択の副操作なので、用紙 1 枚に収める方を取る。
+   --tap-min を下回ってよいのはここだけ（720px 以上＝マウス操作の幅）。
+   狭い画面は指で押すので据え置き */
 @media (min-width: 720px) {
   .mode-switch--compact .mode-switch__item {
     padding-block: var(--space-1);
@@ -1111,7 +1124,7 @@ body {
 }
 
 .cover__ranking {
-  min-height: 38px;
+  min-height: var(--tap-min);
   padding: var(--space-1) var(--space-4);
   font-size: var(--fs-sm);
 }
@@ -1455,7 +1468,7 @@ body {
 }
 
 .atlas-nav .btn {
-  min-height: 36px;
+  min-height: var(--tap-min);
   padding: var(--space-1) var(--space-3);
   font-size: var(--fs-xs);
 }

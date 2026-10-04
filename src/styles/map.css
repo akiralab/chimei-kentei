@@ -87,7 +87,7 @@
 }
 
 .layout__exit .btn {
-  min-height: 32px;
+  min-height: var(--tap-min);
   padding: var(--space-1) var(--space-3);
   font-size: var(--fs-xs);
 }
@@ -262,7 +262,7 @@
 
 /* 見出し行に同居する「全国」。.pref-grid__item と同じ見た目だが縦を詰めている */
 .jp-map__all {
-  min-height: 32px;
+  min-height: var(--tap-min);
   padding: var(--space-1) var(--space-4);
   font-family: var(--font-hand);
   font-size: var(--fs-md);
