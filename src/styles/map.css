@@ -69,6 +69,15 @@
   color: var(--color-pencil);
 }
 
+/* ソフトキーボードが出ている高さ（390x508 近似）。畳んだ 1 行は用紙の帯の
+   「範囲: 東京都」と同じことしか言わないので、ここでは消して「解答」を画面内に残す。
+   解答すると feedback が付いて畳みが外れ、地図は通常どおり開く */
+@media (max-height: 560px) {
+  .board .layout__map--folded {
+    display: none;
+  }
+}
+
 /* 開くときだけ軽く伸ばす。動きを止める設定では theme.css の一括指定で 0 になる */
 @media (max-width: 899px) {
   .layout__map {
