@@ -69,6 +69,40 @@
   color: var(--color-pencil);
 }
 
+/* 解答後に開いた地図の高さ（899px 以下＝地図を用紙の上に積む幅だけ）。
+   解答前に畳むようにしたぶん「開く」が答え合わせの見せ場になったので、
+   用紙に余っていた罫線 5 行ぶんを地図へ回す。情報カードを重ねても輪郭と
+   赤い強調が見える高さが要る（24dvh では 375px でカードが地図を覆っていた）*/
+@media (max-width: 899px) {
+  .layout__map {
+    height: min(34dvh, 320px);
+  }
+}
+
+/* 低い画面（375x667 など）は用紙の余りが少ないので控えめに。
+   28dvh では解答後（○× と正解の行が増えたとき）に用紙が 29px あふれた。
+   ここは情報カード（105px）だけでパネルをほぼ使い切るので、地図が覗く高さを
+   作るために見出しとカードの余白も削る（「東京都のどこ？」は用紙の帯の
+   「範囲: 東京都」と同じことしか言わないので落とす）*/
+@media (max-width: 899px) and (max-height: 740px) {
+  .layout__map {
+    height: min(23dvh, 190px);
+  }
+
+  .layout__map .map-muni__caption {
+    display: none;
+  }
+
+  .layout__map .info-card {
+    padding: var(--space-1) var(--space-2);
+  }
+
+  .layout__map .info-card__stats,
+  .layout__map .info-card__source {
+    margin-top: 0;
+  }
+}
+
 /* ソフトキーボードが出ている高さ（390x508 近似）。畳んだ 1 行は用紙の帯の
    「範囲: 東京都」と同じことしか言わないので、ここでは消して「解答」を画面内に残す。
    解答すると feedback が付いて畳みが外れ、地図は通常どおり開く */

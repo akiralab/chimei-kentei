@@ -1365,7 +1365,9 @@ select.field__input {
    1 枚に収まるよう部品の margin も落とす。文字サイズは触らない。
    -------------------------------------------------------------------------- */
 
-/* 1 段目（844・932・800）。余白だけを落とし、帯は sticky のまま残す */
+/* 1 段目（844・932・PC の 800）。**余白だけ**を落とし、帯は sticky のまま残す。
+   文字サイズを落とす tokens.css 側の段は 899px 以下に限ってあるが（PC の出題漢字は
+   4.4rem のまま）、余白の詰めは高さが足りない PC でも要るので幅で切らない */
 @media (max-height: 940px) {
   .q-prompt {
     margin-bottom: var(--space-3);
@@ -1481,14 +1483,6 @@ select.field__input {
     top: var(--space-3);
     right: var(--space-3);
     z-index: 3;
-  }
-}
-
-/* 地図パネルを少し低くして解答ボタンまで収める（map.css の 24dvh を上書き）。
-   畳んでいる間は map.css の .board .layout__map--folded が勝つ（44px）*/
-@media (max-width: 600px) and (max-height: 940px) {
-  .board .layout__map {
-    height: 20dvh;
   }
 }
 
