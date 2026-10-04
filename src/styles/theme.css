@@ -66,7 +66,10 @@ body {
   height: 100vh;
   height: 100dvh;
   overflow: hidden;
-  padding: var(--space-4) var(--space-3);
+  /* ノッチ・ホームインジケータを避ける（殻に入れたとき用）。ウェブでは env() が 0 なので
+     見た目は変わらない。* { box-sizing: border-box } が効いているので高さは増えない */
+  padding: calc(var(--space-4) + env(safe-area-inset-top)) calc(var(--space-3) + env(safe-area-inset-right))
+    calc(var(--space-4) + env(safe-area-inset-bottom)) calc(var(--space-3) + env(safe-area-inset-left));
   display: flex;
   flex-direction: column;
   align-items: center;

@@ -3,7 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- ホーム画面・ネイティブの殻（設計ノート §13 / Issue #42）。
+         href は public/ 直下のファイル。Vite が base（/chimei-kentei/ か、
+         --mode capacitor のときは相対）を付け直すので、ここでは / 始まりで書く -->
+    <meta name="theme-color" content="#2e6b5e" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="地名検定" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
     <title>地名読み検定</title>
     <meta name="description" content="難読地名をひらがなで答える検定。都道府県を選んで 10 問、順位表で競えます。" />
     <!-- リンクプレビュー（Slack・LINE・X 向け）。ハッシュルーティングなので全画面で共通の 1 枚。
