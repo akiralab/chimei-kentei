@@ -951,6 +951,14 @@ body {
   }
 }
 
+/* 単独で 1 行に置く --fit の切替（地名帳の難易度）。範囲選択と違って残りを譲る相手がいないので、
+   狭い画面の width: 100% を外して枠も中身に合わせる（右半分が空いた帯にならない）。
+   範囲選択の難易度は .switch-row の中なのでこの指定に当たらない */
+.paper > .mode-switch--fit {
+  width: auto;
+  align-self: start;
+}
+
 /* --------------------------------------------------------------------------
    14. .review — 答案の見直し（1 行 1 問）
    -------------------------------------------------------------------------- */
@@ -1468,13 +1476,19 @@ body {
 
 .atlas__row {
   border-bottom: 1px solid var(--color-paper-line);
+  /* 行を含有ブロックにする。★ に添える .sr-only は position: absolute なので、
+     ここで止めないと .paper（position: relative）を基準に置かれ、
+     一覧の内側スクロールに切り取られずに用紙の高さを押し広げてしまう */
+  position: relative;
 }
 
 /* 行の中身。リンクの行（市区町村）と素の行（段階 2 の町名）で同じ格子を使う */
 .atlas__row > a,
 .atlas__row > .atlas__cells {
   display: grid;
-  grid-template-columns: 1.1rem minmax(0, 1fr) minmax(0, 1.2fr);
+  /* 末尾は ★ の列。行ごとに幅が変わらないよう ★★★ がちょうど入る固定幅にする
+     （行はそれぞれ別の grid なので、auto にすると よみ の右端が行ごとにずれる） */
+  grid-template-columns: 1.1rem minmax(0, 1fr) minmax(0, 1.2fr) 2.6rem;
   align-items: center;
   gap: var(--space-2);
   /* 指で押せる最小の高さ */
@@ -1520,6 +1534,13 @@ body {
   overflow-wrap: anywhere;
 }
 
+/* 行の難易度 ★（easy.json の stars）。問題バンクに無い市区町村は空のまま列だけ残る */
+.atlas__stars {
+  font-size: var(--fs-sm);
+  line-height: 1;
+  text-align: right;
+}
+
 /* 選択中の行は蛍光黄。色だけに頼らないよう .atlas__mark の「▶」を markup 側が添える */
 .atlas__row.is-selected {
   background: var(--color-marker-yellow);
@@ -1528,6 +1549,11 @@ body {
 
 .atlas__row.is-selected > a {
   font-weight: 700;
+}
+
+/* 地名帳の詳細（375）の副題「いたばしく ★★」。よみから少し離す */
+.paper__subtitle > .stars {
+  margin-left: var(--space-2);
 }
 
 /* --------------------------------------------------------------------------

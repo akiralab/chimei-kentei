@@ -14,9 +14,10 @@
  * 出題から外した市区町村（ひらがなの さいたま など）もここには出る（資料集は欠けがない方が価値がある）。
  */
 import { useEffect, useMemo, useState } from 'react'
-import type { BankMeta } from '../engine/types.ts'
-import { loadMeta } from '../engine/bank.ts'
+import type { BankMeta, Stars } from '../engine/types.ts'
+import { loadEasy, loadMeta } from '../engine/bank.ts'
 import { scopeLabel } from '../engine/scope.ts'
+import { STARS_ALL, STARS_CHOICES, starsAria, starsMark, starsSwitchLabel } from '../engine/stars.ts'
 import type { PrefectureCollection } from '../geo/load.ts'
 import { defaultGeoSource } from '../geo/load.ts'
 import { isSubregionScope, subregionById, subregionOf, subregionsOf, wholePrefLabel } from '../geo/subregions.ts'
@@ -29,12 +30,20 @@ import MunicipalityInfo from '../components/MunicipalityInfo.tsx'
 import MunicipalityMap from '../components/MunicipalityMap.tsx'
 import RegionPicker from '../components/RegionPicker.tsx'
 
-/** meta.cities の 1 件（段階 2 で町名を混ぜても壊れないよう、必要な 2 列だけを見る） */
+/** meta.cities の 1 件（段階 2 で町名を混ぜても壊れないよう、必要な列だけを見る） */
 interface City {
   lgCode: string
   name: string
   kana: string
+  /**
+   * 難易度 ★1〜3（easy.json の stars を lgCode で引いたもの）。
+   * 出題から外した 41 件（ひらがな名・読み衝突）は easy.json に無いので undefined
+   */
+  stars?: Stars
 }
+
+/** 選んでいる難易度。0 ＝ 絞らない（全部） */
+type StarsChoice = Stars | typeof STARS_ALL
 
 /** 行の単位。特別区が混じる東京都だけ「市区町村」になる（範囲選択と同じ数え方） */
 function unitOf(cities: City[]): string {
@@ -62,6 +71,13 @@ export default function Atlas({ scope, lgCode }: Props) {
   /** 検索語。画面（親）が持つので、詳細へ行って戻っても消えない（設計 §12.3） */
   const [query, setQuery] = useState('')
   /**
+   * 難易度の絞り込み。0 ＝ 全部。検索語と同じく URL には入れないが、
+   * **都道府県を替えても保つ**（★★★ だけを県をまたいで眺める使い方のため）
+   */
+  const [stars, setStars] = useState<StarsChoice>(STARS_ALL)
+  /** lgCode → ★。easy.json が読めなければ null（★ が出ないだけで一覧は成立する） */
+  const [starsOf, setStarsOf] = useState<Map<string, Stars> | null>(null)
+  /**
    * 最後に開いた行。375 で詳細から一覧へ戻ったとき（URL から lgCode が消える）でも
    * 「どの行を見ていたか」を蛍光黄と `aria-current` で残すために持つ。範囲を替えたら忘れる。
    *
@@ -83,6 +99,24 @@ export default function Atlas({ scope, lgCode }: Props) {
       })
       .catch((e: unknown) => {
         if (alive) setError(e instanceof Error ? e.message : String(e))
+      })
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  // 難易度 ★。範囲選択の件数表と同じ easy.json なので、どちらかを開いていればキャッシュに乗る
+  useEffect(() => {
+    let alive = true
+    loadEasy()
+      .then((easy) => {
+        if (!alive) return
+        const map = new Map<string, Stars>()
+        for (const q of easy) if (q.stars !== undefined) map.set(q.lgCode, q.stars)
+        setStarsOf(map)
+      })
+      .catch(() => {
+        /* ★ が出ないだけで一覧・検索は成立する */
       })
     return () => {
       alive = false
@@ -127,11 +161,15 @@ export default function Atlas({ scope, lgCode }: Props) {
     const sub = scope.length === 3 ? subregionById(scope) : undefined
     return meta.cities
       .filter((c) => c.prefCode === prefCode && (!sub || subregionOf(c.lgCode)?.id === sub.id))
-      .map((c) => ({ lgCode: c.lgCode, name: c.name, kana: c.kana }))
+      .map((c) => ({ lgCode: c.lgCode, name: c.name, kana: c.kana, stars: starsOf?.get(c.lgCode) }))
       .sort((a, b) => (a.lgCode < b.lgCode ? -1 : 1))
-  }, [meta, scope, prefCode])
+  }, [meta, scope, prefCode, starsOf])
 
-  const shown = useMemo(() => cities.filter((c) => matches(c, query.trim())), [cities, query])
+  /** 難易度と検索は **両方** 効く（★★★ かつ「橋」を含む、のように） */
+  const shown = useMemo(
+    () => cities.filter((c) => (stars === STARS_ALL || c.stars === stars) && matches(c, query.trim())),
+    [cities, query, stars],
+  )
 
   // 不正な URL は素直に落とす（設計 §12.4。網羅的な検証はしない）
   useEffect(() => {
@@ -164,13 +202,28 @@ export default function Atlas({ scope, lgCode }: Props) {
   const selected = navIndex < 0 ? undefined : navRows[navIndex]
 
   const rangeName = scopeLabel(scope, () => prefName)
+  /**
+   * 見出しの右の添え書き。検索中は「N 件」、そうでなければ「東京都・23区 ／ ★★★ 5 市区町村」。
+   * 単位は範囲の全件（cities）から決めるので、★ で絞って区が 0 件になっても「市区町村」のまま
+   */
   const headerNote =
-    query.trim() !== '' ? `${shown.length} 件` : `${rangeName} ／ ${cities.length} ${unitOf(cities)}`
+    query.trim() !== '' ? `${shown.length} 件`
+    : stars === STARS_ALL ? `${rangeName} ／ ${cities.length} ${unitOf(cities)}`
+    : `${rangeName} ／ ${starsMark(stars)} ${shown.length} ${unitOf(cities)}`
+  /** その範囲に ★{n} が何件あるか。ツールチップに出す（ラベルに入れると 375px で溢れる） */
+  const countAt = (choice: Stars): number => cities.filter((c) => c.stars === choice).length
 
   const changePref = (code: string) => {
-    // 都道府県を替えたら地域は「全域」に戻り、検索も空にする（設計 §12.4）
+    // 都道府県を替えたら地域は「全域」に戻り、検索も空にする（設計 §12.4）。
+    // 難易度は保つ（★★★ だけを県をまたいで眺められるように）
     setQuery('')
     navigate(atlasPath(code))
+  }
+
+  /** 0 件のときの逃げ道。検索語と難易度の両方を戻す */
+  const clearFilters = () => {
+    setQuery('')
+    setStars(STARS_ALL)
   }
 
   if (error) {
@@ -232,6 +285,7 @@ export default function Atlas({ scope, lgCode }: Props) {
     kana: c.kana,
     href: atlasPath(scope, c.lgCode),
     selected: c.lgCode === markedLgCode,
+    stars: c.stars,
   }))
 
   const nav = (
@@ -322,6 +376,43 @@ export default function Atlas({ scope, lgCode }: Props) {
         </div>
       )}
 
+      {/* 難易度 ＝ 市区町村名 1 問ごとに付いた ★1〜3（easy.json の stars）。
+          範囲選択（Select.tsx）の難易度切替と同じマークアップ。検索と **両方** 効く。
+          問題バンクに無い 41 件は ★ を持たないので、★ を選んでいる間は出ない */}
+      <div className="mode-switch mode-switch--compact mode-switch--fit" role="group" aria-label="難易度">
+        <button
+          type="button"
+          className={stars === STARS_ALL ? 'mode-switch__item is-selected' : 'mode-switch__item'}
+          aria-pressed={stars === STARS_ALL}
+          aria-label={starsSwitchLabel(STARS_ALL)}
+          onClick={() => setStars(STARS_ALL)}
+        >
+          <span className="mode-switch__full" aria-hidden="true">
+            全部
+          </span>
+          {/* 狭い画面では ★ 3 つ分の幅を確保するため 1 文字に落とす */}
+          <span className="mode-switch__abbr" aria-hidden="true">
+            全
+          </span>
+        </button>
+        {STARS_CHOICES.map((s) => (
+          <button
+            key={s}
+            type="button"
+            className={stars === s ? 'mode-switch__item is-selected' : 'mode-switch__item'}
+            aria-pressed={stars === s}
+            aria-label={starsSwitchLabel(s)}
+            // 件数は幅を食うのでラベルには出さず、ツールチップに回す（範囲選択と同じ）
+            title={`${rangeName}の${starsMark(s)}は ${countAt(s)} 件`}
+            onClick={() => setStars(s)}
+          >
+            <span className="stars" aria-hidden="true">
+              {starsMark(s)}
+            </span>
+          </button>
+        ))}
+      </div>
+
       <label className="field">
         <span className="field__label">検索</span>
         <input
@@ -337,8 +428,8 @@ export default function Atlas({ scope, lgCode }: Props) {
       {rows.length === 0 ?
         <p>
           見つかりません。
-          <button type="button" className="btn btn--ghost" onClick={() => setQuery('')}>
-            検索を消す
+          <button type="button" className="btn btn--ghost" onClick={clearFilters}>
+            絞り込みを消す
           </button>
         </p>
       : <AtlasList rows={rows} label={`${rangeName}の市区町村`} />}
@@ -371,7 +462,15 @@ export default function Atlas({ scope, lgCode }: Props) {
     <div className="paper">
       <div className="paper__header">
         <h1 className="paper__title">{selected?.name ?? '地名帳'}</h1>
-        <p className="paper__subtitle">{selected?.kana ?? ''}</p>
+        <p className="paper__subtitle">
+          {selected?.kana ?? ''}
+          {/* 単独で置く ★ は記号を読ませず、言い換えを名前にする（CONTRACT.md）*/}
+          {selected?.stars !== undefined && (
+            <span className="stars" role="img" aria-label={starsAria(selected.stars)}>
+              {starsMark(selected.stars)}
+            </span>
+          )}
+        </p>
       </div>
       {/* 出題画面と違い、用紙 1 枚をこの 2 つに使えるのでカードは通常フロー（map.css の .atlas-detail） */}
       <div className="atlas-detail">{detail}</div>

@@ -10,7 +10,7 @@
 import '@testing-library/jest-dom/vitest'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import type { BankMeta } from '../engine/types.ts'
+import type { BankMeta, Question, Stars } from '../engine/types.ts'
 import { DATA_VERSION } from '../engine/bank.ts'
 import { resetGeoSource } from '../geo/load.ts'
 import { resetNavigated } from '../router.ts'
@@ -30,6 +30,35 @@ const CITIES = [
   { lgCode: '122106', prefCode: '12', name: '匝瑳市', kana: 'そうさし' },
 ]
 
+/**
+ * 難易度 ★（easy.json の stars）。**八王子市（132012）は意図的に入れない**ので、
+ * 「問題バンクに無い市区町村（実データの さいたま・ニセコ など 41 件）は ★ を持たず、
+ * ★ で絞ると出ない」経路が通る
+ */
+const STARS: Record<string, Stars> = {
+  '131199': 3, // 板橋区
+  '131016': 1, // 千代田区
+  '131202': 2, // 練馬区
+  '122041': 3, // 船橋市
+  '122106': 3, // 匝瑳市
+}
+
+/** 画面は lgCode と stars しか見ないので、問題バンクの形だけ整えた最小の easy.json */
+const EASY: Question[] = Object.entries(STARS).map(([lgCode, stars]) => {
+  const city = CITIES.find((c) => c.lgCode === lgCode)
+  if (!city) throw new Error(`CITIES に無い lgCode: ${lgCode}`)
+  return {
+    id: `c:${lgCode}:${city.name}`,
+    prefCode: city.prefCode,
+    pref: city.prefCode === '13' ? '東京都' : '千葉県',
+    lgCode,
+    display: city.name.slice(0, -1),
+    suffix: city.name.slice(-1),
+    answer: city.kana.slice(0, -1),
+    stars,
+  }
+})
+
 const META: BankMeta = {
   dataVersion: DATA_VERSION,
   generatedAt: '2026-09-25T00:00:00.000Z',
@@ -48,6 +77,9 @@ function installFetchMock(): void {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : String(input)
       if (url.endsWith('/meta.json')) {
         return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(META) })
+      }
+      if (url.endsWith('/easy.json')) {
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(EASY) })
       }
       // 地図・統計は用意しない（無くても地名帳は成立する）
       return Promise.resolve({ ok: false, status: 404, json: () => Promise.reject(new Error('not found')) })
@@ -77,6 +109,17 @@ function rows(): HTMLElement[] {
 
 function names(): string[] {
   return [...document.querySelectorAll<HTMLElement>('.atlas__name')].map((el) => el.textContent ?? '')
+}
+
+/** 各行の ★（記号のみ。★ を持たない行は空文字） */
+function rowStars(): string[] {
+  return [...document.querySelectorAll<HTMLElement>('.atlas__stars')].map(
+    (el) => el.querySelector('.stars')?.textContent ?? '',
+  )
+}
+
+function starsButton(label: string): HTMLElement {
+  return screen.getByRole('button', { name: label })
 }
 
 function subtitle(): string {
@@ -213,7 +256,7 @@ describe('地名帳の検索', () => {
     expect(screen.getByText(/見つかりません/)).toBeInTheDocument()
     expect(document.querySelector('.atlas')).toBeNull()
 
-    fireEvent.click(screen.getByRole('button', { name: '検索を消す' }))
+    fireEvent.click(screen.getByRole('button', { name: '絞り込みを消す' }))
     await settle()
     expect(names()).toEqual(['千代田区', '板橋区', '練馬区', '八王子市'])
   })
@@ -231,12 +274,130 @@ describe('地名帳の検索', () => {
   })
 })
 
+describe('地名帳の難易度 ★', () => {
+  it('各行のよみの右に ★ を出す。記号は読み上げから外し、言い換えを添える', async () => {
+    await renderAt('#/atlas/13')
+
+    // 千代田区 ★1 / 板橋区 ★3 / 練馬区 ★2 / 八王子市 は easy.json に無いので ★ なし
+    expect(rowStars()).toEqual(['★', '★★★', '★★', ''])
+    const mark = document.querySelector('.atlas__stars .stars')
+    expect(mark).toHaveAttribute('aria-hidden', 'true')
+    expect(document.querySelector('.atlas__stars .sr-only')?.textContent).toBe('難易度 1')
+  })
+
+  it('★ で絞ると行数が減り、見出しに ★ が添わる', async () => {
+    await renderAt('#/atlas/13')
+    expect(subtitle()).toBe('東京都 ／ 4 市区町村')
+
+    fireEvent.click(starsButton('難易度: ★3'))
+    await settle()
+    expect(names()).toEqual(['板橋区'])
+    // 単位は範囲の全件から決めるので「市区町村」のまま
+    expect(subtitle()).toBe('東京都 ／ ★★★ 1 市区町村')
+
+    fireEvent.click(starsButton('難易度: 全部'))
+    await settle()
+    expect(names()).toEqual(['千代田区', '板橋区', '練馬区', '八王子市'])
+    expect(subtitle()).toBe('東京都 ／ 4 市区町村')
+  })
+
+  it('★ を選んでいる間は、問題バンクに無い市区町村（★ なし）が出ない', async () => {
+    await renderAt('#/atlas/13')
+
+    for (const label of ['難易度: ★1', '難易度: ★2', '難易度: ★3']) {
+      fireEvent.click(starsButton(label))
+      await settle()
+      expect(names()).not.toContain('八王子市')
+    }
+    // 「全部」なら出る
+    fireEvent.click(starsButton('難易度: 全部'))
+    await settle()
+    expect(names()).toContain('八王子市')
+  })
+
+  it('★ と検索は両方効く', async () => {
+    await renderAt('#/atlas/13')
+
+    fireEvent.change(searchBox(), { target: { value: '区' } })
+    await settle()
+    expect(names()).toEqual(['千代田区', '板橋区', '練馬区'])
+
+    fireEvent.click(starsButton('難易度: ★3'))
+    await settle()
+    expect(names()).toEqual(['板橋区'])
+    // 検索中の見出しは今までどおり件数だけ
+    expect(subtitle()).toBe('1 件')
+  })
+
+  it('0 件なら検索語と ★ の両方を戻すボタンを出す', async () => {
+    await renderAt('#/atlas/13')
+
+    fireEvent.click(starsButton('難易度: ★1'))
+    await settle()
+    fireEvent.change(searchBox(), { target: { value: '練馬' } })
+    await settle()
+    // 練馬区は ★2 なので ★1 では当たらない
+    expect(screen.getByText(/見つかりません/)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '絞り込みを消す' }))
+    await settle()
+    expect(searchBox().value).toBe('')
+    expect(starsButton('難易度: 全部')).toHaveAttribute('aria-pressed', 'true')
+    expect(names()).toEqual(['千代田区', '板橋区', '練馬区', '八王子市'])
+  })
+
+  it('都道府県を替えても ★ は保つ（検索語は空に戻る）', async () => {
+    await renderAt('#/atlas/13')
+
+    fireEvent.click(starsButton('難易度: ★3'))
+    await settle()
+    fireEvent.change(searchBox(), { target: { value: '橋' } })
+    await settle()
+
+    fireEvent.change(screen.getByLabelText('都道府県をえらぶ'), { target: { value: '12' } })
+    await settle()
+    expect(searchBox().value).toBe('')
+    expect(starsButton('難易度: ★3')).toHaveAttribute('aria-pressed', 'true')
+    expect(names()).toEqual(['船橋市', '匝瑳市'])
+  })
+
+  it('★ は詳細へ行って戻っても消えない。前／次は絞った並びをたどる', async () => {
+    await renderAt('#/atlas/12')
+
+    fireEvent.click(starsButton('難易度: ★3'))
+    await settle()
+    expect(names()).toEqual(['船橋市', '匝瑳市'])
+
+    goto('#/atlas/12/122106')
+    await settle()
+    // 絞った 2 件のうち 2 件目。次は無く、前は船橋市
+    expect(document.querySelector('.atlas-nav__count')?.textContent).toBe('2 / 2')
+    expect(screen.getByRole('link', { name: '前: 船橋市' })).toHaveAttribute('href', '#/atlas/12/122041')
+    expect(screen.queryByRole('link', { name: /^次: / })).toBeNull()
+
+    goto('#/atlas/12')
+    await settle()
+    expect(starsButton('難易度: ★3')).toHaveAttribute('aria-pressed', 'true')
+    expect(names()).toEqual(['船橋市', '匝瑳市'])
+  })
+
+  it('375 の詳細では副題のよみの右に ★ を出す（記号は読ませない）', async () => {
+    await renderAt('#/atlas/13k/131199')
+
+    const mark = document.querySelector('.paper__subtitle .stars')
+    expect(mark?.textContent).toBe('★★★')
+    expect(mark).toHaveAttribute('role', 'img')
+    expect(mark).toHaveAttribute('aria-label', '難易度 3')
+  })
+})
+
 describe('地名帳の詳細（899px 以下）', () => {
   it('#/atlas/13k/131199 を直接開くと名前・よみ・地図・カードと前後の移動が出る', async () => {
     await renderAt('#/atlas/13k/131199')
 
     expect(screen.getByRole('heading', { name: '板橋区' })).toBeInTheDocument()
-    expect(subtitle()).toBe('いたばしく')
+    // 副題はよみ ＋ 難易度（板橋区は ★3）
+    expect(subtitle()).toBe('いたばしく★★★')
     // 一覧は出さない（375 は一覧か詳細のどちらか）
     expect(document.querySelector('.atlas')).toBeNull()
     expect(document.querySelector('.atlas-detail')).not.toBeNull()

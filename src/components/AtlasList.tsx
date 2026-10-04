@@ -9,6 +9,8 @@
  * `aria-current="true"`（読み上げ）＋ 蛍光黄の背景 ＋ 赤ペンの「▶」の 3 つで示す
  * （色だけに頼らない）。
  */
+import type { Stars } from '../engine/types.ts'
+import { starsAria, starsMark } from '../engine/stars.ts'
 
 export interface AtlasRow {
   /** React の key。市区町村なら lgCode */
@@ -20,6 +22,8 @@ export interface AtlasRow {
   /** 行のリンク先。無い行は選べない（段階 2 の町名） */
   href?: string
   selected?: boolean
+  /** 難易度 ★1〜3。問題バンク（easy.json）に無い市区町村と、★ を持たない町名では undefined */
+  stars?: Stars
 }
 
 interface Props {
@@ -38,6 +42,18 @@ function Cells({ row }: { row: AtlasRow }) {
       </span>
       <span className="atlas__name">{row.name}</span>
       <span className="atlas__kana">{row.kana}</span>
+      {/* ★ の列は中身が無くても置く（行ごとに幅が変わると、よみの右端が揃わない）。
+          リンクの中なので記号は読み上げから外し、言い換えだけを添える（CONTRACT.md）*/}
+      <span className="atlas__stars">
+        {row.stars !== undefined && (
+          <>
+            <span className="stars" aria-hidden="true">
+              {starsMark(row.stars)}
+            </span>
+            <span className="sr-only">{starsAria(row.stars)}</span>
+          </>
+        )}
+      </span>
     </>
   )
 }

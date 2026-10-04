@@ -138,6 +138,7 @@ Dela Gothic One は字幅を詰めた極太デザインで、1.4rem 前後の漢
 | `.atlas__mark` | 選択中の目印「▶」（赤ペン色）。列幅は常に取るので、選んでも地名の位置がずれない |
 | `.atlas__name` | 地名（明朝・`--font-body`） |
 | `.atlas__kana` | よみ（手書き風・`--font-hand`） |
+| `.atlas__stars` | 行の難易度 ★（`.stars` の入れ物）。★ を持たない行でも**列だけ残す**ので、よみの右端が行ごとにずれない |
 | `.atlas-nav` / `.atlas-nav__back` / `.atlas-nav__step` / `.atlas-nav__name` / `.atlas-nav__count` | 「← 一覧へ」「◀ 前 {名前}」「次 {名前} ▶」「3 / 23」。端の行では `.atlas-nav__step--end` で押せない見た目にする |
 | `.atlas-detail`（**map.css**） | 899px 以下の詳細（地図＋カード）。`.info-card` を地図に重ねるのをやめて通常フローに戻す上書きなので、`.map-*` / `.info-card*` の所有者である `map.css` に置く |
 
@@ -147,3 +148,5 @@ Dela Gothic One は字幅を詰めた極太デザインで、1.4rem 前後の漢
 - `.atlas__row` の中の行の高さは **44px 以上**（指で押せる最小）。
 - `.atlas` は `AtlasList`（`src/components/AtlasList.tsx`）が描く。行は `{key, name, kana, href?, selected?}` の配列で受け取る **meta 非依存の表示部品**なので、段階 2 の町名もそのまま並べられる。
 - 900px 以上の地名帳は出題画面と同じ `.layout` / `.layout__map` / `.layout__quiz` をそのまま使う（CSS の追加なし）。
+- **`.atlas__row` は `position: relative`。** 行の `.sr-only`（`position: absolute`）を行の中で止めるため。 ここで止めないと `.paper`（`position: relative`）を基準に置かれ、一覧の内側スクロールに切り取られずに用紙の高さを押し広げる。
+- 地名帳の難易度の切替は範囲選択と同じ `.mode-switch.mode-switch--compact.mode-switch--fit` だが、**`.switch-row` に入れず 1 行に単独で置く**。そのため `.paper > .mode-switch--fit` だけ `width: auto`（枠を中身に合わせる）にしてある。
