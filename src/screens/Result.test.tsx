@@ -354,3 +354,16 @@ describe('全市区町村名', () => {
     expect(rows()[0].querySelector('.ranking__score')?.textContent).toBe('100点')
   })
 })
+
+describe('旧版のセットID', () => {
+  it('古い版の共有リンクは、現行版で組み直さず「古い版のため開けません」と出して表紙へ導く', async () => {
+    // 旧版（abr20260925）は 2026-10-04 に同梱から外した。seed から同じ 10 問を
+    // 再現できないので、黙って現行版の 10 問を出さずに止める
+    render(<Result setId="abr20260925-e-12-1234" />)
+
+    expect(await screen.findByText('この問題セットは古い版のため開けません。')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'タイトルへ戻る' })).toBeInTheDocument()
+    // 問題バンクも読みに行かない
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled()
+  })
+})

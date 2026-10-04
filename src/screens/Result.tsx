@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { QuestionSet, RankingRow } from '../engine/types.ts'
-import { buildQuestionSet, defaultSource } from '../engine/bank.ts'
+import { OUTDATED_SET_MESSAGE, buildQuestionSet, defaultSource, isCurrentDataVersion } from '../engine/bank.ts'
 import { rangeLabelOf } from '../engine/scope.ts'
 import { parseSetId } from '../engine/setId.ts'
 import { defaultStorage, getClientToken, isValidNickname, provisionalRank } from '../engine/ranking.ts'
@@ -70,7 +70,10 @@ export default function Result({ setId }: { setId: string }) {
   /** この回に使った時間制限。出題時の控えが無ければ今の設定で代用する */
   const timeLimitMs = useMemo(() => readQuizTimeLimit(setId) ?? readTimeLimit(), [setId])
 
-  const error = parsed ? loadError : `セットIDが読めません: ${setId}`
+  const error =
+    parsed === null ? `セットIDが読めません: ${setId}`
+    : isCurrentDataVersion(parsed.dataVersion) ? loadError
+    : OUTDATED_SET_MESSAGE
   const total = records?.length ?? 0
   const correct = useMemo(() => (records ?? []).filter((r) => r.correct).length, [records])
   /** 10 問なら正答数 × 10、全市区町村名は 100 点満点の正答率（engine/score.ts） */
@@ -83,14 +86,15 @@ export default function Result({ setId }: { setId: string }) {
     return date === null ? 'この問題の順位表' : `今日の10問（${date}）の順位表`
   }, [parsed])
 
-  // 答案が無ければ範囲選択へ戻す
+  // 答案が無ければ範囲選択へ戻す。ただし旧版の setId は「古い版のため開けません」を
+  // 読んでもらいたいので黙って飛ばさない
   useEffect(() => {
-    if (records === null) navigate(SELECT_PATH)
-  }, [records])
+    if (records === null && (parsed === null || isCurrentDataVersion(parsed.dataVersion))) navigate(SELECT_PATH)
+  }, [records, parsed])
 
   // 出題は setId から再現できるので、見直し用にもう一度組み立てる
   useEffect(() => {
-    if (!parsed) return
+    if (!parsed || !isCurrentDataVersion(parsed.dataVersion)) return
     let alive = true
     buildQuestionSet(parsed.mode, parsed.scope, parsed.seed, defaultSource(), parsed.all, parsed.stars)
       .then((s) => {
@@ -210,6 +214,11 @@ export default function Result({ setId }: { setId: string }) {
         <p>
           <button type="button" className="btn btn--primary" onClick={() => navigate(SELECT_PATH)}>
             範囲をえらび直す
+          </button>
+        </p>
+        <p>
+          <button type="button" className="btn btn--ghost" onClick={() => navigate(COVER_PATH)}>
+            タイトルへ戻る
           </button>
         </p>
       </div>
