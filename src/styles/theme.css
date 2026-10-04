@@ -617,7 +617,8 @@ select.field__input {
 .stars {
   /* 等幅にして ★ / ★★ / ★★★ の幅が揃うようにする（行がぶれない） */
   font-family: var(--font-body);
-  font-size: 0.9em;
+  /* em は親が小さい場所（--fs-sm の帯・地名帳の行）で 11.7px まで潰れるので下限を置く */
+  font-size: max(0.9em, 0.8125rem);
   letter-spacing: 0.02em;
   line-height: 1;
   white-space: nowrap;
@@ -635,14 +636,14 @@ select.field__input {
 /* 出題の問番号の横。見出しと同じ行なので少し小さく、下に揃える */
 .q-number__stars {
   margin-left: var(--space-2);
-  font-size: 0.62em;
+  font-size: max(0.62em, 0.8125rem);
   vertical-align: 0.12em;
 }
 
 /* 答案の見直しの行。出題のすぐ後ろに小さく添える */
 .review__stars {
   margin-left: var(--space-1);
-  font-size: 0.7em;
+  font-size: max(0.7em, 0.8125rem);
   vertical-align: 0.1em;
 }
 
