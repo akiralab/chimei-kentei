@@ -84,6 +84,43 @@ body {
   background-repeat: no-repeat;
 }
 
+/* 1 画面契約の例外（結果・間違えた問題の 2 画面だけ。CONTRACT.md「1 画面運用」）。
+   内容が本質的に「10 行＋操作」で、どう詰めても 1 画面に入らない。用紙を内側で
+   スクロールさせると底のボタンが切れるので、**用紙ごと**縦に伸ばしてページを動かす。
+   画面側は useBoardModifier(BOARD_SCROLL) で宣言する */
+html:has(.board--scroll),
+body:has(.board--scroll) {
+  height: auto;
+  overflow: visible;
+}
+
+.board--scroll {
+  height: auto;
+  min-height: 100dvh;
+  overflow-y: auto;
+  /* 伸びた用紙は上から積む（中央寄せのままだと先頭が画面の上に隠れる）*/
+  justify-content: flex-start;
+}
+
+/* 用紙は中身の高さそのまま。内側スクロールをやめる */
+.board--scroll > .paper {
+  flex: none;
+  height: auto;
+  max-height: none;
+  overflow: visible;
+  /* ホームインジケータの上に最後のボタンが来ないように（.board の padding とは別に用紙側でも見る）*/
+  padding-bottom: calc(var(--space-6) + env(safe-area-inset-bottom));
+}
+
+/* 一覧も内側スクロールをやめる。行はすべて用紙に並び、ページごと流れる */
+.board--scroll > .paper > .review,
+.board--scroll > .paper > .ranking {
+  flex: none;
+  min-height: 0;
+  max-height: none;
+  overflow: visible;
+}
+
 /* --------------------------------------------------------------------------
    3. .paper — 答案用紙
    罫線は repeating-linear-gradient。background-attachment: local で

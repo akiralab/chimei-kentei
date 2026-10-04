@@ -8,6 +8,7 @@ import { useMemo, useState } from 'react'
 import type { WrongItem } from '../engine/wrongList.ts'
 import { modeName } from '../engine/modes.ts'
 import { clearWrongList, newestFirst, readWrongList } from '../engine/wrongList.ts'
+import { BOARD_SCROLL, useBoardModifier } from '../hooks/useBoardModifier.ts'
 import { COVER_PATH, SELECT_PATH, navigate } from '../router.ts'
 
 /** 都道府県の絞り込みで「すべて」を表す値 */
@@ -26,6 +27,8 @@ function placeLabel(item: WrongItem): string {
 }
 
 export default function Review() {
+  // 間違えた問題は 1 行 1 問が何十行にもなる。1 画面契約の例外として用紙ごと縦に伸ばす
+  useBoardModifier(BOARD_SCROLL)
   const [items, setItems] = useState<WrongItem[]>(() => newestFirst(readWrongList()))
   const [pref, setPref] = useState<string>(ALL)
   /** 「一覧を消す」は 2 回押しで確定する（確認ダイアログは出さない） */

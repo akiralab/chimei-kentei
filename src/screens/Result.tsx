@@ -11,6 +11,7 @@ import { appendWrongFromEntry } from '../engine/wrongList.ts'
 import { readNickname } from '../hooks/useNickname.ts'
 import { readAnswerSheet } from '../hooks/answerSheet.ts'
 import { readQuizTimeLimit, readTimeLimit } from '../hooks/useTimeLimit.ts'
+import { BOARD_SCROLL, useBoardModifier } from '../hooks/useBoardModifier.ts'
 import { COVER_PATH, REVIEW_PATH, SELECT_PATH, absoluteUrl, navigate, quizPath } from '../router.ts'
 
 const KANJI_NUM = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十']
@@ -50,6 +51,8 @@ function submittedKey(setId: string): string {
 }
 
 export default function Result({ setId }: { setId: string }) {
+  // 答案の見直し 10 行＋操作＋順位表は 1 画面に入らない。例外として用紙ごと縦に伸ばす
+  useBoardModifier(BOARD_SCROLL)
   const parsed = useMemo(() => parseSetId(setId), [setId])
   const [records] = useState(() => readAnswerSheet(setId))
   const [set, setSet] = useState<QuestionSet | null>(null)
