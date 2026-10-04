@@ -52,10 +52,10 @@
 - `.q-suffix` は `.q-kanji` の**内側**に置く（サイズが `em` 基準）
 - `.timer__bar` の幅は画面側が inline style（`style="width: 65%"`）で与える
 - `.ranking__row.is-me` は蛍光黄だが、色だけに頼らないよう `.ranking__rank` に「★」等の記号を markup 側で添える
-- 部品の見本は `public/theme-preview.html`（`/chimei-kentei/theme-preview.html`）。CSS は `public/theme-preview.css` に結合コピーしてあるので、**正本を直したらそちらも再生成する**
+- 部品の見本は `public/theme-preview.html`（`/chimei-kentei/theme-preview.html`）。CSS は `public/theme-preview.css` に結合コピー（`fonts.css` + `tokens.css` + `theme.css`）してあるので、**正本を直したらそちらも再生成する**（手順はそのファイルの先頭コメント）
 
-- フォントは `index.html` の `<link>` で Google Fonts から読み込む（design 側が追加）
-- `src/main.tsx` が `./styles/tokens.css` と `./styles/theme.css` を import する（ui 側が追加）
+- フォントは **同梱**（`public/fonts/*.woff2`）。`@font-face` は `src/styles/fonts.css` で、これは `npm run build:fonts` が生成するので**手で編集しない**。外部ホスト（Google Fonts）からは読まない
+- `src/main.tsx` が `./styles/fonts.css` → `./styles/tokens.css` → `./styles/theme.css` の順に import する（ui 側が追加）
 - ダークモード対応は不要。正誤は色と記号（○×）の両方で示す
 
 ## v1 追加（担当分け）
@@ -73,7 +73,7 @@
 | `--font-display` | **Mochiy Pop One** | 見出し・ボタン・問番号・順位。**Dela Gothic One から変更** |
 | `--font-stamp` | Dela Gothic One | 得点スタンプの数字（`.stamp__num`）だけに残した |
 
-Dela Gothic One は字幅を詰めた極太デザインで、1.4rem 前後の漢字（範囲・結果・匝瑳）が墨だまりになって読めなかった。Mochiy Pop One は同程度にポップで、画線が均一・フトコロが開いているため小さくしても潰れない。`index.html` と `public/theme-preview.html` の Google Fonts `<link>` は 5 書体（Dela Gothic One / Klee One / Mochiy Pop One / Shippori Mincho B1 / Yusei Magic）。
+Dela Gothic One は字幅を詰めた極太デザインで、1.4rem 前後の漢字（範囲・結果・匝瑳）が墨だまりになって読めなかった。Mochiy Pop One は同程度にポップで、画線が均一・フトコロが開いているため小さくしても潰れない。同梱しているのは 5 書体 7 ウェイト（Dela Gothic One / Klee One 400・600 / Mochiy Pop One / Shippori Mincho B1 400・700 / Yusei Magic）。
 
 ### 文字サイズの約束
 
@@ -150,3 +150,33 @@ Dela Gothic One は字幅を詰めた極太デザインで、1.4rem 前後の漢
 - 900px 以上の地名帳は出題画面と同じ `.layout` / `.layout__map` / `.layout__quiz` をそのまま使う（CSS の追加なし）。
 - **`.atlas__row` は `position: relative`。** 行の `.sr-only`（`position: absolute`）を行の中で止めるため。 ここで止めないと `.paper`（`position: relative`）を基準に置かれ、一覧の内側スクロールに切り取られずに用紙の高さを押し広げる。
 - 地名帳の難易度の切替は範囲選択と同じ `.mode-switch.mode-switch--compact.mode-switch--fit` だが、**`.switch-row` に入れず 1 行に単独で置く**。そのため `.paper > .mode-switch--fit` だけ `width: auto`（枠を中身に合わせる）にしてある。
+
+## v1 追加（2026-10-04 / スマホアプリ化 第 1 波）
+
+### タップ領域 `--tap-min`（44px）
+
+指で押せる最小の寸法。Apple HIG の 44pt に合わせた `tokens.css` のトークンで、
+**操作できる部品（`a` / `button` / `input` / `select`）はこれを下回らせない**。
+高さは `min-height: var(--tap-min)`、中身が痩せる切替（難易度の ★）は `min-width` も引く。
+
+| 守っている部品 | 置き場所 |
+|---|---|
+| `.btn`（`.btn--ghost` 含む） | `theme.css` |
+| `.cover__ranking` / `.atlas-nav .btn` / `.layout__exit .btn` | `theme.css` / `map.css`（小さく詰める修飾が当たる場所） |
+| `.mode-switch__item`（`min-width` も） / `.pref-grid__item` / `.field__input` | `theme.css` |
+| `.jp-map__all` | `map.css` |
+
+**`--tap-min` を下回ってよいのは `@media (min-width: 720px)` の中だけ**（`.mode-switch--compact .mode-switch__item`）。
+マウス操作の幅なので、用紙 1 枚に収める方を取る。狭い画面に同じ縮小を持ち込まない。
+
+### 文字の下限
+
+表示中のテキストに **13px 未満を作らない**。`em` 指定は親が小さい場所で掛け算になって潰れるので、
+小さくなり得る入れ子では絶対値（`--fs-sm` など）に切り替える
+（例: `.review__q .q-suffix` は `.q-kanji` 基準の `0.42em` では 8px になるため上書きしている）。
+
+### safe-area
+
+`.board` の padding に `env(safe-area-inset-*)` を足してある。ウェブでは 0 なので見た目は変わらない。
+用紙の外に部品を置く変更（第 3 波の下タブバー）では、その部品側でも
+`padding-bottom: env(safe-area-inset-bottom)` を見ること。
