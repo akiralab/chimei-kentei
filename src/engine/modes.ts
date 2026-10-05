@@ -20,13 +20,17 @@ export function modeName(mode: Mode): string {
 }
 
 /**
- * 順位表の区分（科目 2 つ ＋ 全市区町村名）の表示名。
- * 全市区町村名は 10 問とは得点の尺度が違うので、順位表では科目と並ぶ 3 つ目として見せる。
+ * 順位表の区分（科目 2 つ ＋ 全問）の表示名。
+ * 全問は 10 問とは得点の尺度が違うので、順位表では科目と並ぶ 3 つ目として見せる。
+ *
+ * 「全問」に **全市区町村名と全町名を同居させる**（Issue #46 の決定 5）。区分を 4 つに増やすと
+ * API の sk・カウンタ・`?mode=` が全部増えるので、どちらなのかは行の注記
+ * （engine/score.ts の `allRowNote`）で見分ける。`?mode=all` と DynamoDB の sk は変えない。
  */
 export const RANKING_MODE_LABELS: Record<RankingMode, { name: string; short: string }> = {
   e: MODE_LABELS.e,
   d: MODE_LABELS.d,
-  all: { name: '全市区町村名', short: '全市町村' },
+  all: { name: '全問', short: '全問' },
 }
 
 export const RANKING_MODES: RankingMode[] = ['e', 'd', ALL_RANKING_MODE]

@@ -28,14 +28,15 @@ export interface Question {
   /** 正解（ひらがなの幹）。例 'そうさ'、'はなてんひがし' */
   answer: string
   /**
-   * 難易度 ★1〜3。**easy（市区町村名）だけが持つ**。difficult（大字・町名）には無い。
-   * 付け方は data/build_stars.py（A1 人口 × B2 音訓分解 × B4 漢字の難しさ）が正本で、
+   * 難易度 ★1〜3。**easy（市区町村名）と difficult（大字・町名）の全問が持つ**。
+   * 付け方は data/build_stars.py が正本で、科目によって軸が違う
+   * （市区町村名 = A1 人口 × B2 音訓分解 × B4 漢字の難しさ／町名 = B2 × B4 × B5 同表記異読み）。
    * meta.json の starsNote にも軸の要約が入る。版の古い問題バンクには無いので任意
    */
   stars?: Stars
 }
 
-/** 難易度。★ の数（1 = やさしい／3 = むずかしい）。市区町村名の出題だけが持つ */
+/** 難易度。★ の数（1 = やさしい／3 = むずかしい）。両科目の出題が持つ */
 export type Stars = 1 | 2 | 3
 
 /** meta.json */
@@ -45,13 +46,29 @@ export interface BankMeta {
   source: string // 出典の一文
   /** 難易度 stars の付け方（軸と出典）の一文。stars を入れる前の版には無い */
   starsNote?: string
-  prefectures: { code: string; name: string; easyCount: number; difficultCount: number }[]
+  prefectures: {
+    code: string
+    name: string
+    easyCount: number
+    difficultCount: number
+    /** その都道府県の町名の ★ 別件数 `[★1, ★2, ★3]`（合計 = difficultCount） */
+    difficultStars: [number, number, number]
+  }[]
   /**
    * 市区町村の一覧（全 1,741 件）。easy.json は r2 以降かなだけの名前を除くので、こちらの方が多い。
-   * 使い道は **範囲選択の「全54市町村」表示と difficult の絞り込み**。出題はしない
-   * （全市区町村名が出すのも easy.json にある件だけ）
+   * 使い道は **範囲選択の「全54市町村」表示・「全町名（97問）」の件数・difficult の絞り込み**。
+   * ここに並ぶ市区町村名そのものを出題するのは easy.json にある件だけ
    */
-  cities: { lgCode: string; prefCode: string; name: string; kana: string }[]
+  cities: {
+    lgCode: string
+    prefCode: string
+    name: string
+    kana: string
+    /** その市区町村の町名（difficult）の件数。0 の市区町村が 33 件ある */
+    towns: number
+    /** その市区町村の町名の ★ 別件数 `[★1, ★2, ★3]`（合計 = towns） */
+    townStars: [number, number, number]
+  }[]
 }
 
 export interface QuestionSet {
@@ -64,14 +81,17 @@ export interface QuestionSet {
   /** 範囲が狭すぎて都道府県へ広げたとき true */
   widened: boolean
   /**
-   * 全市区町村名: その範囲（都道府県か地域）の市区町村名を全部。
-   * 母集団は easy.json にあるものだけで、問題バンクが除いた市区町村は出さない。
-   * 順位表は 10 問とは別区分（RankingMode の 'all'）
+   * 10 問ではなく母集団を全部出すセット。科目で単位が違う:
+   *  - 市区町村名（'e'）… **全市区町村名**。その範囲（都道府県か地域）の市区町村名を全部。
+   *    母集団は easy.json にあるものだけで、問題バンクが除いた市区町村は出さない
+   *  - 町名（'d'）… **全町名**。その市区町村（6 桁 scope）の町名を全部。市区町村名そのものは含めない
+   *
+   * 順位表はどちらも 10 問とは別区分（RankingMode の 'all' ＝「全問」）で同居し、行の注記で見分ける
    */
   all: boolean
   /**
    * 難易度の絞り込み。null ＝ 全部（絞っていない）。
-   * 市区町村名（'e'）のときだけ値が入り、母集団を `q.stars === stars` で絞ってある
+   * 両科目で値が入り、母集団を `q.stars === stars` で絞ってある
    */
   stars: Stars | null
   questions: Question[] // 出題順。all でなければ QUESTIONS_PER_SET 件
@@ -127,6 +147,14 @@ export const TIME_LIMIT_MS = 20_000
  */
 export const MIN_POOL_FOR_SCOPE = 20
 
+/**
+ * 「全町名」を選べる市区町村の町名の上限（Issue #46 の決定 2）。
+ * これを超える 17 市区町村（京都市 3,741・名古屋市 1,480 ほか）は 1 回の答案として
+ * 成立しないので選択肢から外す。**API の `ANSWERS_MAX`（infra/api/src/handler.ts）と同じ値にする**
+ * — 上限を上げるならどちらも上げ、Lambda を再デプロイする（`npm run deploy:api`）
+ */
+export const ALL_TOWNS_MAX = 500
+
 /** 時間制限の設定として許す下限・上限（0 ＝ 制限なしは別扱い） */
 export const TIME_LIMIT_MIN_MS = 1_000
 export const TIME_LIMIT_MAX_MS = 60_000
@@ -176,7 +204,7 @@ export interface RankingRow {
   score: number
   /** 正答数。後から足した項目なので古い行には無い（score から復元する → engine/score.ts） */
   correct?: number
-  /** 問題数。10 ＝ 従来の 10 問、それ以外 ＝ 全市区町村名（都道府県ごとに違う）。古い行には無い */
+  /** 問題数。10 ＝ 従来の 10 問、それ以外 ＝ 全市区町村名／全町名（範囲ごとに違う）。古い行には無い */
   total?: number
   timeMs: number
   createdAt: string
@@ -190,12 +218,12 @@ export interface RankingRow {
 
 /**
  * 順位表の区分。科目 2 つ（'e' | 'd'・どちらも 10 問）に、
- * 全市区町村名（'all'）を第 3 の区分として並べる。
- * 10 問と全市区町村名は 1 問の重みが違うので、同じ一覧に混ぜない。
+ * 全問（'all' ＝ 全市区町村名と全町名）を第 3 の区分として並べる。
+ * 10 問と全問は 1 問の重みが違うので、同じ一覧に混ぜない。
  */
 export type RankingMode = Mode | 'all'
 
-/** 全市区町村名の区分。API の `?mode=` とカウンタの sk にもこの文字列を使う */
+/** 全問（全市区町村名・全町名）の区分。API の `?mode=` とカウンタの sk にもこの文字列を使う */
 export const ALL_RANKING_MODE = 'all'
 
 /** 件数と人数の組。区分別の内訳に使う */

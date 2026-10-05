@@ -16,7 +16,7 @@ import type { BankMeta, Question, QuestionSet } from './engine/types.ts'
 import { QUESTIONS_PER_SET, TIME_LIMIT_MS } from './engine/types.ts'
 import type { BankSource } from './engine/bank.ts'
 import { DATA_VERSION, buildQuestionSet } from './engine/bank.ts'
-import { makeDifficult, makeEasy, withStars } from './engine/__fixtures__/questions.ts'
+import { cityRow, cityRowOf, makeDifficult, makeEasy, starsTriple, withStars } from './engine/__fixtures__/questions.ts'
 import { answerSheetKey } from './hooks/answerSheet.ts'
 import { NICKNAME_KEY } from './hooks/useNickname.ts'
 import { NO_TIME_LIMIT, TIME_LIMIT_KEY } from './hooks/useTimeLimit.ts'
@@ -76,21 +76,34 @@ const EASY_13 = withLgCodes(kanaizeAnswers(makeEasy('13', '東京都', 14)), [
 const EASY_ALL: Question[] = [...EASY_12, ...EASY_13, ...EASY_01]
 const DIFFICULT_12 = kanaizeAnswers(makeDifficult('12', '千葉県', 1, 30))
 const DIFFICULT_13 = kanaizeAnswers(makeDifficult('13', '東京都', 1, 30))
+const DIFFICULT_ALL: Question[] = [...DIFFICULT_12, ...DIFFICULT_13]
 
 const META: BankMeta = {
   dataVersion: DATA_VERSION,
   generatedAt: '2026-09-25T00:00:00.000Z',
   source: 'テスト用フィクスチャ',
   prefectures: [
-    { code: '01', name: '北海道', easyCount: EASY_01.length, difficultCount: 0 },
-    { code: '12', name: '千葉県', easyCount: EASY_12.length, difficultCount: DIFFICULT_12.length },
-    { code: '13', name: '東京都', easyCount: EASY_13.length, difficultCount: DIFFICULT_13.length },
+    { code: '01', name: '北海道', easyCount: EASY_01.length, difficultCount: 0, difficultStars: [0, 0, 0] },
+    {
+      code: '12',
+      name: '千葉県',
+      easyCount: EASY_12.length,
+      difficultCount: DIFFICULT_12.length,
+      difficultStars: starsTriple(DIFFICULT_12),
+    },
+    {
+      code: '13',
+      name: '東京都',
+      easyCount: EASY_13.length,
+      difficultCount: DIFFICULT_13.length,
+      difficultStars: starsTriple(DIFFICULT_13),
+    },
   ],
   cities: [
-    ...EASY_ALL.map((q) => ({ lgCode: q.lgCode, prefCode: q.prefCode, name: q.display, kana: q.answer })),
+    ...EASY_ALL.map((q) => cityRowOf(q, DIFFICULT_ALL)),
     // 問題バンクが除いた市区町村（実データの さいたま・ニセコ・むかわ の代わり）。
     // 市区町村の数には入るが、問題にはならない ＝ 全市区町村名でも出題されない
-    { lgCode: '129901', prefCode: '12', name: 'さいたま市', kana: 'さいたまし' },
+    cityRow({ lgCode: '129901', prefCode: '12', name: 'さいたま市', kana: 'さいたまし' }),
   ],
 }
 
