@@ -6,6 +6,12 @@
 //                 除外は作らない。`.footer-credit a` も数える（#44 で 13px に上げたため）
 //   paper.overY … .paper の縦はみ出し（#42 条件 6 / #44 条件 1）
 //   fonts … 読み込めた書体（#42 条件 5）
+//   backInPaper … .paper の中に残った「タイトルへ戻る / 範囲・科目へ / 表紙へ」の数（#51 条件 1）
+//                 第 3 波で戻る導線を下タブバーに集約したので、**全画面で 0** であること
+//   tabbar … 下タブバーの有無・高さ・現在地（aria-current）の数（#51 条件 1・7）
+//   primaryCount … 可視の .btn--primary の数。表紙は 1 つ（#51 条件 4）
+//   atlasVisible … 地名帳の一覧の見える行数（atlas.visible の別名。375x667 で 8 以上。#51 条件 3）
+//   quizMap … 出題画面の地図パネルの高さと、情報カードに覆われずに見える高さ（#51 やること 6）
 //
 // 用紙ごと縦スクロールする 3 画面（.board--scroll ＝ 結果・間違えた問題・あそびかた。#44 条件 2）は
 // paper.overY が 0 でも「切れていない」とは言えないので、専用の 3 つで判定する。
@@ -106,6 +112,55 @@
   const answerBtn = [...document.querySelectorAll('button.btn')].find((b) => b.textContent.trim() === '解答') ?? null
   const answerBtnVisible = answerBtn === null ? null : answerBtn.getBoundingClientRect().bottom <= innerHeight
 
+  // --- 用紙の中に残った戻る導線（#51 条件 1）。語彙は 3 つに限る
+  //     （「← 一覧へ」「都道府県の一覧へ」は同じ画面の中の移動なので数えない）
+  const BACK_LABELS = ['タイトルへ戻る', '範囲・科目へ', '表紙へ']
+  const backInPaper = [...document.querySelectorAll('.paper a, .paper button')]
+    .filter((el) => BACK_LABELS.includes((el.textContent || '').trim()))
+    .map((el) => ({ sel: sel(el), text: label(el) }))
+
+  // --- 下タブバー（#51 条件 1・7）。.paper の外に 1 本だけあること
+  const tabbar = (() => {
+    const nav = document.querySelector('.tabbar')
+    if (nav === null) return { present: false }
+    const r = nav.getBoundingClientRect()
+    const items = [...nav.querySelectorAll('.tabbar__item')]
+    return {
+      present: true,
+      inPaper: nav.closest('.paper') !== null,
+      visible: vis(nav),
+      h: Math.round(r.height),
+      bottomGap: Math.round(innerHeight - r.bottom),
+      ariaLabel: nav.getAttribute('aria-label'),
+      items: items.length,
+      current: items.filter((el) => el.getAttribute('aria-current') === 'page').length,
+      labels: items.map((el) => (el.textContent || '').trim()),
+      // 用紙がタブバーの下に隠れていないか（用紙の下端が帯の上端より上にあること）。
+      // 用紙ごとスクロールする画面（.board--scroll）は用紙がビューポートより長いのが
+      // 正常なので見ない（そちらは docOverY / lastButtonCut で判定する）
+      paperClear:
+        paper === null || document.querySelector('.board--scroll') !== null ?
+          null
+        : Math.round(r.top - paper.getBoundingClientRect().bottom),
+    }
+  })()
+
+  // --- 出題画面の地図パネル。スマホは .info-card を地図の下端に重ねるので、
+  //     「地図として見える高さ」は カードの上端 − パネルの上端（#51 やること 6）
+  const quizMap = (() => {
+    const panel = document.querySelector('.layout__map')
+    if (panel === null) return null
+    const pb = panel.getBoundingClientRect()
+    const card = panel.querySelector('.info-card')
+    const cb = card !== null && vis(card) ? card.getBoundingClientRect() : null
+    return {
+      h: Math.round(pb.height),
+      folded: panel.classList.contains('layout__map--folded'),
+      cardH: cb === null ? 0 : Math.round(cb.height),
+      uncovered: Math.round(cb === null ? pb.height : cb.top - pb.top),
+    }
+  })()
+
   return JSON.stringify({
     vw: innerWidth, vh: innerHeight,
     boardScroll: !!document.querySelector('.board--scroll'),
@@ -124,11 +179,16 @@
     fontUnder16: small,
     buttons: hier,
     buttonTotal: btns.length,
+    primaryCount: hier.primary || 0,
+    backInPaper,
+    tabbar,
+    quizMap,
     atlas: rowsIn('.atlas', '.atlas__row'),
     ranking: rowsIn('.ranking', '.ranking__row'),
     review: rowsIn('.review', '.review__row'),
     prefGrid: rowsIn('.pref-grid', 'li'),
     layout: !!document.querySelector('.layout'),
+    atlasVisible: (rowsIn('.atlas', '.atlas__row') ?? {}).visible ?? null,
     hiddenProps: [...document.querySelectorAll('.cover__prop')].filter((p) => getComputedStyle(p).display === 'none').length,
     propsTotal: document.querySelectorAll('.cover__prop').length,
     title: (document.querySelector('.paper__title')?.textContent || '').trim(),

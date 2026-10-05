@@ -23,3 +23,12 @@ export function readAnswerSheet(setId: string): AnswerRecord[] | null {
     return null
   }
 }
+
+/** 進行中の答案を捨てる（出題中にタブ・戻る導線で離れたとき） */
+export function clearAnswerSheet(setId: string): void {
+  try {
+    sessionStorage.removeItem(answerSheetKey(setId))
+  } catch {
+    // 保存できない環境では消すものも無い
+  }
+}

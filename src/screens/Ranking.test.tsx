@@ -253,7 +253,7 @@ describe('都道府県の詳細', () => {
     expect(rows()).toHaveLength(0)
   })
 
-  it('タイトルへ戻る / もう一度 / 一覧へ の 3 つを置く', async () => {
+  it('もう一度 / 一覧へ の 2 つを置く（表紙へ戻る導線は下タブバーが持つ）', async () => {
     installFetchMock()
     render(<Ranking prefCode="12" />)
     await waitFor(() => {
@@ -261,11 +261,12 @@ describe('都道府県の詳細', () => {
     })
 
     expect(screen.getByRole('button', { name: 'もう一度（範囲選択へ）' })).toBeInTheDocument()
+    // 「タイトルへ戻る」は用紙から外した（第 3 波 D1）
+    expect(screen.queryByRole('button', { name: 'タイトルへ戻る' })).toBeNull()
+
+    // 同じ画面の中の移動は残す
     fireEvent.click(screen.getByRole('button', { name: '都道府県の一覧へ' }))
     expect(hash()).toBe('#/ranking')
-
-    fireEvent.click(screen.getByRole('button', { name: 'タイトルへ戻る' }))
-    expect(hash()).toBe('#/')
   })
 })
 

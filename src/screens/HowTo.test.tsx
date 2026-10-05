@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * あそびかた（#/howto）。読み込みも通信も無い静的な 1 枚なので、確かめるのは
- * 骨組みだけ ——  見出しの階層（h1 → h2 が 7 つ）・表紙への戻り道・
+ * 骨組みだけ ——  見出しの階層（h1 → h2 が 7 つ）・節 7 の出典リンク・
  * 1 画面契約の例外（.board に board--scroll が付く）。
  *
  * .board を描くのは App なので、この画面だけ単体で描くと useBoardModifier の
@@ -36,19 +36,28 @@ describe('あそびかた', () => {
     expect(markers.map((m) => m.textContent)).toEqual(['市・区・町・村は書きません'])
   })
 
-  it('「表紙へ」で #/ へ戻れる。帯の右端と用紙の末尾の 2 か所に置く', () => {
+  it('用紙の中に「表紙へ」は置かない。戻るのは下タブバーの「検定」（第 3 波 D1）', () => {
     render(<App />)
+    expect(screen.queryByRole('link', { name: '表紙へ' })).toBeNull()
+    expect(document.querySelector('.howto__exit')).toBeNull()
     // jsdom はフラグメントへのリンクを click で辿らないので、行き先は href で見る
-    // （表紙の副ボタンのテストと同じ流儀）
-    const backs = screen.getAllByRole('link', { name: '表紙へ' })
-    expect(backs).toHaveLength(2)
-    for (const b of backs) {
-      expect(b).toHaveAttribute('href', '#/')
-      expect(b.className).toContain('btn--ghost')
-    }
-    // 1 つ目は帯の中（開いた直後に見える）、2 つ目は本文の後ろ（読み終えた位置から戻れる）
-    expect(backs[0].closest('.paper__header')).not.toBeNull()
-    expect(backs[1].closest('.paper__header')).toBeNull()
+    const tab = screen.getByRole('link', { name: '検定' })
+    expect(tab).toHaveAttribute('href', '#/')
+    expect(tab.closest('.paper')).toBeNull()
+  })
+
+  it('節 7 に CC BY 4.0 のリンクと「加工して利用」がある（出典の正本。第 3 波 決定 ②）', () => {
+    render(<App />)
+    const link = screen.getByRole('link', { name: 'CC BY 4.0' })
+    expect(link).toHaveAttribute('href', 'https://creativecommons.org/licenses/by/4.0/deed.ja')
+    expect(link).toHaveAttribute('target', '_blank')
+    expect(link).toHaveAttribute('rel', 'noreferrer')
+    // 節 7 の中にあること（アプリ内で外部へ出るのはここ 1 か所だけ）
+    const sections = [...document.querySelectorAll('.howto__section')]
+    expect(sections[6]).toContainElement(link)
+    expect(sections[6].textContent).toContain('加工して利用')
+    // 用紙の外（.footer-credit）には出典を置かない
+    expect(document.querySelector('.footer-credit')).toBeNull()
   })
 
   it('用紙ごと縦スクロールする画面なので .board に board--scroll が付く', () => {

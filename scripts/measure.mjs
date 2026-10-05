@@ -9,7 +9,8 @@
 //   node scripts/measure.mjs --base http://localhost:4317/chimei-kentei/
 //
 // 出力は 3 つ。受け入れ条件の判定はこれで機械的に行う（Issue #42「計測方法」）。
-//   <json>           … 画面ごとの tapUnder44 / fontUnder16 / paper.overY / 見える行数
+//   <json>           … 画面ごとの tapUnder44 / fontUnder16 / paper.overY / 見える行数 /
+//                      backInPaper（用紙の中の戻るボタン）/ tabbar（下タブバー）/ primaryCount
 //   <network-json>   … 初回ロードのリクエスト数・バイト・外部ホスト（external が空であること）
 //   <out>/*.png      … スクリーンショット（前後で差分を取る）
 //
@@ -203,7 +204,17 @@ async function record(s, name, w, h) {
   if (m.docOverY > 0) flag.push(`docOverY=${m.docOverY}`)
   if (m.docOverX > 0) flag.push(`docOverX=${m.docOverX}`)
   if (m.fonts?.missing.length) flag.push(`fontMissing=${m.fonts.missing.length}`)
-  console.log(`  ${name}-${w}x${h}  tap<44=${m.tapUnder44.length} font<16=${m.fontUnder16.length} ${flag.join(' ')}`)
+  // 第 3 波（Issue #51）の受け入れ条件。用紙の中の戻るボタンは 0、タブバーは全状態で見える
+  if (m.backInPaper?.length) flag.push(`backInPaper=${m.backInPaper.map((b) => b.text).join('|')}`)
+  if (!m.tabbar?.present) flag.push('tabbar=MISSING')
+  else if (!m.tabbar.visible) flag.push('tabbar=HIDDEN')
+  else if (m.tabbar.inPaper) flag.push('tabbar=INSIDE-PAPER')
+  else if (m.tabbar.current !== 1) flag.push(`tabbarCurrent=${m.tabbar.current}`)
+  if (m.paper && m.tabbar?.paperClear !== null && m.tabbar?.paperClear < 0) flag.push(`paperUnderTabbar=${-m.tabbar.paperClear}`)
+  if (m.answerBtnVisible === false) flag.push('answerBtn=HIDDEN')
+  console.log(
+    `  ${name}-${w}x${h}  tap<44=${m.tapUnder44.length} font<16=${m.fontUnder16.length} primary=${m.primaryCount} ${flag.join(' ')}`,
+  )
   return m
 }
 

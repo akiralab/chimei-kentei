@@ -7,14 +7,15 @@
  *
  * 1 画面契約の例外として **用紙ごと縦スクロール**する（結果・間違えた問題と同じ
  * useBoardModifier(BOARD_SCROLL)。src/styles/CONTRACT.md「1 画面運用」）。
- * 「表紙へ」は帯の右端と用紙の末尾の 2 か所に置く。帯の sticky は .board--scroll の中では
- * 効かない（黒板そのものがスクロールポートなので中の sticky は動かない）ため、
- * 読み終えた位置から戻る道を末尾にも用意する。
+ * 戻る導線は持たない（下タブバーの「検定」が表紙へ戻す。第 3 波 D1）。
+ *
+ * **出典の正本はこのページの節 7**（第 3 波 D3・決定 ②）。各画面に常駐していた
+ * .footer-credit を外した代わりに、CC BY 4.0 のライセンス URL を節 7 に置く。
+ * アプリ内で外部リンクを開くのはこの 1 か所だけ。
  */
 import type { Stars as StarsLevel } from '../engine/types.ts'
 import { starsAria, starsMark } from '../engine/stars.ts'
 import { BOARD_SCROLL, useBoardModifier } from '../hooks/useBoardModifier.ts'
-import { COVER_PATH } from '../router.ts'
 
 /** 本文に混ぜる ★。記号は読み上げから外し、言い換えを添える（engine/stars.ts・CONTRACT.md） */
 function Stars({ level }: { level: StarsLevel }) {
@@ -52,12 +53,6 @@ export default function HowTo() {
     <div className="paper howto">
       <div className="paper__header">
         <h1 className="paper__title">あそびかた</h1>
-        {/* 見出し行の右端。開いた直後に戻り道が見えている */}
-        <span className="howto__exit">
-          <a className="btn btn--ghost" href={COVER_PATH}>
-            表紙へ
-          </a>
-        </span>
         <p className="paper__subtitle">どうやって遊ぶの？</p>
       </div>
 
@@ -146,9 +141,9 @@ export default function HowTo() {
             得点のスタンプと答案が出ます。「ランキングに登録」で同じ問題を解いた人と並びます（1
             つの問題セットに 1 回）
           </li>
-          <li>「この問題で挑ませる」で同じ 10 問のリンクを送れます</li>
+          <li>見出しの右の「共有」で同じ 10 問のリンクを送れます</li>
           <li>
-            間違えた問題は、<strong>登録した答案のぶんだけ</strong>この端末に残ります（表紙の「間違えた問題」）
+            間違えた問題は、<strong>登録した答案のぶんだけ</strong>この端末に残ります（下の「見直し」）
           </li>
         </ul>
       </section>
@@ -157,24 +152,26 @@ export default function HowTo() {
         <h2 className="paper__section">7. 地名帳と出典</h2>
         <ul>
           <li>
-            「地名帳」で市区町村名の読みと場所を一覧できます。
+            下の「地名帳」で市区町村名の読みと場所を一覧できます。
             <StarMark />
             と検索で絞れます
           </li>
           <li>
-            出題はデジタル庁「アドレス・ベース・レジストリ」（CC BY 4.0）を加工。人口・地図は総務省統計局
-            e-Stat（2020 年国勢調査）、難易度の判定に KANJIDIC2（EDRDG, CC BY-SA 4.0）、書体は SIL Open Font
-            License の 5 書体を同梱
+            出題はデジタル庁「アドレス・ベース・レジストリ」（
+            <a
+              className="howto__link"
+              href="https://creativecommons.org/licenses/by/4.0/deed.ja"
+              target="_blank"
+              rel="noreferrer"
+            >
+              CC BY 4.0
+            </a>
+            ）を<strong>加工して利用</strong>しています（読みの正規化・難易度の判定・出題の抽出）。
+            人口・地図は総務省統計局 e-Stat（2020 年国勢調査）、難易度の判定に KANJIDIC2（EDRDG, CC BY-SA
+            4.0）、書体は SIL Open Font License の 5 書体を同梱
           </li>
         </ul>
       </section>
-
-      {/* 読み終えた位置から戻れる 2 つ目の出口。.btn を <p> で包むのは用紙の約束（CONTRACT.md） */}
-      <p>
-        <a className="btn btn--ghost" href={COVER_PATH}>
-          表紙へ
-        </a>
-      </p>
     </div>
   )
 }

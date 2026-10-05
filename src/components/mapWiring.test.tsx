@@ -155,16 +155,26 @@ describe('出題 への組み込み', () => {
     expect(document.querySelector('.info-card')).toHaveClass('info-card--placeholder')
   })
 
-  it('「タイトルへ戻る」で答案を捨てて表紙へ（確認ダイアログなし）', async () => {
+  it('出題中も下タブバーを出し、「検定」で答案を捨てて表紙へ（確認ダイアログなし）', async () => {
     const setId = `${DATA_VERSION}-e-12-1234`
+    // 同じ setId を前に解き終えていた場合の控えを置く（タブで抜けたら消えること）
+    sessionStorage.setItem(`result:${setId}`, '[]')
     renderAt(quizPath(setId))
     await waitFor(() => {
       expect(screen.getByLabelText('読みをひらがなで入力')).toBeInTheDocument()
     })
 
-    // 1 問だけ答えてから抜ける
+    // 用紙の中に出口は無い（第 3 波 D1）
+    expect(screen.queryByRole('button', { name: 'タイトルへ戻る' })).toBeNull()
+    expect(document.querySelector('.layout__exit')).toBeNull()
+
+    // 1 問だけ答えてからタブで抜ける。jsdom はフラグメントへのリンクを click で
+    // 辿らないので、ハッシュは手で動かして「押した後の始末」だけを見る
     fireEvent.click(screen.getByRole('button', { name: '解答' }))
-    fireEvent.click(screen.getByRole('button', { name: 'タイトルへ戻る' }))
+    const tab = screen.getByRole('link', { name: '検定' })
+    expect(tab).toHaveAttribute('href', '#/')
+    fireEvent.click(tab)
+    window.location.hash = '#/'
     await settle()
 
     expect(window.location.hash).toBe('#/')

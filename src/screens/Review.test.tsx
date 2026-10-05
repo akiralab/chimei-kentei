@@ -122,14 +122,13 @@ describe('記録があるとき', () => {
     expect(screen.queryByRole('button', { name: '一覧を消す' })).toBeNull()
   })
 
-  it('「この県でもう一度」で範囲選択へ、「タイトルへ戻る」で表紙へ', () => {
+  it('「この県でもう一度」で範囲選択へ。表紙へ戻る導線は用紙に置かない（下タブバーが持つ）', () => {
     render(<Review />)
 
     fireEvent.click(screen.getByRole('button', { name: 'この県でもう一度' }))
     expect(hash()).toBe('#/select')
 
-    fireEvent.click(screen.getByRole('button', { name: 'タイトルへ戻る' }))
-    expect(hash()).toBe('#/')
+    expect(screen.queryByRole('button', { name: 'タイトルへ戻る' })).toBeNull()
   })
 })
 
@@ -141,8 +140,9 @@ describe('記録が無いとき', () => {
     expect(rows()).toHaveLength(0)
     expect(screen.queryByLabelText('都道府県で絞り込む')).toBeNull()
     expect(screen.queryByRole('button', { name: '一覧を消す' })).toBeNull()
-    // 戻る動線は残す
-    expect(screen.getByRole('button', { name: 'タイトルへ戻る' })).toBeInTheDocument()
+    // 次の行動（範囲選択へ）だけ残す。表紙へ戻る導線は用紙に置かない
+    expect(screen.getByRole('button', { name: 'この県でもう一度' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'タイトルへ戻る' })).toBeNull()
   })
 
   it('壊れた記録は無視して案内文を出す', () => {

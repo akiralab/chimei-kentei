@@ -41,22 +41,34 @@ afterEach(() => {
 })
 
 describe('表紙のボタン', () => {
-  it('氏名が未入力なら主ボタンは 2 つとも押せない', () => {
+  it('氏名が未入力ならどちらのボタンも押せない', () => {
     render(<Cover />)
     expect(startBtn()).toBeDisabled()
     expect(todayBtn()).toBeDisabled()
   })
 
-  it('「今日の10問」は「はじめる」と同じ主ボタンの格で置く', () => {
+  it('主ボタンは「はじめる」1 つだけ（第 3 波 決定 ④）', () => {
     render(<Cover />)
-    expect(todayBtn().className).toContain('btn--primary')
-    expect(startBtn().className).toContain('btn--primary')
+    const primaries = [...document.querySelectorAll<HTMLElement>('.btn--primary')]
+    expect(primaries).toHaveLength(1)
+    expect(primaries[0].textContent).toBe('はじめる')
   })
 
-  it('見える字は「今日の10問（全国）」のままで、★★★ は下の注記で伝える', () => {
+  it('「今日の10問」は用紙に貼った付箋（.sticky-note）の中に副として置く', () => {
+    render(<Cover />)
+    const note = document.querySelector('.sticky-note')
+    expect(note).not.toBeNull()
+    expect(note).toContainElement(todayBtn())
+    // 付箋の中のボタンは主ボタンの格にしない
+    expect(todayBtn().className).not.toContain('btn--primary')
+  })
+
+  it('見える字は「今日の10問（全国）」のままで、★★★ は付箋の中の注記で伝える', () => {
     render(<Cover />)
     expect(todayBtn().textContent).toBe('今日の10問（全国）')
-    expect(document.querySelector('.cover__today-note')?.textContent).toBe('今日の10問は全国の★★★難易度 3から出題。')
+    expect(document.querySelector('.sticky-note .cover__today-note')?.textContent).toBe(
+      '全国の★★★難易度 3から出題。だれが押しても同じ 10 問。',
+    )
     // ★ の記号は読み上げから外し、言い換えだけを読ませる
     expect(document.querySelector('.cover__today-note .stars')).toHaveAttribute('aria-hidden', 'true')
   })
@@ -91,13 +103,22 @@ describe('表紙のボタン', () => {
     expect(localStorage.getItem(NICKNAME_KEY)).toBe('はなこ')
   })
 
-  it('副ボタンは 3 つ（ランキング・間違えた問題・地名帳）。375px で 1 行に収めるため見える字は縮める', () => {
+  it('副ボタン行（ランキング・間違えた問題・地名帳）は置かない（下タブバーが引き取った）', () => {
     render(<Cover />)
-    const subs = [...document.querySelectorAll<HTMLElement>('.cover__sub-actions .btn')]
-    expect(subs.map((a) => a.textContent)).toEqual(['ランキング', '間違えた問題', '地名帳'])
-    expect(subs.map((a) => a.getAttribute('href'))).toEqual(['#/ranking', '#/review', '#/atlas'])
-    // 見える字を縮めても読み上げ名は「ランキングを見る」のまま
-    expect(screen.getByRole('link', { name: 'ランキングを見る' })).toHaveAttribute('href', '#/ranking')
+    expect(document.querySelector('.cover__sub-actions')).toBeNull()
+    for (const name of ['ランキングを見る', '間違えた問題', '地名帳']) {
+      expect(screen.queryByRole('link', { name })).toBeNull()
+    }
+  })
+
+  it('用紙の余白の飾り（鉛筆・花丸・ゴム印）は 3 つとも DOM にある。読み上げはしない', () => {
+    render(<Cover />)
+    const props = [...document.querySelectorAll('.cover__prop')]
+    expect(props).toHaveLength(3)
+    expect(document.querySelector('.cover__prop--pencil')).not.toBeNull()
+    expect(document.querySelector('.cover__prop--circle')).not.toBeNull()
+    expect(document.querySelector('.cover__prop--stamp')).not.toBeNull()
+    for (const el of props) expect(el).toHaveAttribute('aria-hidden', 'true')
   })
 
   it('見出し行の「？」はあそびかたへ。読み上げ名は「どうやって遊ぶの？」', () => {
@@ -105,8 +126,8 @@ describe('表紙のボタン', () => {
     const help = screen.getByRole('link', { name: 'どうやって遊ぶの？' })
     expect(help).toHaveAttribute('href', '#/howto')
     expect(help.textContent).toBe('？')
-    // 副ボタンの行には足さない（375px で折り返すため）
-    expect(document.querySelector('.cover__sub-actions .paper__help')).toBeNull()
+    // タブにはしない（第 3 波 決定 ①: タブは 4 枚のまま）。置き場所は見出し行だけ
+    expect(document.querySelector('.paper__header > .paper__help')).not.toBeNull()
   })
 
   it('「はじめる」は範囲選択へ、Enter キーも範囲選択へ', () => {
