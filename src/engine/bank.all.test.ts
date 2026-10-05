@@ -1,11 +1,32 @@
 import { describe, expect, it } from 'vitest'
-import type { BankMeta } from './types.ts'
+import type { BankMeta, Question } from './types.ts'
+import { ALL_TOWNS_MAX, ALL_TOWNS_MIN } from './types.ts'
 import type { BankSource } from './bank.ts'
 import { DATA_VERSION, allQuestions, buildQuestionSet } from './bank.ts'
-import { DIFFICULT_12, EASY_12, EASY_13, META, cityRow, fixtureSource } from './__fixtures__/questions.ts'
+import { DIFFICULT_12, EASY_12, EASY_13, META, cityRow, fixtureSource, makeDifficult } from './__fixtures__/questions.ts'
 
 /** DIFFICULT_12 が所属する市区町村（フィクスチャの千葉県 1 番目・町名 30 件） */
 const CITY_WITH_TOWNS = DIFFICULT_12[0].lgCode
+
+/**
+ * 全町名の下限・上限を試すための市区町村（千葉県の 2〜4 番目）。
+ *  - 9 件 … 下限（ALL_TOWNS_MIN = 10）に 1 件足りない
+ *  - 501 件 … 上限（ALL_TOWNS_MAX = 500）を 1 件超える
+ *  - 12 件 … ★ は 1→2→3 の循環なので各 4 件。**絞ると下限を割る**（絞らなければ組める）
+ */
+const TOWNS_FEW = makeDifficult('12', '千葉県', 2, ALL_TOWNS_MIN - 1)
+const TOWNS_MANY = makeDifficult('12', '千葉県', 3, ALL_TOWNS_MAX + 1)
+const TOWNS_THIN_STARS = makeDifficult('12', '千葉県', 4, 12)
+const CITY_FEW = TOWNS_FEW[0].lgCode
+const CITY_MANY = TOWNS_MANY[0].lgCode
+const CITY_THIN_STARS = TOWNS_THIN_STARS[0].lgCode
+
+/** 上の 3 市区町村を difficult に足した BankSource（meta は件数を数え直す） */
+function sourceWithTownLimits(): BankSource {
+  const base = sourceWithExtraCities()
+  const difficult: Question[] = [...DIFFICULT_12, ...TOWNS_FEW, ...TOWNS_MANY, ...TOWNS_THIN_STARS]
+  return { ...base, difficult: (prefCode) => Promise.resolve(prefCode === '12' ? difficult : []) }
+}
 
 /**
  * フィクスチャの meta.cities に「easy.json には無い市区町村」を 2 件足す。
@@ -134,5 +155,47 @@ describe('buildQuestionSet / 全町名', () => {
     await expect(buildQuestionSet('d', EASY_12[1].lgCode, '0417', src, true)).rejects.toThrow(
       /この範囲には出題できる町名がありませんでした。/,
     )
+  })
+})
+
+describe('buildQuestionSet / 全町名の下限・上限', () => {
+  const src = sourceWithTownLimits()
+
+  it(`町名が ${String(ALL_TOWNS_MIN)} 件に足りない市区町村は件数を言って止まる`, async () => {
+    await expect(buildQuestionSet('d', CITY_FEW, '0417', src, true)).rejects.toThrow(
+      `千市2の町名は ${String(ALL_TOWNS_MIN - 1)} 件しかないので、全町名（${String(ALL_TOWNS_MIN)} 問以上）を組めません。`,
+    )
+  })
+
+  it('★ で絞って下限を割る組み合わせも止まる（絞らなければ組める）', async () => {
+    await expect(buildQuestionSet('d', CITY_THIN_STARS, '0417', src, true, 3)).rejects.toThrow(
+      `千市4の★★★の町名は 4 件しかないので、全町名（${String(ALL_TOWNS_MIN)} 問以上）を組めません。`,
+    )
+    const whole = await buildQuestionSet('d', CITY_THIN_STARS, '0417', src, true)
+    expect(whole.questions).toHaveLength(12)
+  })
+
+  it(`町名が ${String(ALL_TOWNS_MAX)} 件を超える市区町村も件数を言って止まる`, async () => {
+    await expect(buildQuestionSet('d', CITY_MANY, '0417', src, true)).rejects.toThrow(
+      '千市3の町名は 501 件あり多すぎるので、全町名を組めません。',
+    )
+  })
+
+  it('ちょうど下限・上限なら組める', async () => {
+    const few = makeDifficult('12', '千葉県', 5, ALL_TOWNS_MIN)
+    const many = makeDifficult('12', '千葉県', 6, ALL_TOWNS_MAX)
+    const edge: BankSource = {
+      ...sourceWithExtraCities(),
+      difficult: () => Promise.resolve([...few, ...many]),
+    }
+    expect((await buildQuestionSet('d', few[0].lgCode, '0417', edge, true)).questions).toHaveLength(ALL_TOWNS_MIN)
+    expect((await buildQuestionSet('d', many[0].lgCode, '0417', edge, true)).questions).toHaveLength(ALL_TOWNS_MAX)
+  })
+
+  it('全市区町村名（e）には下限を効かせない（島しょ 9 問は組めるまま）', async () => {
+    // 東京都の easy は 5 件。10 件に足りなくても全市区町村名は成立する
+    const set = await buildQuestionSet('e', '13', '0417', src, true)
+    expect(set.questions).toHaveLength(EASY_13.length)
+    expect(EASY_13.length).toBeLessThan(ALL_TOWNS_MIN)
   })
 })

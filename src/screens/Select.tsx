@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { BankMeta, Mode, Stars } from '../engine/types.ts'
-import { ALL_TOWNS_MAX, QUESTIONS_PER_SET } from '../engine/types.ts'
+import { ALL_TOWNS_MAX, ALL_TOWNS_MIN, QUESTIONS_PER_SET } from '../engine/types.ts'
 import { DATA_VERSION, loadEasy, loadMeta } from '../engine/bank.ts'
 import { MODES, MODE_LABELS, modeName } from '../engine/modes.ts'
 import { allSetLabel, allSetName } from '../engine/score.ts'
@@ -60,16 +60,21 @@ function townCounts(meta: BankMeta): Map<string, number> {
   return counts
 }
 
-/** 市区町村の `<select>` の選択肢 1 つ。選べない理由（0 件・多すぎる）もここで決める */
+/** 市区町村の `<select>` の選択肢 1 つ。選べない理由（0 件・少なすぎる・多すぎる）もここで決める */
 function cityOptionLabel(city: BankMeta['cities'][number]): string {
   if (city.towns === 0) return `${city.name}（町名なし）`
   const n = city.towns.toLocaleString('ja-JP')
-  return city.towns > ALL_TOWNS_MAX ? `${city.name}（${n}問・多すぎるため対象外）` : `${city.name}（${n}問）`
+  if (city.towns < ALL_TOWNS_MIN) return `${city.name}（${n}問・少なすぎるため対象外）`
+  if (city.towns > ALL_TOWNS_MAX) return `${city.name}（${n}問・多すぎるため対象外）`
+  return `${city.name}（${n}問）`
 }
 
-/** その市区町村の全町名を 1 回の答案として出せるか（0 件・上限超えは出せない） */
+/**
+ * その市区町村の全町名を 1 回の答案として出せるか。**10〜500 問の 1,405 市区町村だけ**。
+ * 0 件（33）と 1〜9 件（286）と 501 問以上（17）は出せない（判定の正本は engine/bank.ts）
+ */
 function canPlayAllTowns(city: BankMeta['cities'][number]): boolean {
-  return city.towns > 0 && city.towns <= ALL_TOWNS_MAX
+  return city.towns >= ALL_TOWNS_MIN && city.towns <= ALL_TOWNS_MAX
 }
 
 export default function Select() {
@@ -222,14 +227,15 @@ export default function Select() {
 
   /**
    * その難易度を選べないか。**0 件**は両科目で押せない（既存）。さらに
-   * **町名 × 10 問**では 10 問に足りない ★ も押せなくする — 市区町村名のように
-   * 「全市区町村名へ固定」で逃がせないため（例 東京都・島しょの ★★★ は 4 問）
+   * **町名（'d'）は 10 問に足りない ★ も押せなくする** — 10 問のセットは市区町村名のように
+   * 「全市区町村名へ固定」で逃がせず（例 東京都・島しょの ★★★ は 4 問）、
+   * 全町名も下限 10 問なので（例 匝瑳市の ★★★ が 4 件）どちらも組めないため
    */
   const starsBlocked = (choice: Stars): boolean => {
     const n = countAt(choice)
     if (n === null) return false
     if (n === 0) return true
-    return mode === 'd' && !all && n < QUESTIONS_PER_SET
+    return mode === 'd' && n < QUESTIONS_PER_SET
   }
   /**
    * 実際に使う難易度。選んだ ★ が **いまの範囲で選べない**なら「全部」に落とす

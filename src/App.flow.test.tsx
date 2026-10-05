@@ -74,7 +74,11 @@ const EASY_13 = withLgCodes(kanaizeAnswers(makeEasy('13', '東京都', 14)), [
   '132012', '132021',
 ])
 const EASY_ALL: Question[] = [...EASY_12, ...EASY_13, ...EASY_01]
-const DIFFICULT_12 = kanaizeAnswers(makeDifficult('12', '千葉県', 1, 30))
+// 千市1 は 30 件（全町名を組める）。千市2 は 7 件で **下限 10 に足りない**（選択肢から外れる）
+const DIFFICULT_12 = [
+  ...kanaizeAnswers(makeDifficult('12', '千葉県', 1, 30)),
+  ...kanaizeAnswers(makeDifficult('12', '千葉県', 2, 7)),
+]
 const DIFFICULT_13 = kanaizeAnswers(makeDifficult('13', '東京都', 1, 30))
 const DIFFICULT_ALL: Question[] = [...DIFFICULT_12, ...DIFFICULT_13]
 
@@ -471,9 +475,10 @@ describe('範囲・科目', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '問題数: 全町名' }))
     const picker = screen.getByLabelText('市区町村')
-    // 町名を持つのは 1 件目（千市1 の 30 件）だけ。ほかは「町名なし」で押せない
+    // 選べるのは 10〜500 問の市区町村だけ。7 件の 千市2 と 0 件の 千市3 は押せない
     expect(screen.getByRole('option', { name: '千市1（30問）' })).toBeEnabled()
-    expect(screen.getByRole('option', { name: '千市2（町名なし）' })).toBeDisabled()
+    expect(screen.getByRole('option', { name: '千市2（7問・少なすぎるため対象外）' })).toBeDisabled()
+    expect(screen.getByRole('option', { name: '千市3（町名なし）' })).toBeDisabled()
     expect(screen.getByRole('button', { name: '市区町村を選ぶと始められます' })).toBeDisabled()
 
     fireEvent.change(picker, { target: { value: '120001' } })
@@ -555,11 +560,11 @@ describe('範囲・科目', () => {
     expect(el('.jp-map__note').textContent).toBe('千葉県 ★★ 3問')
 
     // 町名も出す（meta の townStars で地域まで数えられるようになった）。
-    // 千葉県の町名は 30 件で ★1〜3 が 10 件ずつ
+    // 千葉県の町名は 37 件（千市1 の 30 ＋ 千市2 の 7）で ★1 が 13・★2 と ★3 が 12 件ずつ
     fireEvent.click(screen.getByRole('button', { name: '市区町村名＋町名' }))
-    expect(el('.jp-map__note').textContent).toBe('千葉県 ★★ 10問')
+    expect(el('.jp-map__note').textContent).toBe('千葉県 ★★ 12問')
     fireEvent.click(screen.getByRole('button', { name: '難易度: 全部' }))
-    expect(el('.jp-map__note').textContent).toBe('千葉県 30問')
+    expect(el('.jp-map__note').textContent).toBe('千葉県 37問')
 
     fireEvent.click(screen.getByRole('button', { name: '市区町村名' }))
     expect(el('.jp-map__note').textContent).toBe('千葉県 15問')

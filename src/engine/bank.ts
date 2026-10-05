@@ -4,7 +4,7 @@
  */
 import { subregionById, subregionOf } from '../geo/subregions.ts'
 import type { BankMeta, Mode, Question, QuestionSet, Stars } from './types.ts'
-import { MIN_POOL_FOR_SCOPE, QUESTIONS_PER_SET } from './types.ts'
+import { ALL_TOWNS_MAX, ALL_TOWNS_MIN, MIN_POOL_FOR_SCOPE, QUESTIONS_PER_SET } from './types.ts'
 import { modeName } from './modes.ts'
 import { starsMark } from './stars.ts'
 import { SCOPE_NATIONWIDE, buildSetId, canBeAll, canHaveStars } from './setId.ts'
@@ -216,6 +216,24 @@ function poolConditionName(mode: Mode, stars: Stars | null): string {
 }
 
 /**
+ * 全町名が 1 回の答案として成立する件数かを確かめる。成立しなければ理由を日本語で投げる。
+ *
+ * **全市区町村名（'e'）には効かせない** — 島しょ（9 問）のように既に登録された行があるため
+ * （下限の理由は types.ts の ALL_TOWNS_MIN）。エンジンは Lambda と共有しているので、
+ * この判定だけでクライアントとサーバーの条件が揃う
+ */
+function assertTownsCount(questions: Question[], stars: Stars | null): void {
+  const n = questions.length
+  if (n >= ALL_TOWNS_MIN && n <= ALL_TOWNS_MAX) return
+  const name = questions[0]?.city ?? questions[0]?.pref ?? ''
+  const what = stars === null ? '町名' : `${starsMark(stars)}の町名`
+  if (n < ALL_TOWNS_MIN) {
+    throw new Error(`${name}の${what}は ${n} 件しかないので、全町名（${ALL_TOWNS_MIN} 問以上）を組めません。`)
+  }
+  throw new Error(`${name}の${what}は ${n.toLocaleString('ja-JP')} 件あり多すぎるので、全町名を組めません。`)
+}
+
+/**
  * 問題セットを組み立てる。all なら母集団を全部（'e' ならその範囲の市区町村名、
  * 'd' ならその市区町村の町名。seed は出題順のシャッフルだけに効く）、
  * そうでなければ母集団から QUESTIONS_PER_SET 件を決定論的に抽出する。
@@ -247,6 +265,8 @@ export async function buildQuestionSet(
       const what = stars === null ? unit : `${starsMark(stars)}の${unit}`
       throw new Error(`この範囲には出題できる${what}がありませんでした。`)
     }
+    // 全町名だけ 1 回の答案として成立する件数（ALL_TOWNS_MIN〜ALL_TOWNS_MAX）に縛る
+    if (mode === 'd') assertTownsCount(questions, stars)
     return {
       setId,
       dataVersion: DATA_VERSION,

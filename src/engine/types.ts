@@ -155,6 +155,17 @@ export const MIN_POOL_FOR_SCOPE = 20
  */
 export const ALL_TOWNS_MAX = 500
 
+/**
+ * 「全町名」を選べる市区町村の町名の**下限**（本人の決定 2026-10-05）。
+ *
+ * 全問のセットの得点は正答率なので、町名が 1〜9 件の市区町村（286 件）を全問正解すると
+ * **短時間で 100 点**になり、同じ「全問」の一覧で 179 問を解いた人より上に来てしまう。
+ * 10 問が最小の答案という既存の決まり（`QUESTIONS_PER_SET`）に揃え、上限と同じ仕組みで外す。
+ *
+ * **全市区町村名（`'e'`）には効かせない** — 島しょ（9 問）のように既に登録された行があるため。
+ */
+export const ALL_TOWNS_MIN = QUESTIONS_PER_SET
+
 /** 時間制限の設定として許す下限・上限（0 ＝ 制限なしは別扱い） */
 export const TIME_LIMIT_MIN_MS = 1_000
 export const TIME_LIMIT_MAX_MS = 60_000

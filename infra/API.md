@@ -24,6 +24,7 @@ GitHub Pages は静的配信のため、ランキングは別ホストの API �
   "answers": [ { "questionId": "c:122351:匝瑳", "input": "そうさ", "ms": 4210, "passed": false } ] }
 ```
 - 検証: setId がパースでき問題セットを再導出できる、**answers の件数が再導出したセットの問題数と一致**（10 問のセットは 10 件、全市区町村名はその都道府県の市区町村の数、全町名はその市区町村の町名の数。防御的な上限 `ANSWERS_MAX` = 500 件 ＝ 選択画面が全町名を出す上限 `ALL_TOWNS_MAX`）、questionId の集合が一致、nickname 1〜12 文字。
+- **全町名（`d` × 6 桁 × `-all`）は 10〜500 問の市区町村だけ。** 再導出が `ALL_TOWNS_MIN`（10）未満・`ALL_TOWNS_MAX`（500）超で失敗するので 400（`invalid`）になる。判定は `src/engine/bank.ts` にあり Lambda がバンドルしているので、**クライアントとサーバーで条件が揃う**（全市区町村名に下限は無い）。
 - `timeLimitMs` は任意。**0（または省略）＝ 時間制限なし**、1000〜60000 ＝ 1 問あたりの制限。それ以外は 400。
 - `ms` の許容範囲は `timeLimitMs` で変わる:
   - `timeLimitMs > 0` … `ms` は 0〜`timeLimitMs`。`passed=true` なら `ms === timeLimitMs`（使い切った扱い）
