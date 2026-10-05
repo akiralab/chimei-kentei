@@ -3,7 +3,11 @@
  * DynamoDB はメモリ上の偽物、問題バンクは src/engine/__fixtures__ に差し替える。
  */
 import { beforeEach, describe, expect, it } from 'vitest'
-import { DIFFICULT_12, fixtureSource } from '../../../src/engine/__fixtures__/questions.ts'
+import {
+  DIFFICULT_12,
+  DIFFICULT_12_WITH_SKIP,
+  fixtureSource,
+} from '../../../src/engine/__fixtures__/questions.ts'
 import { DATA_VERSION, buildQuestionSet } from '../../../src/engine/bank.ts'
 import type { QuestionSet } from '../../../src/engine/types.ts'
 import type {
@@ -525,6 +529,40 @@ describe('POST /results（全町名の `-all` セット）', () => {
     // 区分「全問」として数える（全市区町村名と同じ `all` フラグ・同じカウンタ）
     expect(ddb.items.get(`${setPk(SET_TOWNS)}|entry#2026-10-02T12:00:00.000Z#id-1`)).toMatchObject({ all: true })
     expect(ddb.items.get(`${STATS_PK}|12#all`)).toMatchObject({ entries: 1, players: 1 })
+  })
+
+  // 出題しない町名（skip）を含む市区町村。エンジンを共有しているので、Lambda も
+  // クライアントと同じ 12 問を再導出する（コード変更なし。Issue #50）
+  it('skip 付きの町名は再導出に入らず、出題できる分だけで採点する', async () => {
+    const CITY_SKIP = DIFFICULT_12_WITH_SKIP[0].lgCode
+    const setId = `${DATA_VERSION}-d-${CITY_SKIP}-1234-all`
+    const bankSource = {
+      ...fixtureSource(),
+      difficult: (prefCode: string) =>
+        Promise.resolve(prefCode === '12' ? [...DIFFICULT_12, ...DIFFICULT_12_WITH_SKIP] : []),
+    }
+    const set = await buildQuestionSet('d', CITY_SKIP, '1234', bankSource, true)
+    // 14 件のうち 2 件は skip なので 12 問
+    expect(set.questions).toHaveLength(DIFFICULT_12_WITH_SKIP.length - 2)
+    expect(set.questions.every((q) => q.skip === undefined)).toBe(true)
+
+    seq = 0
+    const handler = createHandler({
+      ddb: memoryDdb(),
+      bankSource,
+      now: () => new Date('2026-10-02T12:00:00.000Z'),
+      randomId: () => `id-${++seq}`,
+    })
+    const answers = set.questions.map((q, i) => ({
+      questionId: q.id,
+      input: i < 9 ? q.answer : 'ちがう',
+      ms: 2000,
+      passed: false,
+    }))
+    const res = await handler(postEvent({ setId, nickname: 'たろう', clientToken: 'tok-skip', answers }))
+    expect(res.statusCode).toBe(201)
+    // 9 / 12 = 75 点
+    expect(parse(res).entry).toMatchObject({ setId, score: 75, correct: 9, total: 12, mode: 'd' })
   })
 
   it('町名 × 都道府県の -all は読めない（全町名の単位は市区町村）', async () => {

@@ -59,21 +59,33 @@ export function makeDifficult(prefCode: string, pref: string, seq: number, count
   })
 }
 
-/** `[★1, ★2, ★3]` の件数。meta の difficultStars / townStars と同じ形 */
+/**
+ * 指定した位置の問に `skip: 'reading'`（出題しない印）を付ける。実データでいう
+ * 「読みに全角数字が混ざる町名 345 件」の代わり（Issue #50）。
+ * **既存のフィクスチャには付けない** — 件数や ★ の期待値が動かないよう、
+ * skip を試すテストだけがこれで自前の母集団を作る
+ */
+export function withSkipReading(questions: Question[], indexes: number[]): Question[] {
+  const mark = new Set(indexes)
+  return questions.map((q, i) => (mark.has(i) ? { ...q, skip: 'reading' as const } : q))
+}
+
+/** `[★1, ★2, ★3]` の件数。meta の difficultStars / townStars と同じ形（skip は数えない） */
 export function starsTriple(questions: Question[]): [number, number, number] {
-  const n = (s: Stars) => questions.filter((q) => q.stars === s).length
+  const askable = questions.filter((q) => q.skip === undefined)
+  const n = (s: Stars) => askable.filter((q) => q.stars === s).length
   return [n(1), n(2), n(3)]
 }
 
 /**
  * meta.cities の 1 行。町名の件数（towns / townStars）は渡した difficult から
- * lgCode で数える（実データの build_questions.py と同じ数え方）
+ * lgCode で数える（実データの build_questions.py と同じ数え方 ＝ **skip は除く**）
  */
 export function cityRow(
   city: { lgCode: string; prefCode: string; name: string; kana: string },
   towns: Question[] = [],
 ): BankMeta['cities'][number] {
-  const inCity = towns.filter((t) => t.lgCode === city.lgCode)
+  const inCity = towns.filter((t) => t.lgCode === city.lgCode && t.skip === undefined)
   return { ...city, towns: inCity.length, townStars: starsTriple(inCity) }
 }
 
@@ -88,6 +100,12 @@ export const EASY_13 = makeEasy('13', '東京都', 5)
 export const EASY_ALL: Question[] = [...EASY_12, ...EASY_13]
 export const DIFFICULT_12 = makeDifficult('12', '千葉県', 1, 30)
 export const DIFFICULT_13 = makeDifficult('13', '東京都', 1, 3)
+/**
+ * 千葉県の 9 番目の自治体の町名 14 件のうち 2 件に `skip` を付けたもの（Issue #50）。
+ * **fixtureSource() には入れない** — 既存のセットの 10 問が動かないよう、
+ * skip を試すテストが自前の BankSource に足して使う（出題できるのは 12 件）
+ */
+export const DIFFICULT_12_WITH_SKIP = withSkipReading(makeDifficult('12', '千葉県', 9, 14), [2, 11])
 const DIFFICULT_ALL: Question[] = [...DIFFICULT_12, ...DIFFICULT_13]
 
 export const META: BankMeta = {

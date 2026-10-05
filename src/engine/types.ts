@@ -34,6 +34,15 @@ export interface Question {
    * meta.json の starsNote にも軸の要約が入る。版の古い問題バンクには無いので任意
    */
   stars?: Stars
+  /**
+   * **出題しない理由**（無ければ出題できる）。いまは 1 種類だけ:
+   *  - `'reading'` … 正解 `answer` にひらがなと「ー」以外（実データではすべて全角数字）が
+   *    混ざる。解答欄がその文字を受け付けないので正解できない（町名 345 件。Issue #50）
+   *
+   * 問題バンク JSON からは**消さない**（母集団の並びが変わると既存セットの 10 問を
+   * 再現できなくなる）。抽出側（sampler.ts）が飛ばし、meta の件数からも除く
+   */
+  skip?: 'reading'
 }
 
 /** 難易度。★ の数（1 = やさしい／3 = むずかしい）。両科目の出題が持つ */
@@ -46,12 +55,20 @@ export interface BankMeta {
   source: string // 出典の一文
   /** 難易度 stars の付け方（軸と出典）の一文。stars を入れる前の版には無い */
   starsNote?: string
+  /**
+   * `skip` が付いて**出題から外した**問の件数（全国。現行版は 345 件がすべて町名）。
+   * 下の件数はこれを除いた「出題できる件数」なので、JSON の配列の長さとは一致しない。
+   * ルール h を入れる前の版には無い（→ data/README.md の「前処理ルール」）
+   */
+  skippedReadings?: number
   prefectures: {
     code: string
     name: string
+    /** その都道府県で**出題できる**市区町村名の件数（skip を除く） */
     easyCount: number
+    /** その都道府県で**出題できる**町名の件数（skip を除く。JSON の配列はこれより多い） */
     difficultCount: number
-    /** その都道府県の町名の ★ 別件数 `[★1, ★2, ★3]`（合計 = difficultCount） */
+    /** その都道府県で出題できる町名の ★ 別件数 `[★1, ★2, ★3]`（合計 = difficultCount） */
     difficultStars: [number, number, number]
   }[]
   /**
@@ -64,9 +81,9 @@ export interface BankMeta {
     prefCode: string
     name: string
     kana: string
-    /** その市区町村の町名（difficult）の件数。0 の市区町村が 33 件ある */
+    /** その市区町村で**出題できる**町名（difficult）の件数（skip を除く）。0 の市区町村が 33 件ある */
     towns: number
-    /** その市区町村の町名の ★ 別件数 `[★1, ★2, ★3]`（合計 = towns） */
+    /** その市区町村で出題できる町名の ★ 別件数 `[★1, ★2, ★3]`（合計 = towns） */
     townStars: [number, number, number]
   }[]
 }
