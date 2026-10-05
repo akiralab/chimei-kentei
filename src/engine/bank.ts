@@ -4,7 +4,7 @@
  */
 import { subregionById, subregionOf } from '../geo/subregions.ts'
 import type { BankMeta, Mode, Question, QuestionSet, Stars } from './types.ts'
-import { MIN_POOL_FOR_SCOPE, QUESTIONS_PER_SET } from './types.ts'
+import { ALL_TOWNS_MAX, ALL_TOWNS_MIN, MIN_POOL_FOR_SCOPE, QUESTIONS_PER_SET } from './types.ts'
 import { modeName } from './modes.ts'
 import { starsMark } from './stars.ts'
 import { SCOPE_NATIONWIDE, buildSetId, canBeAll, canHaveStars } from './setId.ts'
@@ -168,21 +168,29 @@ export async function buildPool(mode: Mode, scope: string, source: BankSource = 
 }
 
 /**
- * ある範囲の市区町村名を **全部**。母集団は **easy.json にあるものだけ**で、
- * 問題バンクが除いた市区町村（ひらがなの さいたま・ニセコ・むかわ など）は出さない
- * ＝「問題バンクで除外した市区町村はクイズに出さない」に揃える。
+ * 10 問ではなく母集団を **全部** 出すセットの母集団。**科目で単位が違う**（Issue #46）:
  *
- * scope は 2 桁（都道府県）か 3 文字（その中の地域）。並びは lgCode 順。
- * 母集団なので出題順はここでは決めない
+ *  - `'e'` 全市区町村名 … scope は 2 桁（都道府県）か 3 文字（その中の地域）。母集団は
+ *    **easy.json にあるものだけ**で、問題バンクが除いた市区町村（ひらがなの さいたま・
+ *    ニセコ・むかわ など）は出さない ＝「問題バンクで除外した市区町村はクイズに出さない」に揃える
+ *  - `'d'` 全町名 … scope は 6 桁（市区町村）。その市区町村の町名（difficult）だけで、
+ *    **市区町村名そのものは含めない**（「全町名（97 問）」の 97 を `meta.cities[].towns` と一致させる）
+ *
+ * 並びは id 順。母集団なので出題順はここでは決めない（sampleQuestions の担当）
  */
-export async function municipalityQuestions(scope: string, source: BankSource = defaultSource()): Promise<Question[]> {
+export async function allQuestions(
+  mode: Mode,
+  scope: string,
+  source: BankSource = defaultSource(),
+): Promise<Question[]> {
   const prefCode = scope.slice(0, 2)
   if (scope.length === 3 && !subregionById(scope)) throw new Error(`地域コードがありません: ${scope}`)
-  const [easy, meta] = await Promise.all([source.easy(), source.meta()])
+  const meta = await source.meta()
   if (!meta.prefectures.some((p) => p.code === prefCode)) {
     throw new Error(`都道府県コードが問題バンクにありません: ${prefCode}`)
   }
-  return easy.filter(scopeMatcher(scope)).sort((a, b) => (a.lgCode < b.lgCode ? -1 : a.lgCode > b.lgCode ? 1 : 0))
+  const pool = mode === 'e' ? await source.easy() : await source.difficult(prefCode)
+  return pool.filter(scopeMatcher(scope)).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
 }
 
 /** 母集団が足りないときの案内に使う範囲名。地域は「島しょ」、都道府県は出題の pref から */
@@ -191,8 +199,8 @@ function poolRangeName(scope: string, questions: Question[]): string {
 }
 
 /**
- * 難易度で母集団を絞る。★ を持つのは市区町村名（easy）だけなので、
- * stars が null のときは何もしない。
+ * 難易度で母集団を絞る。★ は両科目の全問が持つ（Issue #46）ので、
+ * stars が null のときだけ何もしない。
  *
  * **絞った結果が足りなくても範囲を広げない。**「★3 を選んだのに ★1 が出た」は
  * 「道東を選んだのに全道が出た」と同じく選んだ条件に反するため（Issue #34 と同じ理屈）
@@ -208,10 +216,29 @@ function poolConditionName(mode: Mode, stars: Stars | null): string {
 }
 
 /**
- * 問題セットを組み立てる。all なら「その範囲の市区町村名を全部」（seed は出題順のシャッフルだけに効く）、
+ * 全町名が 1 回の答案として成立する件数かを確かめる。成立しなければ理由を日本語で投げる。
+ *
+ * **全市区町村名（'e'）には効かせない** — 島しょ（9 問）のように既に登録された行があるため
+ * （下限の理由は types.ts の ALL_TOWNS_MIN）。エンジンは Lambda と共有しているので、
+ * この判定だけでクライアントとサーバーの条件が揃う
+ */
+function assertTownsCount(questions: Question[], stars: Stars | null): void {
+  const n = questions.length
+  if (n >= ALL_TOWNS_MIN && n <= ALL_TOWNS_MAX) return
+  const name = questions[0]?.city ?? questions[0]?.pref ?? ''
+  const what = stars === null ? '町名' : `${starsMark(stars)}の町名`
+  if (n < ALL_TOWNS_MIN) {
+    throw new Error(`${name}の${what}は ${n} 件しかないので、全町名（${ALL_TOWNS_MIN} 問以上）を組めません。`)
+  }
+  throw new Error(`${name}の${what}は ${n.toLocaleString('ja-JP')} 件あり多すぎるので、全町名を組めません。`)
+}
+
+/**
+ * 問題セットを組み立てる。all なら母集団を全部（'e' ならその範囲の市区町村名、
+ * 'd' ならその市区町村の町名。seed は出題順のシャッフルだけに効く）、
  * そうでなければ母集団から QUESTIONS_PER_SET 件を決定論的に抽出する。
  *
- * stars を渡すと母集団をその難易度だけに絞る（市区町村名のみ。all でも効いて
+ * stars を渡すと母集団をその難易度だけに絞る（両科目。all でも効いて
  * 「その範囲の ★3 を全部」になる）。絞って足りなくても範囲は広げず、案内して止める。
  */
 export async function buildQuestionSet(
@@ -223,18 +250,23 @@ export async function buildQuestionSet(
   stars: Stars | null = null,
 ): Promise<QuestionSet> {
   if (stars !== null && !canHaveStars(mode)) {
-    throw new Error('難易度は市区町村名のときだけ選べます。')
+    throw new Error('この科目では難易度を選べません。')
   }
   if (all) {
     if (!canBeAll(mode, scope)) {
-      throw new Error('全市区町村名は、市区町村名で都道府県か地域を選んだときだけ出題できます。')
+      throw new Error(
+        '全市区町村名は市区町村名 × 都道府県／地域、全町名は町名 × 市区町村のときだけ出題できます。',
+      )
     }
     const setId = buildSetId(DATA_VERSION, mode, scope, seed, true, stars ?? undefined)
-    const questions = filterByStars(await municipalityQuestions(scope, source), stars)
+    const questions = filterByStars(await allQuestions(mode, scope, source), stars)
     if (questions.length === 0) {
-      const what = stars === null ? '市区町村' : `${starsMark(stars)}の市区町村`
+      const unit = mode === 'e' ? '市区町村' : '町名'
+      const what = stars === null ? unit : `${starsMark(stars)}の${unit}`
       throw new Error(`この範囲には出題できる${what}がありませんでした。`)
     }
+    // 全町名だけ 1 回の答案として成立する件数（ALL_TOWNS_MIN〜ALL_TOWNS_MAX）に縛る
+    if (mode === 'd') assertTownsCount(questions, stars)
     return {
       setId,
       dataVersion: DATA_VERSION,

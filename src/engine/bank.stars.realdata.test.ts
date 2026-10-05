@@ -2,21 +2,24 @@
  * 難易度 ★ を **実データ**で検査する（node 環境）。読み込みは bank.subregion.realdata.test.ts と同じ
  * `import.meta.glob`。
  *
- * ここが固定するのは 3 つ:
+ * ここが固定するのは 5 つ:
  *  - easy.json の全問が ★1〜3 を持ち、全国の件数が下の表と一致する
  *    （data/build_stars.py の軸を変えたらこの数字も動く ＝ 気づけるようにする）
+ *  - difficult（町名）も全問が ★1〜3 を持ち、全国の件数が下の表と一致する（Issue #46）
  *  - 全市区町村名 × 難易度は、その都道府県のその ★ を **全件** 出す
+ *  - 全町名 × 難易度は、その市区町村のその ★ を **全件** 出し、件数が meta.cities と合う
  *  - 10 問に足りない組み合わせは案内して止まる（★ では珍しくない。README の注記参照）
  */
 import { beforeAll, describe, expect, it } from 'vitest'
 import type { BankMeta, Question, Stars } from './types.ts'
 import { QUESTIONS_PER_SET } from './types.ts'
 import type { BankSource } from './bank.ts'
-import { DATA_VERSION, buildQuestionSet, municipalityQuestions } from './bank.ts'
+import { DATA_VERSION, allQuestions, buildQuestionSet } from './bank.ts'
 import { STARS_CHOICES } from './stars.ts'
 
 const EASY_FILES = import.meta.glob<Question[]>('../../public/questions/*/easy.json', { import: 'default' })
 const META_FILES = import.meta.glob<BankMeta>('../../public/questions/*/meta.json', { import: 'default' })
+const DIFFICULT_FILES = import.meta.glob<Question[]>('../../public/questions/*/difficult/*.json', { import: 'default' })
 
 function pick<T>(files: Record<string, () => Promise<T>>, suffix: string): Promise<T> {
   const hit = Object.entries(files).find(([path]) => path.includes(`/${DATA_VERSION}/`) && path.endsWith(suffix))
@@ -28,16 +31,31 @@ function pick<T>(files: Record<string, () => Promise<T>>, suffix: string): Promi
 const NATIONWIDE: Record<Stars, number> = { 1: 566, 2: 601, 3: 533 }
 const EASY_TOTAL = 1700
 
+/** 町名 107,681 件の ★ の分布（judge_towns ＝ B2×B4×B5。Issue #46 の案 C） */
+const TOWNS_NATIONWIDE: Record<Stars, number> = { 1: 38_863, 2: 40_931, 3: 27_887 }
+const TOWNS_TOTAL = 107_681
+
+/** 全町名の検算に使う市区町村（Issue #46 のセット ID 例 `-d-122351-1234-all`） */
+const SOUSA = '122351'
+
 let easy: Question[]
+let meta: BankMeta
+let difficult12: Question[]
 let source: BankSource
 
 beforeAll(async () => {
-  const [e, meta] = await Promise.all([pick(EASY_FILES, 'easy.json'), pick(META_FILES, 'meta.json')])
+  const [e, m, d12] = await Promise.all([
+    pick(EASY_FILES, 'easy.json'),
+    pick(META_FILES, 'meta.json'),
+    pick(DIFFICULT_FILES, 'difficult/12.json'),
+  ])
   easy = e
+  meta = m
+  difficult12 = d12
   source = {
-    meta: () => Promise.resolve(meta),
+    meta: () => Promise.resolve(m),
     easy: () => Promise.resolve(e),
-    difficult: () => Promise.resolve([]),
+    difficult: (prefCode: string) => Promise.resolve(prefCode === '12' ? d12 : []),
   }
 })
 
@@ -80,7 +98,7 @@ describe('難易度 ★ の実データ', () => {
     expect(set.questions.every((q) => q.stars === 3 && q.prefCode === '01')).toBe(true)
 
     // 絞らなければ道内の easy 全件（＝ ★1+★2+★3）
-    const whole = await municipalityQuestions('01', source)
+    const whole = await allQuestions('e', '01', source)
     expect(whole).toHaveLength(countIn('01', 1) + countIn('01', 2) + countIn('01', 3))
   })
 
@@ -105,5 +123,62 @@ describe('難易度 ★ の実データ', () => {
     // 逃げ道（全市区町村名）はその件数で成立する
     const set = await buildQuestionSet('e', '31', '0417', source, true, 3)
     expect(set.questions).toHaveLength(want)
+  })
+})
+
+describe('町名の難易度 ★ の実データ（Issue #46）', () => {
+  it('meta の difficultStars が全国で TOWNS_NATIONWIDE と一致する', () => {
+    const sum: Record<Stars, number> = { 1: 0, 2: 0, 3: 0 }
+    let total = 0
+    for (const p of meta.prefectures) {
+      for (const s of STARS_CHOICES) sum[s] += p.difficultStars[s - 1]
+      total += p.difficultCount
+      expect(p.difficultStars.reduce((a, b) => a + b, 0), `${p.code} ${p.name}`).toBe(p.difficultCount)
+    }
+    expect(total).toBe(TOWNS_TOTAL)
+    expect(sum).toEqual(TOWNS_NATIONWIDE)
+  })
+
+  it('meta の townStars の合計が towns と一致し、都道府県の difficultStars に積み上がる', () => {
+    const byPref = new Map<string, [number, number, number]>()
+    for (const c of meta.cities) {
+      expect(c.townStars.reduce((a, b) => a + b, 0), `${c.lgCode} ${c.name}`).toBe(c.towns)
+      const acc = byPref.get(c.prefCode) ?? [0, 0, 0]
+      for (const s of STARS_CHOICES) acc[s - 1] += c.townStars[s - 1]
+      byPref.set(c.prefCode, acc)
+    }
+    for (const p of meta.prefectures) {
+      expect(byPref.get(p.code), `${p.code} ${p.name}`).toEqual(p.difficultStars)
+    }
+  })
+
+  it('difficult/12.json の全問が ★1〜3 を持つ', () => {
+    expect(difficult12.length).toBeGreaterThan(0)
+    expect(difficult12.every((q) => q.stars === 1 || q.stars === 2 || q.stars === 3)).toBe(true)
+  })
+
+  it('全町名は meta.cities[].towns と同じ件数を出す（市区町村名は混ざらない）', async () => {
+    const city = meta.cities.find((c) => c.lgCode === SOUSA)
+    if (!city) throw new Error(`meta.cities に ${SOUSA} が無い`)
+    const set = await buildQuestionSet('d', SOUSA, '1234', source, true)
+    expect(set.setId).toBe(`${DATA_VERSION}-d-${SOUSA}-1234-all`)
+    expect(set.questions).toHaveLength(city.towns)
+    expect(set.questions.every((q) => q.lgCode === SOUSA && q.id.startsWith('o:'))).toBe(true)
+  })
+
+  it.each(STARS_CHOICES)('全町名 × ★%i は meta.cities[].townStars と同じ件数', async (stars) => {
+    const city = meta.cities.find((c) => c.lgCode === SOUSA)
+    if (!city) throw new Error(`meta.cities に ${SOUSA} が無い`)
+    const set = await buildQuestionSet('d', SOUSA, '1234', source, true, stars)
+    expect(set.setId).toBe(`${DATA_VERSION}-d-${SOUSA}-1234-all-s${stars}`)
+    expect(set.questions).toHaveLength(city.townStars[stars - 1])
+    expect(set.questions.every((q) => q.stars === stars)).toBe(true)
+  })
+
+  it('町名を含む科目 × ★ の 10 問も、その ★ だけから出る', async () => {
+    const set = await buildQuestionSet('d', '12', '1234', source, false, 3)
+    expect(set.setId).toBe(`${DATA_VERSION}-d-12-1234-s3`)
+    expect(set.questions).toHaveLength(QUESTIONS_PER_SET)
+    expect(set.questions.every((q) => q.stars === 3)).toBe(true)
   })
 })

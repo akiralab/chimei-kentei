@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { BankMeta, Mode, Stars } from '../engine/types.ts'
-import { QUESTIONS_PER_SET } from '../engine/types.ts'
+import { ALL_TOWNS_MAX, ALL_TOWNS_MIN, QUESTIONS_PER_SET } from '../engine/types.ts'
 import { DATA_VERSION, loadEasy, loadMeta } from '../engine/bank.ts'
 import { MODES, MODE_LABELS, modeName } from '../engine/modes.ts'
+import { allSetLabel, allSetName } from '../engine/score.ts'
 import { STARS_ALL, STARS_CHOICES, starsHeaderNote, starsMark, starsSwitchLabel } from '../engine/stars.ts'
 import { scopeLabel } from '../engine/scope.ts'
 import { SCOPE_NATIONWIDE, buildSetId, canBeAll, canHaveStars, randomSeed } from '../engine/setId.ts'
@@ -32,19 +33,71 @@ function municipalityCount(meta: BankMeta, scope: string): { n: number; unit: st
 /** 選んでいる難易度。0 ＝ 絞らない（全部） */
 type StarsChoice = Stars | typeof STARS_ALL
 
-/** easy の件数表のキー。範囲（'00' / 2 桁 / 3 文字）× 難易度（0 ＝ 全部） */
+/** 件数表のキー。範囲（'00' / 2 桁 / 3 文字 / 6 桁）× 難易度（0 ＝ 全部） */
 function countKey(scope: string, stars: StarsChoice): string {
   return `${scope}|${stars}`
+}
+
+/**
+ * 町名の件数表。`countKey(範囲, 難易度)` → 件数。**meta.json だけで数える**
+ * （町名の実体 `difficult/*.json` は 18 MB あるので選択画面では読まない）。
+ * 範囲は全国 '00'・都道府県コード・地域 ID・市区町村コード（6 桁）の 4 つを同時に積む
+ */
+function townCounts(meta: BankMeta): Map<string, number> {
+  const counts = new Map<string, number>()
+  const bump = (scope: string, stars: StarsChoice, n: number) => {
+    const key = countKey(scope, stars)
+    counts.set(key, (counts.get(key) ?? 0) + n)
+  }
+  for (const c of meta.cities) {
+    const sub = subregionOf(c.lgCode)
+    const scopes = sub ? [SCOPE_NATIONWIDE, c.prefCode, sub.id, c.lgCode] : [SCOPE_NATIONWIDE, c.prefCode, c.lgCode]
+    for (const scope of scopes) {
+      bump(scope, STARS_ALL, c.towns)
+      for (const stars of STARS_CHOICES) bump(scope, stars, c.townStars[stars - 1])
+    }
+  }
+  return counts
+}
+
+/** 市区町村の `<select>` の選択肢 1 つ。選べない理由（0 件・少なすぎる・多すぎる）もここで決める */
+function cityOptionLabel(city: BankMeta['cities'][number]): string {
+  if (city.towns === 0) return `${city.name}（町名なし）`
+  const n = city.towns.toLocaleString('ja-JP')
+  if (city.towns < ALL_TOWNS_MIN) return `${city.name}（${n}問・少なすぎるため対象外）`
+  if (city.towns > ALL_TOWNS_MAX) return `${city.name}（${n}問・多すぎるため対象外）`
+  return `${city.name}（${n}問）`
+}
+
+/**
+ * その市区町村の全町名を 1 回の答案として出せるか。**10〜500 問の 1,405 市区町村だけ**。
+ * 0 件（33）と 1〜9 件（286）と 501 問以上（17）は出せない（判定の正本は engine/bank.ts）
+ */
+function canPlayAllTowns(city: BankMeta['cities'][number]): boolean {
+  return city.towns >= ALL_TOWNS_MIN && city.towns <= ALL_TOWNS_MAX
 }
 
 export default function Select() {
   const [meta, setMeta] = useState<BankMeta | null>(null)
   const [error, setError] = useState<string | null>(null)
+  /**
+   * 選んでいる**範囲**。'00' ＝ 全国／2 桁 ＝ 都道府県／3 文字 ＝ 地域。
+   * 市区町村（6 桁）はここに入れない — 全町名のときだけ下の `city` で選ぶ（PR #28 で外した
+   * 「市区町村で絞る」を戻さないため。6 桁 scope は全町名専用）
+   */
   const [scope, setScope] = useState<string>(SCOPE_NATIONWIDE)
   const [mode, setMode] = useState<Mode>('e')
-  /** 問題数。false ＝ 10 問、true ＝ その都道府県の全市区町村名（市区町村名 × 都道府県のときだけ） */
+  /**
+   * 選んでいる市区町村コード（6 桁）。'' ＝ 未選択。
+   * **全町名（町名 × 全部）のときだけ**使う。範囲を変えたら捨てる
+   */
+  const [city, setCity] = useState('')
+  /**
+   * 問題数。false ＝ 10 問、true ＝ 母集団を全部
+   * （市区町村名ならその範囲の全市区町村名、町名なら選んだ市区町村の全町名）
+   */
   const [all, setAll] = useState(false)
-  /** 難易度。0 ＝ 全部。市区町村名のときだけ選べる（町名に ★ は無い） */
+  /** 難易度。0 ＝ 全部。両科目で選べる（Issue #46 で町名にも ★ が付いた） */
   const [stars, setStars] = useState<StarsChoice>(STARS_ALL)
   // 時間制限は端末の設定（既定は「制限なし」）。Quiz は出題開始時に readTimeLimit() で読み直す
   const [timeLimitMs, setTimeLimitMs] = useTimeLimit()
@@ -130,44 +183,106 @@ export default function Select() {
   )
   /** 地域に分けられる都道府県（北海道・東京都）だけ中身が入る */
   const subregions = useMemo(() => (prefCode === undefined ? [] : subregionsOf(prefCode)), [prefCode])
+  /**
+   * 全町名で選べる市区町村。選んでいる範囲（都道府県か地域）に入る `meta.cities` を団体コード順に。
+   * 町名 0 件（33 件）と上限超え（17 件）も **選択肢には出す** — 無いものとして隠すより、
+   * 押せないことと理由（「3,741問・多すぎるため対象外」）を見せた方が分かるため
+   */
+  const cityOptions = useMemo(() => {
+    if (!meta || prefCode === undefined) return []
+    const sub = scope.length === 3 ? subregionById(scope) : undefined
+    return meta.cities.filter((c) => c.prefCode === prefCode && (!sub || subregionOf(c.lgCode)?.id === sub.id))
+  }, [meta, prefCode, scope])
   const count = useMemo(
     () => (meta && selectedPref ? municipalityCount(meta, scope) : null),
     [meta, selectedPref, scope],
   )
-  /** 難易度を選べる条件（市区町村名のときだけ）。町名に切り替えたら「全部」に戻す */
+  /** 町名の件数表（meta だけで数える）。全国・都道府県・地域・市区町村の 4 つの範囲を引ける */
+  const townCount = useMemo(() => (meta ? townCounts(meta) : null), [meta])
+  /** 難易度を選べる条件。いまは両科目 true（判定は engine/setId.ts に置く） */
   const starsAvailable = canHaveStars(mode)
-  /** いまの範囲 × 難易度の件数。読めていなければ null */
-  const countAt = (choice: StarsChoice): number | null => easyCount?.get(countKey(scope, choice)) ?? null
+
   /**
-   * 実際に使う難易度。選んだ ★ が **いまの範囲に 0 件**なら「全部」に落とす
+   * いまの範囲（またはいまの市区町村）× 難易度の件数。読めていなければ null。
+   *  - 市区町村名（'e'）… easy.json を走査した件数
+   *  - 町名（'d'）… `meta.cities[].towns` / `townStars` の積み上げ。
+   *    **市区町村名そのものは数に入らない**（科目 'd' の 10 問は市区町村名も母集団に含むので、
+   *    実際の母集団はこの件数より少し多い。足りないと言い過ぎる側に倒している）
+   */
+  const countOfRange = (rangeScope: string, choice: StarsChoice): number | null =>
+    (mode === 'e' ? easyCount : townCount)?.get(countKey(rangeScope, choice)) ?? null
+
+  /** 選んでいる市区町村（全町名のときだけ）。範囲の外・選べない市区町村なら undefined */
+  const selectedCity = useMemo(() => {
+    if (mode !== 'd' || city === '') return undefined
+    const hit = meta?.cities.find((c) => c.lgCode === city)
+    return hit && canPlayAllTowns(hit) ? hit : undefined
+  }, [meta, mode, city])
+  /** 全町名で出題する市区町村の scope（6 桁）。決まっていなければ undefined */
+  const townsScope = all && selectedCity ? selectedCity.lgCode : undefined
+
+  /** 難易度の件数を数える範囲。全町名で市区町村まで決まっていればその市区町村 */
+  const starsScope = townsScope ?? scope
+  const countAt = (choice: StarsChoice): number | null => countOfRange(starsScope, choice)
+
+  /**
+   * その難易度を選べないか。**0 件**は両科目で押せない（既存）。さらに
+   * **町名（'d'）は 10 問に足りない ★ も押せなくする** — 10 問のセットは市区町村名のように
+   * 「全市区町村名へ固定」で逃がせず（例 東京都・島しょの ★★★ は 4 問）、
+   * 全町名も下限 10 問なので（例 匝瑳市の ★★★ が 4 件）どちらも組めないため
+   */
+  const starsBlocked = (choice: Stars): boolean => {
+    const n = countAt(choice)
+    if (n === null) return false
+    if (n === 0) return true
+    return mode === 'd' && n < QUESTIONS_PER_SET
+  }
+  /**
+   * 実際に使う難易度。選んだ ★ が **いまの範囲で選べない**なら「全部」に落とす
    * （範囲を変えた拍子に始められない組み合わせが残らないように）
    */
   const starsSelected: StarsChoice =
-    !starsAvailable || (stars !== STARS_ALL && countAt(stars) === 0) ? STARS_ALL : stars
+    !starsAvailable || (stars !== STARS_ALL && starsBlocked(stars)) ? STARS_ALL : stars
   /** 出題に渡す難易度。0（全部）は渡さない */
   const starsParam = starsSelected === STARS_ALL ? undefined : starsSelected
 
-  /** 全市区町村名の問題数（＝その範囲 × 難易度の easy の件数）。読めていなければ null */
-  const allCount = nationwide ? null : countAt(starsSelected)
+  /**
+   * 「全部」ボタンに添える問題数。読めていなければ null（＝件数を出さない）。
+   *  - 市区町村名 … その範囲 × 難易度の easy の件数
+   *  - 町名 … **選んだ市区町村** × 難易度の町名の件数（市区町村を選ぶまでは出せない）
+   */
+  const allCount =
+    mode === 'e' ? (nationwide ? null : countAt(starsSelected))
+    : townsScope === undefined ? null
+    : countOfRange(townsScope, starsSelected)
+  /** 全部を選べる条件。市区町村名は都道府県／地域、町名は市区町村（下の `<select>` で選ぶ） */
+  const allAvailable = mode === 'e' ? canBeAll(mode, scope) : !nationwide
+  /**
+   * 10 問を組めない範囲。絞らなければ島しょ（9 件）だけだが、**難易度で絞ると珍しくない**
+   * （47 都道府県 × ★3 のうち 71 通りが 10 件未満。例 鳥取県 × ★★★ は 5 件）。
+   * 範囲も難易度も広げない仕様（Issue #34 と同じ理屈）なので、ここで全市区町村名に固定する。
+   * **町名（'d'）では固定しない** — 逃げ道の全町名は単位（市区町村）が違うので、
+   * 代わりに上の starsBlocked でその ★ を押せなくする
+   */
+  const tooFewForSet = mode === 'e' && allCount !== null && allCount < QUESTIONS_PER_SET
+  const allSelected = allAvailable && (all || tooFewForSet)
+  /** 全町名を選んだが市区町村がまだ決まっていない。始められないので案内を出す */
+  const needCity = mode === 'd' && allSelected && townsScope === undefined
   /**
    * 全国 × 町名は母集団を組めない（町名は都道府県ごとのファイル）。
    * 科目の切替自体は全国のままでも押せるようにし、「始める」だけを止めて案内を出す。
    */
-  const blocked = nationwide && mode === 'd'
-  /** 全市区町村名を選べる条件。外れたら 10 問に戻す（切替は押せないまま残さない） */
-  const allAvailable = canBeAll(mode, scope)
-  /**
-   * 10 問を組めない範囲。絞らなければ島しょ（9 件）だけだが、**難易度で絞ると珍しくない**
-   * （47 都道府県 × ★3 のうち 71 通りが 10 件未満。例 鳥取県 × ★★★ は 5 件）。
-   * 範囲も難易度も広げない仕様（Issue #34 と同じ理屈）なので、ここで全市区町村名に固定する
-   */
-  const tooFewForSet = mode === 'e' && allCount !== null && allCount < QUESTIONS_PER_SET
-  const allSelected = allAvailable && (all || tooFewForSet)
+  const blocked = (nationwide && mode === 'd') || needCity
+  /** 出題に渡す範囲。全町名なら市区町村（6 桁）、それ以外は選んでいる範囲 */
+  const startScope = townsScope ?? scope
 
-  /** 地図で光らせる県。地域を選んでいても親の都道府県を光らせる */
+  /** 地図で光らせる県。地域・市区町村を選んでいても親の都道府県を光らせる */
   const mapSelected = prefCode
 
-  const rangeName = scopeLabel(scope, (code) => meta?.prefectures.find((p) => p.code === code)?.name)
+  const prefNameOf = (code: string) => meta?.prefectures.find((p) => p.code === code)?.name
+  const cityNameOf = (lgCode: string) => meta?.cities.find((c) => c.lgCode === lgCode)?.name
+  /** 見出しに出す範囲名。全町名で市区町村まで決まっていれば「匝瑳市」 */
+  const rangeName = scopeLabel(startScope, prefNameOf, cityNameOf)
   /** 「制限なし」→「なし」。見出しや切替で「制限: 制限なし」と重ならないように頭を落とす */
   const shortLimit = (label: string) => label.replace(/^制限/, '')
   const timeLimitLabel = shortLimit(
@@ -187,11 +302,11 @@ export default function Select() {
 
   /**
    * 地図の見出し行に出す添え書き。「いまの範囲 × いまの難易度」の **問題数**（「67問」「★★★ 26問」）。
-   * 市区町村の数（meta.cities）ではなく easy.json の件数なので、難易度の切替と一緒に動く。
-   * 町名（'d'）は easy の件数ではないので出さない（都道府県なら meta の difficultCount で出せるが、
-   * 地域（3 文字 scope）では取れず、科目によって出る／出ないが混ざるため一律で出さない）
+   * 市区町村の数（meta.cities）ではなく問題バンクの件数なので、難易度の切替と一緒に動く。
+   * 町名（'d'）でも出す（地域の件数が meta の townStars で取れるようになったため。Issue #46）。
+   * 数えるのは **地図が指している範囲**（都道府県／地域）で、全町名で市区町村を選んでも動かさない
    */
-  const noteCount = mode === 'e' && !nationwide ? countAt(starsSelected) : null
+  const noteCount = nationwide ? null : countOfRange(scope, starsSelected)
   const selectedNote =
     noteCount === null ? undefined
     : starsParam === undefined ? `${noteCount}問`
@@ -202,23 +317,30 @@ export default function Select() {
     : starsParam === undefined ? `問題数 ${noteCount} 問`
     : `${starsMark(starsParam)} の問題数 ${noteCount} 問`
 
-  const choosePref = (prefCode: string) => setScope(prefCode)
+  /** 範囲（都道府県・地域）を選び直す。選んでいた市区町村は範囲の外になり得るので捨てる */
+  const chooseScope = (next: string) => {
+    setScope(next)
+    setCity('')
+  }
+  const choosePref = (prefCode: string) => chooseScope(prefCode)
   const chooseNationwide = () => {
-    setScope(SCOPE_NATIONWIDE)
+    chooseScope(SCOPE_NATIONWIDE)
     setAll(false)
   }
   const chooseMode = (m: Mode) => {
     setMode(m)
-    if (m !== 'e') {
-      setAll(false)
-      // 町名に ★ は無いので、切り替えたら難易度も「全部」に戻す（戻ってきたとき引きずらない）
-      setStars(STARS_ALL)
-    }
+    // 「全部」の単位が科目で違う（全市区町村名 ↔ 全町名）ので、市区町村の選択は引きずらない
+    setCity('')
+  }
+  /** 10 問に戻す。全町名から戻るので市区町村も捨てて都道府県／地域に戻る */
+  const chooseTenQuestions = () => {
+    setAll(false)
+    setCity('')
   }
 
   const start = () => {
     if (blocked) return
-    navigate(quizPath(buildSetId(DATA_VERSION, mode, scope, randomSeed(), allSelected, starsParam)))
+    navigate(quizPath(buildSetId(DATA_VERSION, mode, startScope, randomSeed(), allSelected, starsParam)))
   }
 
   if (error) {
@@ -276,7 +398,7 @@ export default function Select() {
             className={scope.length === 2 ? 'mode-switch__item is-selected' : 'mode-switch__item'}
             aria-pressed={scope.length === 2}
             aria-label={`地域: ${wholePrefLabel(prefCode) ?? '全域'}`}
-            onClick={() => setScope(prefCode)}
+            onClick={() => chooseScope(prefCode)}
           >
             {wholePrefLabel(prefCode) ?? '全域'}
           </button>
@@ -287,7 +409,7 @@ export default function Select() {
               className={scope === sub.id ? 'mode-switch__item is-selected' : 'mode-switch__item'}
               aria-pressed={scope === sub.id}
               aria-label={`地域: ${sub.name}`}
-              onClick={() => setScope(sub.id)}
+              onClick={() => chooseScope(sub.id)}
             >
               {sub.name}
             </button>
@@ -318,8 +440,8 @@ export default function Select() {
           ))}
         </div>
 
-        {/* 難易度 ＝ 市区町村名 1 問ごとに付いた ★1〜3（data/build_stars.py）。
-            町名（'d'）には ★ が無いので、科目が市区町村名のときだけ出す。
+        {/* 難易度 ＝ 1 問ごとに付いた ★1〜3（data/build_stars.py）。**両科目に出す**
+            （Issue #46 で町名にも ★ が付いた）。
             選択肢が 4 つなので地域の行と同じ --compact で 375px に収める */}
         {starsAvailable && (
           <div className="mode-switch mode-switch--compact mode-switch--fit" role="group" aria-label="難易度">
@@ -349,7 +471,7 @@ export default function Select() {
                   aria-label={starsSwitchLabel(s)}
                   // 件数は幅を食うのでラベルには出さず、ツールチップに回す（地域の行と同じ考え）
                   title={n === null ? undefined : `${rangeName}の${starsMark(s)}は ${n} 問`}
-                  disabled={n === 0}
+                  disabled={starsBlocked(s)}
                   onClick={() => setStars(s)}
                 >
                   <span className="stars" aria-hidden="true">
@@ -380,7 +502,7 @@ export default function Select() {
             aria-label={`問題数: ${QUESTIONS_PER_SET} 問`}
             title={tooFewLack === null ? undefined : `${tooFewLack}なので全市区町村名で解きます`}
             disabled={tooFewForSet}
-            onClick={() => setAll(false)}
+            onClick={chooseTenQuestions}
           >
             <span className="mode-switch__full" aria-hidden="true">
               {QUESTIONS_PER_SET}問
@@ -393,13 +515,19 @@ export default function Select() {
             type="button"
             className={allSelected ? 'mode-switch__item is-selected' : 'mode-switch__item'}
             aria-pressed={allSelected}
-            aria-label={allCount === null ? '問題数: 全市区町村名' : `問題数: 全市区町村名（${allCount} 問）`}
-            title={allAvailable ? undefined : '市区町村名で都道府県か地域を選ぶと選べます'}
+            // 名前は科目で違う（全市区町村名／全町名）。組み立ては engine/score.ts の 1 か所
+            aria-label={`問題数: ${allSetLabel(mode, allCount ?? undefined)}`}
+            title={
+              allAvailable ? undefined
+              : mode === 'e' ? '市区町村名で都道府県か地域を選ぶと選べます'
+              : '町名で都道府県か地域を選ぶと選べます'
+            }
             disabled={!allAvailable}
             onClick={() => setAll(true)}
           >
             <span className="mode-switch__full" aria-hidden="true">
-              全市区町村名{allCount !== null && `（${allCount}問）`}
+              {allSetName(mode)}
+              {allCount !== null && `（${allCount}問）`}
             </span>
             <span className="mode-switch__abbr" aria-hidden="true">
               全部{allCount !== null && `（${allCount}）`}
@@ -429,11 +557,34 @@ export default function Select() {
         </div>
       </div>
 
+      {/* 全町名の単位は市区町村（Issue #46 の決定 1）。**全町名を選んだときだけ** 1 行増やして
+          ネイティブの `<select>` で選ばせる（PR #28 で外した「市区町村で絞る」は戻さない）。
+          0 件と上限超えは押せない選択肢として並べ、理由をラベルに書く */}
+      {mode === 'd' && allSelected && (
+        <label className="field">
+          <span className="field__label">市区町村</span>
+          <select
+            className="field__input field__input--wide"
+            value={city}
+            onChange={(e) => setCity(e.target.value)}
+          >
+            <option value="">市区町村を選ぶ</option>
+            {cityOptions.map((c) => (
+              <option key={c.lgCode} value={c.lgCode} disabled={!canPlayAllTowns(c)}>
+                {cityOptionLabel(c)}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+
       <p>
-        {/* 全国のまま町名（都道府県ごとの出題）を選んでいる間は始められない。
-            行を足すと 1 画面に収まらなくなるので、案内はボタンのラベルに出す */}
+        {/* 全国のまま町名（都道府県ごとの出題）を選んでいる間、全町名で市区町村を選んでいない間は
+            始められない。行を足すと 1 画面に収まらなくなるので、案内はボタンのラベルに出す */}
         <button type="button" className="btn btn--primary" onClick={start} disabled={blocked}>
-          {blocked ? '都道府県を選ぶと始められます' : '始める'}
+          {!blocked ? '始める'
+          : needCity ? '市区町村を選ぶと始められます'
+          : '都道府県を選ぶと始められます'}
         </button>
       </p>
     </div>

@@ -13,7 +13,7 @@ import type { BankMeta, Question, Stars } from './types.ts'
 import { QUESTIONS_PER_SET } from './types.ts'
 import type { BankSource } from './bank.ts'
 import { DATA_VERSION, buildQuestionSet } from './bank.ts'
-import { makeDifficult, makeEasy, withStars } from './__fixtures__/questions.ts'
+import { cityRowOf, makeDifficult, makeEasy, starsTriple, withStars } from './__fixtures__/questions.ts'
 
 /**
  * 千葉県 24 件（★3 を 12・★2 を 9・★1 を 3）／東京都 12 件（★2 を 12）。
@@ -33,10 +33,16 @@ const META: BankMeta = {
   generatedAt: '2026-10-03T00:00:00.000Z',
   source: 'テスト用フィクスチャ',
   prefectures: [
-    { code: '12', name: '千葉県', easyCount: EASY_12.length, difficultCount: DIFFICULT_12.length },
-    { code: '13', name: '東京都', easyCount: EASY_13.length, difficultCount: 0 },
+    {
+      code: '12',
+      name: '千葉県',
+      easyCount: EASY_12.length,
+      difficultCount: DIFFICULT_12.length,
+      difficultStars: starsTriple(DIFFICULT_12),
+    },
+    { code: '13', name: '東京都', easyCount: EASY_13.length, difficultCount: 0, difficultStars: [0, 0, 0] },
   ],
-  cities: EASY_ALL.map((q) => ({ lgCode: q.lgCode, prefCode: q.prefCode, name: q.display, kana: q.answer })),
+  cities: EASY_ALL.map((q) => cityRowOf(q, DIFFICULT_12)),
 }
 
 const src: BankSource = {
@@ -110,8 +116,22 @@ describe('buildQuestionSet / 難易度', () => {
     )
   })
 
-  it('町名（d）に難易度は無い', async () => {
-    await expect(buildQuestionSet('d', '12', '0417', src, false, 3)).rejects.toThrow(/難易度は市区町村名/)
+  it('町名を含む科目（d）でも難易度で絞れる（Issue #46）', async () => {
+    const set = await buildQuestionSet('d', '12', '0417', src, false, 3)
+    expect(set.setId).toBe(`${DATA_VERSION}-d-12-0417-s3`)
+    expect(set.stars).toBe(3)
+    expect(set.questions).toHaveLength(QUESTIONS_PER_SET)
+    expect(starsIn(set.questions)).toEqual(new Set([3]))
+    // 市区町村名と町名が同じ母集団に入る（科目 d は「市区町村名＋町名」なので）
+    const whole = await buildQuestionSet('d', '12', '0417', src)
+    expect(whole.questions.map((q) => q.id)).not.toEqual(set.questions.map((q) => q.id))
+  })
+
+  it('d で絞って 10 問に足りなければ「範囲を広げてください」で止まる', async () => {
+    // 東京都は easy 12 件（全部 ★2）＋ 町名なし。★3 は 0 件
+    await expect(buildQuestionSet('d', '13', '0417', src, false, 3)).rejects.toThrow(
+      /東京都の市区町村名＋町名（★★★）は 0 件しかないので、10 問を組めません。範囲を広げてください。/,
+    )
   })
 
   it('全国（00）でも難易度で絞れる', async () => {

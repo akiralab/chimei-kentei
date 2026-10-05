@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { BankMeta, Question, Stars } from '../engine/types.ts'
 import { DATA_VERSION } from '../engine/bank.ts'
+import { cityRow } from '../engine/__fixtures__/questions.ts'
 import { resetGeoSource } from '../geo/load.ts'
 import { resetNavigated } from '../router.ts'
 import App from '../App.tsx'
@@ -64,10 +65,11 @@ const META: BankMeta = {
   generatedAt: '2026-09-25T00:00:00.000Z',
   source: 'テスト用フィクスチャ',
   prefectures: [
-    { code: '12', name: '千葉県', easyCount: 2, difficultCount: 0 },
-    { code: '13', name: '東京都', easyCount: 4, difficultCount: 0 },
+    { code: '12', name: '千葉県', easyCount: 2, difficultCount: 0, difficultStars: [0, 0, 0] },
+    { code: '13', name: '東京都', easyCount: 4, difficultCount: 0, difficultStars: [0, 0, 0] },
   ],
-  cities: CITIES,
+  // 地名帳は町名を出さない（Issue #35 の段階 2）ので、町名の件数は 0 のままでよい
+  cities: CITIES.map((c) => cityRow(c)),
 }
 
 function installFetchMock(): void {

@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { DATA_VERSION } from './bank.ts'
-import { allRowNote, isAllRow, rowCounts, scoreOf, starsOfRow } from './score.ts'
+import { allRowNote, allSetLabel, allSetName, isAllRow, rowCounts, scoreOf, starsOfRow } from './score.ts'
 
 const SET = `${DATA_VERSION}-e-12-1234`
 const SET_ALL = `${DATA_VERSION}-e-12-1234-all`
+/** 全町名（町名 × 市区町村）。匝瑳市 122351 */
+const SET_TOWNS = `${DATA_VERSION}-d-122351-1234-all`
 
 describe('scoreOf', () => {
   it('10 問は正答数 × 10', () => {
@@ -48,10 +50,33 @@ describe('isAllRow / allRowNote', () => {
     expect(isAllRow({ setId: 'こわれた', score: 80 })).toBe(false)
   })
 
-  it('注記は 10 問なら null、全市区町村名なら問題数を添える（無ければ名前だけ）', () => {
+  it('全町名のセットも `-all` で見分ける', () => {
+    expect(isAllRow({ setId: SET_TOWNS, score: 70, correct: 41, total: 59 })).toBe(true)
+    expect(isAllRow({ setId: `${DATA_VERSION}-d-12-1234`, score: 70 })).toBe(false)
+  })
+
+  it('注記は 10 問なら null、全部出すセットなら問題数を添える（無ければ名前だけ）', () => {
     expect(allRowNote({ setId: SET, score: 80, correct: 8, total: 10 })).toBeNull()
     expect(allRowNote({ setId: SET_ALL, score: 87, correct: 20, total: 23 })).toBe('全市区町村名（23 問）')
     expect(allRowNote({ setId: SET_ALL, score: 87 })).toBe('全市区町村名')
+  })
+
+  it('注記は科目で分ける（町名なら「全町名」）', () => {
+    expect(allRowNote({ setId: SET_TOWNS, score: 70, correct: 41, total: 59 })).toBe('全町名（59 問）')
+    expect(allRowNote({ setId: SET_TOWNS, score: 70 })).toBe('全町名')
+    // setId が読めない古い行は、全市区町村名しか登録できなかった頃のものなので 'e' 扱い
+    expect(allRowNote({ setId: 'こわれた', score: 87, total: 23 })).toBe('全市区町村名（23 問）')
+  })
+})
+
+describe('allSetName / allSetLabel', () => {
+  it('名前は科目で分かれ、件数は同じ書式で添える', () => {
+    expect(allSetName('e')).toBe('全市区町村名')
+    expect(allSetName('d')).toBe('全町名')
+    expect(allSetLabel('e', 54)).toBe('全市区町村名（54 問）')
+    expect(allSetLabel('d', 97)).toBe('全町名（97 問）')
+    expect(allSetLabel('e')).toBe('全市区町村名')
+    expect(allSetLabel('d')).toBe('全町名')
   })
 })
 

@@ -37,7 +37,10 @@ export function withStars(questions: Question[], starsList: Stars[]): Question[]
   return questions.map((q, i) => ({ ...q, stars: starsList[i] ?? starsList[starsList.length - 1] }))
 }
 
-/** ある自治体の大字・町名（difficult）を count 件 */
+/**
+ * ある自治体の大字・町名（difficult）を count 件。難易度 ★ は easy と同じく
+ * ★1 → ★2 → ★3 の繰り返しで振る（実データと同じく **全問が 1〜3 を持つ**）
+ */
 export function makeDifficult(prefCode: string, pref: string, seq: number, count: number): Question[] {
   const lgCode = lgCodeOf(prefCode, seq)
   const city = `${pref.slice(0, 1)}市${seq}`
@@ -51,8 +54,32 @@ export function makeDifficult(prefCode: string, pref: string, seq: number, count
       city,
       display,
       answer: `まち${i + 1}`,
+      stars: ((i % 3) + 1) as Stars,
     } satisfies Question
   })
+}
+
+/** `[★1, ★2, ★3]` の件数。meta の difficultStars / townStars と同じ形 */
+export function starsTriple(questions: Question[]): [number, number, number] {
+  const n = (s: Stars) => questions.filter((q) => q.stars === s).length
+  return [n(1), n(2), n(3)]
+}
+
+/**
+ * meta.cities の 1 行。町名の件数（towns / townStars）は渡した difficult から
+ * lgCode で数える（実データの build_questions.py と同じ数え方）
+ */
+export function cityRow(
+  city: { lgCode: string; prefCode: string; name: string; kana: string },
+  towns: Question[] = [],
+): BankMeta['cities'][number] {
+  const inCity = towns.filter((t) => t.lgCode === city.lgCode)
+  return { ...city, towns: inCity.length, townStars: starsTriple(inCity) }
+}
+
+/** easy の 1 件を meta.cities の行にする（名前は display のまま＝接尾辞を足さない簡易版） */
+export function cityRowOf(q: Question, towns: Question[] = []): BankMeta['cities'][number] {
+  return cityRow({ lgCode: q.lgCode, prefCode: q.prefCode, name: q.display, kana: q.answer }, towns)
 }
 
 /** pref '12' は easy 25 件、pref '13' は easy 5 件。difficult は '12' の 1 番目の自治体に 30 件 */
@@ -61,16 +88,29 @@ export const EASY_13 = makeEasy('13', '東京都', 5)
 export const EASY_ALL: Question[] = [...EASY_12, ...EASY_13]
 export const DIFFICULT_12 = makeDifficult('12', '千葉県', 1, 30)
 export const DIFFICULT_13 = makeDifficult('13', '東京都', 1, 3)
+const DIFFICULT_ALL: Question[] = [...DIFFICULT_12, ...DIFFICULT_13]
 
 export const META: BankMeta = {
   dataVersion: 'abr20260925',
   generatedAt: '2026-09-25T00:00:00.000Z',
   source: 'テスト用フィクスチャ',
   prefectures: [
-    { code: '12', name: '千葉県', easyCount: EASY_12.length, difficultCount: DIFFICULT_12.length },
-    { code: '13', name: '東京都', easyCount: EASY_13.length, difficultCount: DIFFICULT_13.length },
+    {
+      code: '12',
+      name: '千葉県',
+      easyCount: EASY_12.length,
+      difficultCount: DIFFICULT_12.length,
+      difficultStars: starsTriple(DIFFICULT_12),
+    },
+    {
+      code: '13',
+      name: '東京都',
+      easyCount: EASY_13.length,
+      difficultCount: DIFFICULT_13.length,
+      difficultStars: starsTriple(DIFFICULT_13),
+    },
   ],
-  cities: EASY_ALL.map((q) => ({ lgCode: q.lgCode, prefCode: q.prefCode, name: q.display, kana: q.answer })),
+  cities: EASY_ALL.map((q) => cityRowOf(q, DIFFICULT_ALL)),
 }
 
 export function fixtureSource(): BankSource {

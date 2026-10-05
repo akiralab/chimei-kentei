@@ -15,7 +15,7 @@ import { subregionOf } from '../geo/subregions.ts'
 import type { BankMeta, Question } from './types.ts'
 import { MIN_POOL_FOR_SCOPE, QUESTIONS_PER_SET } from './types.ts'
 import type { BankSource } from './bank.ts'
-import { DATA_VERSION, buildPool, buildQuestionSet, municipalityQuestions } from './bank.ts'
+import { DATA_VERSION, allQuestions, buildPool, buildQuestionSet } from './bank.ts'
 
 const EASY_FILES = import.meta.glob<Question[]>('../../public/questions/*/easy.json', { import: 'default' })
 const META_FILES = import.meta.glob<BankMeta>('../../public/questions/*/meta.json', { import: 'default' })
@@ -68,7 +68,7 @@ describe('地域の母集団（実データ）', () => {
 
   // 全市区町村名の母集団は easy.json にあるものだけ（問題バンクが除いた市区町村は出さない）
   it.each(EXPECTED)('$name の全市区町村名は easy と同じ $easy 件（市区町村数 $cities ではない）', async (row) => {
-    expect(await municipalityQuestions(row.scope, source)).toHaveLength(row.easy)
+    expect(await allQuestions('e', row.scope, source)).toHaveLength(row.easy)
   })
 
   it('地域は都道府県へ広げない（島しょは 9 件でも widened が立たない）', async () => {

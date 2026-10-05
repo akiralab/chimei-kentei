@@ -8,7 +8,8 @@
 | `.paper` | 答案用紙（クリーム地・罫線・影・角丸）。1 画面 1 枚 |
 | `.paper__header` | 用紙上部の帯（科目名・氏名欄・得点欄を横並び） |
 | `.paper__title` | 用紙の見出し（`--font-display`） |
-| `.field` / `.field__label` / `.field__input` | 氏名欄などの記入欄（下線スタイル） |
+| `.field` / `.field__label` / `.field__input` | 氏名欄などの記入欄（下線スタイル）。**`<select>` もこのクラスで作る**（`select.field__input` に `min-height: var(--tap-min)` が当たる） |
+| `.field__input--wide` | `.field__input` に足して 12rem の上限を外し、行幅まで伸ばす（長い選択肢を切らないため） |
 | `.q-number` | 「問三 / 十」の番号 |
 | `.q-prompt` | 「次の地名の読みを書け。」 |
 | `.q-kanji` | 出題の漢字（大きく・明朝） |
@@ -179,11 +180,15 @@ Dela Gothic One は字幅を詰めた極太デザインで、1.4rem 前後の漢
 |---|---|
 | `.btn`（`.btn--ghost` 含む） | `theme.css` |
 | `.cover__ranking` / `.atlas-nav .btn` / `.layout__exit .btn` | `theme.css` / `map.css`（小さく詰める修飾が当たる場所） |
-| `.mode-switch__item`（`min-width` も） / `.pref-grid__item` / `.field__input` | `theme.css` |
+| `.mode-switch__item`（`min-width` も） / `.pref-grid__item` / `input.field__input` ・ `select.field__input` | `theme.css` |
 | `.jp-map__all` | `map.css` |
 
 **`--tap-min` を下回ってよいのは `@media (min-width: 720px)` の中だけ**（`.mode-switch--compact .mode-switch__item`）。
 マウス操作の幅なので、用紙 1 枚に収める方を取る。狭い画面に同じ縮小を持ち込まない。
+
+> 既知の例外（未解決）: 地図の段階 2（地方を開いた状態）の `.jp-map__chip` は `min-height: 36px`、
+> `.jp-map__back`（「地方を選び直す」）は 34px で、**720px 未満でも 44px を割っている**（`map.css`）。
+> `npm run measure` の `select-d-all` がこの画面を初めて測ったことで表に出た。地図の寸法は別の変更で直す。
 
 ### 文字の下限
 
