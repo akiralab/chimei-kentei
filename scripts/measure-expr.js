@@ -135,8 +135,13 @@
       items: items.length,
       current: items.filter((el) => el.getAttribute('aria-current') === 'page').length,
       labels: items.map((el) => (el.textContent || '').trim()),
-      // 用紙がタブバーの下に隠れていないか（用紙の下端が帯の上端より上にあること）
-      paperClear: paper === null ? null : Math.round(r.top - paper.getBoundingClientRect().bottom),
+      // 用紙がタブバーの下に隠れていないか（用紙の下端が帯の上端より上にあること）。
+      // 用紙ごとスクロールする画面（.board--scroll）は用紙がビューポートより長いのが
+      // 正常なので見ない（そちらは docOverY / lastButtonCut で判定する）
+      paperClear:
+        paper === null || document.querySelector('.board--scroll') !== null ?
+          null
+        : Math.round(r.top - paper.getBoundingClientRect().bottom),
     }
   })()
 
