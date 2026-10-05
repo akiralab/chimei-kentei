@@ -5,11 +5,12 @@ GitHub Pages は静的配信のため、ランキングは別ホストの API �
 ## 原則
 - **採点はサーバーで行う。** クライアントは setId と各問の入力だけを送る。サーバーは setId から問題セットを**同じエンジンコード**（`src/engine/bank.ts` の `buildQuestionSet`。`-all` 付き setId なら `all = true` で再導出）で採点し、得点・所要時間を計算する。得点の式も**クライアントと同じ関数**（`src/engine/score.ts` の `scoreOf()`）:
   - 10 問のセット … 正答数 × 10
-  - それ以外（全市区町村名）… 正答率を 100 点満点に丸めた値（23 問で 20 問正解 → 87 点）
-- **順位表の区分（`mode`）は 3 つ。** 科目 2 つ（`e` = 市区町村名 / `d` = 市区町村名＋町名。どちらも 10 問）に、**全市区町村名（`all`）**が並ぶ。全市区町村名は 1 問の重みが違うので 10 問と同じ一覧に混ぜない。
+  - それ以外（全市区町村名・全町名）… 正答率を 100 点満点に丸めた値（23 問で 20 問正解 → 87 点）
+- **順位表の区分（`mode`）は 3 つ。** 科目 2 つ（`e` = 市区町村名 / `d` = 市区町村名＋町名。どちらも 10 問）に、**全問（`all`）**が並ぶ。全問は 1 問の重みが違うので 10 問と同じ一覧に混ぜない。
+  - **`all` には 2 種類が同居する**（Issue #46）: 全市区町村名（`e` × 都道府県／地域 × `-all`）と全町名（`d` × 市区町村 6 桁 × `-all`）。区分を 4 つに増やすと sk・カウンタ・`?mode=` が全部増えるので増やさず、どちらなのかはクライアントが setId の mode から文言を出し分ける（`src/engine/score.ts` の `allSetLabel`）。**`?mode=all` と DynamoDB の sk は変えていない。**
   - setId 単位の順位表（`GET /results?setId=`）は setId が違えば別物なので、区分の考慮は要らない。
-  - 都道府県単位（`GET /results?prefCode=`・`GET /stats/prefectures`）は区分ごとに分ける。アイテムの区分は `all` フラグ（無い古いアイテムは 10 問の科目）。
-  - 全国（scope `'00'`）に全市区町村名は無い（都道府県ごとの出題なので）。問題バンクは公開サイト `https://akiralab.github.io/chimei-kentei/questions/` から取得する（環境変数 `BANK_BASE_URL` ＋ `DATA_VERSION`）。
+  - 都道府県単位（`GET /results?prefCode=`・`GET /stats/prefectures`）は区分ごとに分ける。アイテムの区分は `all` フラグ（無い古いアイテムは 10 問の科目）。全町名の scope は 6 桁なので、先頭 2 桁で親の都道府県の一覧に入る。
+  - 全国（scope `'00'`）に全問は無い（都道府県・市区町村ごとの出題なので）。問題バンクは公開サイト `https://akiralab.github.io/chimei-kentei/questions/` から取得する（環境変数 `BANK_BASE_URL` ＋ `DATA_VERSION`）。
 - **setId の先頭は問題バンクの版**（`DATA_VERSION`。現行 `abr20260925r2`）。サーバーは自分がバンドルした版で再導出するため、**版が違う setId は 400**（`invalid`）になる。版を上げたときは Pages のデプロイ後に `npm run deploy:api` が必要（→ [data/README.md の「版の扱い」](../data/README.md#版の扱い)）。
 - **1 セット 1 登録**（setId × clientToken）。2 回目は 409。
 - clientToken と answers は一覧に出さない。
@@ -22,7 +23,7 @@ GitHub Pages は静的配信のため、ランキングは別ホストの API �
   "clientToken": "uuid", "timeLimitMs": 0,
   "answers": [ { "questionId": "c:122351:匝瑳", "input": "そうさ", "ms": 4210, "passed": false } ] }
 ```
-- 検証: setId がパースでき問題セットを再導出できる、**answers の件数が再導出したセットの問題数と一致**（10 問のセットは 10 件、全市区町村名はその都道府県の市区町村の数。防御的な上限 500 件）、questionId の集合が一致、nickname 1〜12 文字。
+- 検証: setId がパースでき問題セットを再導出できる、**answers の件数が再導出したセットの問題数と一致**（10 問のセットは 10 件、全市区町村名はその都道府県の市区町村の数、全町名はその市区町村の町名の数。防御的な上限 `ANSWERS_MAX` = 500 件 ＝ 選択画面が全町名を出す上限 `ALL_TOWNS_MAX`）、questionId の集合が一致、nickname 1〜12 文字。
 - `timeLimitMs` は任意。**0（または省略）＝ 時間制限なし**、1000〜60000 ＝ 1 問あたりの制限。それ以外は 400。
 - `ms` の許容範囲は `timeLimitMs` で変わる:
   - `timeLimitMs > 0` … `ms` は 0〜`timeLimitMs`。`passed=true` なら `ms === timeLimitMs`（使い切った扱い）
@@ -41,14 +42,14 @@ GitHub Pages は静的配信のため、ランキングは別ホストの API �
 ### GET /results?prefCode=13&limit=30&mode=e
 - その都道府県で登録された結果を、セットを横断して返す（「これまでのランキング」の詳細画面）。
 - `prefCode` は 2 桁。setId の scope の先頭 2 桁で、**全国（scope '00'）は `'00'`**。
-- `mode` は任意（`e` | `d` | `all`）。`all` ＝ 全市区町村名のセットだけ、`e` / `d` ＝ **全市区町村名を除いた**その科目の 10 問だけ。**絞り込みはサーバー側で行う**（クライアントで間引かない）。それ以外の値は 400。
+- `mode` は任意（`e` | `d` | `all`）。`all` ＝ 全問（全市区町村名・全町名）のセットだけ、`e` / `d` ＝ **全問を除いた**その科目の 10 問だけ。**絞り込みはサーバー側で行う**（クライアントで間引かない）。それ以外の値は 400。
 - 200: `{ "entries": RankingRow[] }`（並びは `?setId=` と同じ。**limit 既定 30**・最大 100）
 - 400: `prefCode` が 2 桁でない。`setId` と `prefCode` の両方があれば `prefCode` を優先する。
 
 ### GET /stats/prefectures
 - 200: `{ "prefectures": PrefectureStat[] }`（prefCode 昇順。件数 0 の行は返さない）
 - `PrefectureStat = { prefCode, entries, players, byMode }`
-  - `entries` / `players` … 3 区分の合計（`{prefCode}` の合計行。全市区町村名もここに足す）
+  - `entries` / `players` … 3 区分の合計（`{prefCode}` の合計行。全問もここに足す）
   - `byMode` … `{ e: {…}, d: {…}, all: {…} }`。区分別の内訳。古いデータ（合計行しか無い）では 0 になる
 - `entries` は答案の件数、`players` は登録した端末（clientToken）の数。全国は `prefCode: '00'` の 1 行。
 
@@ -64,7 +65,7 @@ GitHub Pages は静的配信のため、ランキングは別ホストの API �
 | `stats#pref` | `{prefCode}` | 合計カウンタ。`entries` は常に +1、`players` は印が新規のときだけ +1（ADD） |
 | `stats#pref` | `{prefCode}#{mode}` | 区分別カウンタ（`{prefCode}#e` / `#d` / `#all`）。同じやり方で区分ごとに数える |
 
-- `set#` / `pref#` の `entry#` アイテムは `score` のほかに `correct`・`total`・`all`（全市区町村名か）も持つ。いずれも後から足した項目で、無い古いアイテムは 10 問の科目として扱う。
+- `set#` / `pref#` の `entry#` アイテムは `score` のほかに `correct`・`total`・`all`（全問か）も持つ。いずれも後から足した項目で、無い古いアイテムは 10 問の科目として扱う。
 - 予約と本体は TransactWrite で一括（片方だけ残らない）。
 - **都道府県インデックスは本体とは別のリクエストで書く。** player 印の条件失敗（＝同じ端末の 2 セット目）で本体の登録を巻き戻さないため。索引の書き込みが失敗しても POST は 201 のまま返し、ログだけ残す。
 
@@ -75,5 +76,5 @@ GitHub Pages は静的配信のため、ランキングは別ホストの API �
 - `import.meta.env.VITE_RANKING_API`（例 `https://xxxx.execute-api.ap-northeast-1.amazonaws.com`）が設定されていれば `RemoteRankingStore`、無ければ `LocalRankingStore`。GitHub Actions では repository variable `VITE_RANKING_API` を build に渡す。
 - 自分の行の判定は POST 応答の `entry.entryId` を localStorage `submitted:{setId}` に保存して行う。
 - `RankingStore` は 4 メソッド（`submit` / `list` / `prefectureStats` / `listByPrefecture(prefCode, limit?, mode?)`。`mode` は区分 `e` | `d` | `all`）。Local は localStorage の `ranking:*` を走査して同じ答えを作る（`players` は clientToken の distinct 数、`byMode` も同じ走査で数える）。
-- 「これまでのランキング」画面は `#/ranking`（区分を切り替えて都道府県ごとの人数）と `#/ranking/{prefCode}`（上位 30 件）。区分は localStorage `rankingMode`（`e` | `d` | `all`）で引き継ぐ。
+- 「これまでのランキング」画面は `#/ranking`（区分を切り替えて都道府県ごとの人数）と `#/ranking/{prefCode}`（上位 30 件）。区分は localStorage `rankingMode`（`e` | `d` | `all`）で引き継ぐ。区分「全問」の行には全市区町村名と全町名が混ざるので、行に「全市区町村名」「全町名」と出す。
 - 時間制限は localStorage `timeLimitMs`（0 ＝ 制限なし・既定）。その回に使った値は sessionStorage `timeLimit:{setId}` に控えて POST に載せる。
