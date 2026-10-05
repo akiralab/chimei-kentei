@@ -30,6 +30,9 @@
 | `.atlas` / `.atlas__row` / `.atlas__name` / `.atlas__kana` / `.is-selected` | 地名帳の一覧（地名 ｜ よみ）。`.ranking` と同じく `.paper` の内側だけがスクロールする |
 | `.atlas-nav` | 地名帳の移動（「← 一覧へ」「前／次」「3 / 23」） |
 | `.footer-credit` | 出典表記 |
+| `.board--scroll` | `.board` の修飾子。結果・間違えた問題の 2 画面だけ、用紙ごと縦スクロールする（下の「1 画面運用」の例外） |
+| `.skeleton` / `.skeleton__line` | 読み込み中の答案（`PaperSkeleton`）。罫線の上に薄い長方形を数行 |
+| `.layout__map--folded` / `.layout__map-label`（**map.css**） | 出題画面の地図を解答前に 1 行へ畳む修飾子と、その中の範囲名 |
 
 ## 追加した補助クラス（2026-10-02 / design 側）
 
@@ -108,6 +111,17 @@ Dela Gothic One は字幅を詰めた極太デザインで、1.4rem 前後の漢
   つまり画面側は**ボタンを `<p>` か `<div>` で包む**こと（現行の 4 画面はすべてそうなっている）。包まないと底に貼り付かない
 - 確認したビューポート: 375×667 と 1280×800。表紙・範囲選択・出題は用紙の内側スクロールも不要、結果だけ `.review` / `.ranking` が内側で動く。どの画面も `body` はスクロールしない
 
+#### 例外: 結果・間違えた問題の 2 画面（2026-10-05 / 第 2 波）
+
+**`.board--scroll` を付けた画面だけは、用紙ごと縦にスクロールしてよい。他の画面は従来どおり 1 画面に収める。**
+
+- 対象は **結果（`#/result/...`）と間違えた問題（`#/review`）の 2 画面だけ**。内容が本質的に「10 行＋操作（＋順位表）」で、どう詰めても 1 画面に入らない。内側スクロールに押し込むと底のボタンが切れる（設計ノート §13.6 決定 2）
+- 画面側は `useBoardModifier(BOARD_SCROLL)`（`src/hooks/useBoardModifier.ts`）を呼ぶ。`.board` を描くのは `App.tsx` なので、**画面が自分で宣言して App には分岐表を置かない**
+- CSS は `.board--scroll` が `height: auto` / `min-height: 100dvh` / `justify-content: flex-start`、その中の `.paper` が `flex: none` / `max-height: none` / `overflow: visible`、`.review` と `.ranking` も内側スクロールをやめる。`html` / `body` の `overflow: hidden` は `:has(.board--scroll)` で解く
+- 用紙の `padding-bottom` に `env(safe-area-inset-bottom)` を足してある（ホームインジケータの上に最後のボタンが来ないように）
+- 底のボタン群は sticky にしない（用紙の末尾に自然に置く）。`.footer-credit` はスクロールの末尾に来る
+- 計測は `paper.overY` ではなく `docOverY` / `lastButtonCut` / `reviewVisibleFirstView` で見る（`scripts/measure-expr.js`）
+
 ### 入力
 
 - `src/components/HiraganaInput.tsx` が `.answer-input` ＋ `.answer-hint` を出す。値は常にひらがな＋「ー」
@@ -172,8 +186,37 @@ Dela Gothic One は字幅を詰めた極太デザインで、1.4rem 前後の漢
 ### 文字の下限
 
 表示中のテキストに **13px 未満を作らない**。`em` 指定は親が小さい場所で掛け算になって潰れるので、
-小さくなり得る入れ子では絶対値（`--fs-sm` など）に切り替える
+小さくなり得る入れ子では絶対値（`--fs-sm` など）に切り替えるか、`max(0.7em, 0.8125rem)` のように下限を書く
 （例: `.review__q .q-suffix` は `.q-kanji` 基準の `0.42em` では 8px になるため上書きしている）。
+
+2026-10-05（第 2 波）の確定値:
+
+| トークン / クラス | 値 | 備考 |
+|---|---|---|
+| `--fs-md`（本文） | **16px**（`1rem`） | 15px から引き上げ（設計ノート §13.6 決定 3）。iOS の本文に寄せる |
+| `--fs-xs` | **13px**（`0.8125rem`） | 12px から引き上げ。出典クレジット・情報カードのラベル・注記がここに乗る |
+| `.stars` / `.q-number__stars` / `.review__stars` | `max(<em 指定>, 0.8125rem)` | `--fs-sm` の帯の中で 11.7px まで潰れていた |
+
+**`--fs-xs` より小さいトークンを足さない。** 計測（`npm run measure` の `fontUnder16`）に除外は作らず、
+`.footer-credit a` も含めて 13px 未満が 0 件であることを見る。
+
+### 出題画面の地図は解答前に畳む（899px 以下）
+
+`.layout__map` は `899px` 以下で、**解答前だけ** `.layout__map--folded` が付いて高さ `--tap-min`（44px）の
+1 行になる。中身は範囲名（`.layout__map-label`。「東京都」だけ。「どこ？」のヒントは出さない）で、
+`MunicipalityMap` と `MunicipalityInfo` は**描かない**。解答すると 24dvh（狭い画面は 20dvh）で開く。
+
+- 判定は `useMediaQuery(WIDE_QUERY)`（`900px` 以上なら従来どおり常時表示）＋ `feedback === null`
+- 開くときの高さは 150ms で伸ばす。`prefers-reduced-motion` では `theme.css` §18 の一括指定で止まる
+- キーボード近似の高さ（`max-height: 560px`）では畳んだ 1 行も消す。同じ内容が用紙の帯の「範囲: 東京都」に出ているため
+- `MunicipalityInfo` の「カードは常に置く」約束は、**畳んでいない間だけ**の約束に読み替える（出題画面のスマホ幅は畳んだ 1 行 → 地図＋カード で高さが動く。これは「答え合わせで開く」演出として意図したもの）
+
+### 読み込み中と失敗（`.skeleton` / 再試行）
+
+- 読み込み中は「読み込み中…」の 1 行をやめ、`PaperSkeleton`（`.skeleton` / `.skeleton__line`）で
+  罫線に乗る薄い長方形を 3〜5 行置く。`role="status"` ＋ `aria-busy="true"` ＋ `.sr-only` の「読み込み中」
+- 色は `--color-paper-line` を薄めた 1 色だけ。明滅は `prefers-reduced-motion: no-preference` のときだけ 1.2s
+- 順位表に届かなかったときは原因を言い分け（`src/hooks/connection.ts`）、**どちらでも「もう一度ためす」を出す**
 
 ### safe-area
 

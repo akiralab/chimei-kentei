@@ -14,6 +14,7 @@ import { DATA_VERSION } from '../engine/bank.ts'
 import { DIFFICULT_12, EASY_ALL, META } from '../engine/__fixtures__/questions.ts'
 import { JAPAN_FIXTURE, PREF_GEO_FIXTURE, STATS_FIXTURE } from '../geo/__fixtures__/geo.ts'
 import { resetGeoSource } from '../geo/load.ts'
+import { WIDE_QUERY } from '../hooks/useMediaQuery.ts'
 import { NICKNAME_KEY } from '../hooks/useNickname.ts'
 import { quizPath } from '../router.ts'
 import App from '../App.tsx'
@@ -110,16 +111,48 @@ describe('範囲・科目 への組み込み', () => {
 })
 
 describe('出題 への組み込み', () => {
-  it('左パネルに県内地図が出て、用紙はそのまま右に載る', async () => {
+  it('スマホ幅の解答前は地図を畳み、解答すると県内地図が開く', async () => {
+    // jsdom は matchMedia を持たないので useMediaQuery は false ＝ 899px 以下の扱い
+    renderAt(quizPath(`${DATA_VERSION}-e-12-1234`))
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('読みをひらがなで入力')).toBeInTheDocument()
+    })
+    // 畳んだ 1 行。範囲名だけを出し、地図も情報カードも描かない
+    expect(document.querySelector('.layout__map')).toHaveClass('layout__map--folded')
+    expect(document.querySelector('.layout__map-label')?.textContent).toBe('千葉県')
+    expect(document.querySelector('.map-muni')).toBeNull()
+    expect(document.querySelector('.info-card')).toBeNull()
+    // 用紙の中身はそのまま（.answer-input のロジックは触っていない）
+    expect(document.querySelector('.layout__quiz > .paper')).not.toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: '解答' }))
+    await waitFor(() => {
+      expect(document.querySelectorAll('.map-muni__path')).toHaveLength(3)
+    })
+    expect(document.querySelector('.layout__map')).not.toHaveClass('layout__map--folded')
+    expect(document.querySelector('.layout__map-label')).toBeNull()
+  })
+
+  it('900px 以上は解答前から地図が出る（畳まない）', async () => {
+    // 広い側は matchMedia をモックして確かめる（既定の jsdom は常に狭い側）
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn((query: string) => ({
+        matches: query === WIDE_QUERY,
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      })),
+    )
     renderAt(quizPath(`${DATA_VERSION}-e-12-1234`))
 
     await waitFor(() => {
       expect(document.querySelectorAll('.map-muni__path')).toHaveLength(3)
     })
-    expect(document.querySelector('.layout__map')).not.toBeNull()
-    // 用紙の中身はそのまま（.answer-input のロジックは触っていない）
-    expect(document.querySelector('.layout__quiz > .paper')).not.toBeNull()
-    expect(screen.getByLabelText('読みをひらがなで入力')).toBeInTheDocument()
+    expect(document.querySelector('.layout__map')).not.toHaveClass('layout__map--folded')
+    // 解答前でもカードの枠は置く（2 カラムの高さを動かさないため）
+    expect(document.querySelector('.info-card')).toHaveClass('info-card--placeholder')
   })
 
   it('「タイトルへ戻る」で答案を捨てて表紙へ（確認ダイアログなし）', async () => {
@@ -143,17 +176,18 @@ describe('出題 への組み込み', () => {
     renderAt(quizPath(`${DATA_VERSION}-d-120001-1234`))
 
     await waitFor(() => {
-      expect(document.querySelector('.map-muni__path--target')).not.toBeNull()
+      expect(screen.getByLabelText('読みをひらがなで入力')).toBeInTheDocument()
     })
-    expect(document.querySelector('.map-muni__path--target')).toHaveAttribute('data-lg-code', '120001')
-    // 枠は最初からある（解答で高さが動かないように）が、中身は伏せたまま
-    expect(document.querySelector('.info-card')).toHaveClass('info-card--placeholder')
+    // 解答前は畳んでいるので地図もカードも無い
+    expect(document.querySelector('.map-muni__path--target')).toBeNull()
+    expect(document.querySelector('.info-card')).toBeNull()
     expect(screen.queryByText('1,234,567')).toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: '解答' }))
     await waitFor(() => {
       expect(document.querySelector('.info-card')).not.toHaveClass('info-card--placeholder')
     })
+    expect(document.querySelector('.map-muni__path--target')).toHaveAttribute('data-lg-code', '120001')
     expect(screen.getByText('1,234,567')).toBeInTheDocument()
     expect(screen.getByText('出典: 2020 年国勢調査（e-Stat 境界データ）')).toBeInTheDocument()
     // difficult は市区町村の読みが分からないので読みは空

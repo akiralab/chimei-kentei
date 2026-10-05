@@ -12,6 +12,7 @@ import type { PrefectureCollection } from '../geo/load.ts'
 import { defaultGeoSource } from '../geo/load.ts'
 import { subregionById, subregionOf, subregionsOf, wholePrefLabel } from '../geo/subregions.ts'
 import RegionPicker from '../components/RegionPicker.tsx'
+import PaperSkeleton from '../components/PaperSkeleton.tsx'
 
 /**
  * その範囲の **市区町村の数**（「東京都・島しょは 9 市町村」）。政令市の区は市にまとめてあるので、
@@ -234,7 +235,7 @@ export default function Select() {
     return (
       <div className="paper">
         <h1 className="paper__title">範囲・科目</h1>
-        <p>読み込み中…</p>
+        <PaperSkeleton lines={5} />
       </div>
     )
   }
