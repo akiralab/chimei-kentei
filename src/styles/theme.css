@@ -304,6 +304,13 @@ select.field__input {
   min-height: var(--tap-min);
 }
 
+/* 行幅まで伸ばす記入欄。氏名欄の 12rem 上限では「匝瑳市（59問）」のような長い選択肢が
+   切れてしまう場所（範囲・科目の「全町名」で出す市区町村の <select>）で使う */
+.field__input--wide {
+  flex: 1 1 auto;
+  max-width: none;
+}
+
 .field__input::placeholder {
   color: var(--color-paper-line);
 }

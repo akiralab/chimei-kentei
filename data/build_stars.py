@@ -1,19 +1,27 @@
 #!/usr/bin/env python3
-"""市区町村名（mode e）の難易度 ★（1〜3）を機械的に付ける（Issue #33・外部ライブラリ不使用）。
+"""地名の難易度 ★（1〜3）を機械的に付ける（Issue #33・#46・外部ライブラリ不使用）。
 
-Issue #33 の軸のうち **A1（人口による知名度）**・**B2（漢字の音訓辞書で公式読みを
-分解できるか）**・**B4（漢字の難しさ）** の 3 軸を実装し、B2×A1 の表で素点を出して
-B4 で加算する。
+科目ごとに軸が違う（**どちらも判定のコードは同じ** classify_b2 / b4_rank を使う）。
 
-**この判定が easy.json の `stars` の正本。** `build_questions.py` が judge_all() を
-呼んで各問に書き込む（＝ここを直すと問題バンクの難易度が変わるので、変更後は
-`npm run build:questions` で easy.json を作り直す）。このスクリプト単体では
-easy.json を書き換えず、分布・クロス集計・アンカーの検算だけを出す。
+市区町村名（mode e・judge_all）
+    Issue #33 の軸のうち **A1（人口による知名度）**・**B2（漢字の音訓辞書で公式読みを
+    分解できるか）**・**B4（漢字の難しさ）** の 3 軸。B2×A1 の表で素点を出して B4 で加算する。
+
+町名（mode d・judge_towns）
+    Issue #46 の案 C。**A1 は使わない**（町名に人口は無く、所属市区町村の人口は
+    「町名の有名さ」を表さない）。B2 の素点（a=1／b=2／c=3）に B4 を加算し、
+    **B5**（同じ表記が全国の町名で 2 通り以上に読まれる）を **B2 が a のときだけ** +1 する。
+
+**この判定が問題バンクの `stars` の正本。** `build_questions.py` が judge_all() /
+judge_towns() を呼んで各問に書き込む（＝ここを直すと問題バンクの難易度が変わるので、
+変更後は `npm run build:questions` で作り直す）。このスクリプト単体では JSON を
+書き換えず、分布・クロス集計・アンカーの検算だけを出す。
 
 入力
-    public/questions/{DATA_VERSION}/easy.json … display / answer / lgCode / pref
-    public/geo/municipalities.json            … lgCode → population（国勢調査 2020）
-    KANJIDIC2                                 … 漢字の音読み・訓読み・名乗りと配当学年
+    public/questions/{DATA_VERSION}/easy.json          … display / answer / lgCode / pref
+    public/questions/{DATA_VERSION}/difficult/*.json   … --towns のときの町名 107,681 件
+    public/geo/municipalities.json                     … lgCode → population（国勢調査 2020）
+    KANJIDIC2                                          … 漢字の音読み・訓読み・名乗りと配当学年
 
 出力
     標準出力（既定）  … 帯の境界・★ の分布・クロス集計・アンカーの検算
@@ -26,6 +34,9 @@ easy.json を書き換えず、分布・クロス集計・アンカーの検算�
         --markdown /tmp/sample100.md                              # サンプル表を書き出す
     python3 data/build_stars.py --nanori b                        # 名乗り読みを (b) 扱いにした場合
     python3 data/build_stars.py --major-exempt                    # 政令市・県庁所在地は B4 加算を免除
+    python3 data/build_stars.py --towns                           # 町名（B2×B4×B5・A1 なし）
+    python3 data/build_stars.py --towns --sample 100 --seed 20261005 \
+        --markdown /tmp/towns100.md                               # Issue #46 のサンプル表
     python3 -m unittest data/test_build_stars.py                  # 分解判定の単体テスト
 
 漢字の読みの出典
@@ -45,7 +56,7 @@ import random
 import sys
 import urllib.request
 import xml.etree.ElementTree as ET
-from collections import Counter
+from collections import Counter, defaultdict
 from pathlib import Path
 
 from build_questions import DATA_VERSION, to_hira
@@ -76,6 +87,14 @@ STAR_TABLE = {
     "c": {"有名": 2, "ふつう": 3, "無名": 3},
 }
 B2_LABELS = {"a": "素直", "b": "変化あり", "c": "読めない"}
+
+# --- 町名の総合: B2 の素点 ＋ B4 ＋ B5（Issue #46 の案 C）-------------------
+# 町名に人口は無いので A1 を使わず、B2 の段階そのものを素点にする。
+# 市区町村名の STAR_TABLE で言えば「A1 を『ふつう』に固定した列」と同じ並び。
+TOWN_B2_BASE = {"a": 1, "b": 2, "c": 3}
+# B5（同表記異読み）の加算。**B2 が a のときだけ** 足す。b・c にも足すと
+# 中島（なかじま・連濁）や 新橋（しんばし・連濁）が ★3 に上がって ★3 が水で薄まる。
+TOWN_B5_BONUS = 1
 
 # --- B4: 漢字の難しさ（KANJIDIC2 の <grade>）------------------------------
 # <grade> は 1〜6＝教育漢字の配当学年、8＝それ以外の常用漢字（中学で習う）、
@@ -405,6 +424,56 @@ def judge_all(questions: list, geo: dict, kd: dict, nanori_level: str = "c",
     return rows, upper, lower
 
 
+def town_reading_counts(questions: list) -> dict:
+    """B5 の材料。{display: 読みの種類数}。**渡した町名全体で数える**ので、
+    「本町 ＝ ほんちょう／ほんまち／もとまち で 3 通り」を出すには
+    **全国 107,681 件をまとめて渡す**こと（都道府県ごとに呼ぶと数が減る）。"""
+    readings = defaultdict(set)
+    for q in questions:
+        readings[q["display"]].add(q["answer"])
+    return {display: len(answers) for display, answers in readings.items()}
+
+
+def judge_towns(questions: list, kd: dict, nanori_level: str = "c") -> list:
+    """町名（mode d）の ★ を B2 × B4 × B5 で判定する（Issue #46 の案 C。A1 は使わない）。
+
+    `questions` は difficult/{prefCode}.json の要素（id / prefCode / pref / lgCode /
+    city / display / answer）。**B5 は渡した全体で数える**ので全国分をまとめて渡す。
+
+    返す行には判定の根拠（b2detail・b4detail・readings・b5）も入れて、
+    ★ がその値になった理由を人が 1 件ずつ検算できるようにする。
+    """
+    counts = town_reading_counts(questions)
+    rows = []
+    for q in questions:
+        level, detail = classify_b2(q["display"], q["answer"], kd, nanori_level)
+        rank, rank_detail = b4_rank(q["display"], kd)
+        n_readings = counts[q["display"]]
+        b5 = level == "a" and n_readings >= 2
+        base = TOWN_B2_BASE[level]
+        bonus = B4_BONUS[rank] + (TOWN_B5_BONUS if b5 else 0)
+        rows.append(
+            {
+                "id": q["id"],
+                "prefCode": q["prefCode"],
+                "pref": q["pref"],
+                "lgCode": q["lgCode"],
+                "city": q.get("city", ""),
+                "display": q["display"],
+                "answer": q["answer"],
+                "b2": level,
+                "b2detail": detail,
+                "b4": rank,
+                "b4detail": rank_detail,
+                "readings": n_readings,
+                "b5": b5,
+                "baseStars": base,
+                "stars": min(3, base + bonus),
+            }
+        )
+    return rows
+
+
 # --- アンカー（既知例での検算） -------------------------------------------
 # 「★2 付近」の 3 件は A1×B2 の 2 軸だけでは当たらない（README と Issue のコメント参照）。
 ANCHORS = {
@@ -420,6 +489,31 @@ ANCHORS = {
     "473626": 3,  # 八重瀬町（アンカー候補の「東風平」は 2006 年の合併で消滅したため差し替え）
     "122351": 3,  # 匝瑳市
 }
+
+# 町名のアンカー（表記 → 期待する ★）。市区町村をまたいで同じ表記があるので lgCode では
+# 縛らず、**表記で引いて lgCode 順に TOWN_ANCHOR_MAX 件まで**出す（放出東・舎人 のような
+# 1 件しか無いものと、本町・中央 のような全国に散っているものを同じ表で見るため）。
+# 期待値の根拠は Issue #46 のコメント（案 C の 100 件サンプルと一緒に本人が確認した）。
+TOWN_ANCHORS = (
+    ("放出東", 3),    # 名乗り（出=てん）でしか分解できない
+    ("舎人", 3),      # 熟字訓・分解不能
+    ("御器所", 3),    # 分解不能
+    ("雑餉隈町", 3),  # 分解不能 ＋ 表外（餉）
+    ("立売堀", 3),    # 分解不能
+    ("太秦", 3),      # 分解不能 ＋ 人名用（秦）
+    ("等々力", 3),    # 分解不能（世田谷区・川崎市中原区の 2 件）
+    ("馬喰町", 3),    # 分解不能 ＋ 人名用（喰）。読みは 3 通り
+    ("中島", 2),      # b 連濁。読み 2 通りでも b には B5 を足さない
+    ("新橋", 2),      # b 連濁。読み 3 通りでも同じ
+    ("本町", 2),      # a ＋ B5（ほんちょう／ほんまち／もとまち）
+    ("栄町", 2),      # a ＋ B5
+    ("中央", 1),      # a ＋ 読み 1 通り ＝ B5 なし
+    ("山田", 2),      # b 連濁
+    ("大平", 2),      # おおひら（a ＋ B5）と おおびら（b）がどちらも ★2
+    ("白金", 2),      # a ＋ B5（しろがね／しろかね）
+    ("十三", 1),      # a ＋ 読み 1 通り
+)
+TOWN_ANCHOR_MAX = 2
 
 # 政令指定都市 20 市と都道府県庁所在地。A1 の「有名」帯に全部入るかを検算する。
 # 東京都は都庁のある新宿区を代表にする。さいたま市は easy.json にない（かな書きのため
@@ -468,13 +562,159 @@ def markdown_table(rows: list) -> str:
     return "\n".join(lines)
 
 
+def readings_cell(row: dict) -> str:
+    """町名の表の「全国の読み方」。（+1）は B5 が効いた印。"""
+    return f"{row['readings']} 通り" + ("（+1）" if row["b5"] else "")
+
+
+def markdown_table_towns(rows: list) -> str:
+    """町名のサンプル表（Issue #46 のコメントと同じ列・同じ並び）。"""
+    lines = [
+        "| # | 都道府県 | 市区町村 | 町名 | 読み | B2 | B4 | 全国の読み方 | ★ |",
+        "|---|---|---|---|---|---|---|---|---|",
+    ]
+    for i, r in enumerate(rows, start=1):
+        lines.append(
+            f"| {i} | {r['pref']} | {r['city']} | {r['display']} | {r['answer']} "
+            f"| {r['b2']} {r['b2detail']} | {r['b4detail']} | {readings_cell(r)} "
+            f"| {'★' * r['stars']} |"
+        )
+    return "\n".join(lines)
+
+
+def markdown_table_town_anchors(rows: list) -> str:
+    """既知の町名での検算表。列は Issue #46 のコメントと同じ。"""
+    lines = [
+        "| 町名 | 読み | 市区町村 | B2 | B4 | 全国の読み方 | ★ |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    for r in rows:
+        lines.append(
+            f"| {r['display']} | {r['answer']} | {r['city']} "
+            f"| {r['b2']} {r['b2detail']} | {r['b4detail']} | {readings_cell(r)} "
+            f"| {'★' * r['stars']} |"
+        )
+    return "\n".join(lines)
+
+
+def load_town_questions(difficult_dir: Path) -> list:
+    """difficult/{prefCode}.json を全部読んで id 順に並べる（＝全国 1 本の母集団）。
+    B5 を全国で数えるため、都道府県ごとに分けずにまとめて返す。"""
+    files = sorted(difficult_dir.glob("*.json"))
+    if not files:
+        raise SystemExit(
+            f"町名の問題バンクが無い: {difficult_dir}/*.json\n"
+            f"  npm run build:questions で生成するか、--difficult-dir で場所を渡す。"
+        )
+    questions = []
+    for path in files:
+        questions.extend(json.loads(path.read_text(encoding="utf-8")))
+    questions.sort(key=lambda q: q["id"])
+    return questions
+
+
+def town_anchor_rows(rows: list) -> list:
+    """TOWN_ANCHORS の表記に当たる行を、表記の並び → lgCode 順に集める。"""
+    by_display = defaultdict(list)
+    for r in rows:
+        by_display[r["display"]].append(r)
+    picked = []
+    for display, _want in TOWN_ANCHORS:
+        hits = sorted(by_display.get(display, []), key=lambda r: r["lgCode"])
+        picked.extend(hits[:TOWN_ANCHOR_MAX])
+    return picked
+
+
+def main_towns(args: argparse.Namespace) -> int:
+    """--towns: 町名（mode d）の ★ を B2×B4×B5 で判定して分布とサンプルを出す。"""
+    questions = load_town_questions(args.difficult_dir)
+    kd = load_kanjidic(args.kanjidic, download=args.download)
+    rows = judge_towns(questions, kd, args.nanori)
+
+    print(f"町名 {len(rows)} 件 / KANJIDIC2 {len(kd)} 字 / 名乗りの扱い=({args.nanori})")
+    print("軸: B2（音訓分解）の素点 ＋ B4（漢字の難しさ）＋ B5（同表記異読み・a のみ +1）"
+          "／ A1（人口）は使わない")
+
+    b2 = Counter(r["b2"] for r in rows)
+    print("B2: " + " / ".join(
+        f"({k}) {B2_LABELS[k]} {b2[k]} ({b2[k] / len(rows):.0%})" for k in "abc"))
+    undecomposable = sum(1 for r in rows if r["b2detail"] == "分解不能")
+    nanori_only = sum(1 for r in rows if r["b2detail"].startswith("名乗り: "))
+    print(f"  うち名乗りでしか分解できない: {nanori_only} 件 "
+          f"／ 名乗りを使っても分解できない: {undecomposable} 件")
+
+    b4 = Counter(r["b4"] for r in rows)
+    print("B4: " + " / ".join(
+        f"{B4_LABELS[k]} {b4[k]} (+{B4_BONUS[k]})" for k in range(4)))
+    b5 = sum(1 for r in rows if r["b5"])
+    multi = sum(1 for r in rows if r["readings"] >= 2)
+    print(f"B5: 同じ表記が 2 通り以上に読まれる町名 {multi} 件 "
+          f"／ そのうち B2 が (a) で +1 が効いた {b5} 件")
+
+    stars = Counter(r["stars"] for r in rows)
+    print(f"★ の分布（全 {len(rows)} 件）: "
+          + " / ".join(f"{'★' * s} {stars[s]} ({stars[s] / len(rows):.0%})" for s in (1, 2, 3)))
+
+    cube = Counter((r["b2"], r["b4"], r["b5"]) for r in rows)
+    print("B2 × B4 × B5 の各升（件数／確定する ★）:")
+    for k in "abc":
+        for rank in range(4):
+            for flag in (False, True):
+                n = cube[(k, rank, flag)]
+                if not n:
+                    continue
+                star = min(3, TOWN_B2_BASE[k] + B4_BONUS[rank] + (TOWN_B5_BONUS if flag else 0))
+                mark = "あり" if flag else "—"
+                print(f"  ({k}) {B2_LABELS[k]:<5} / {B4_LABELS[rank]:<4} / B5 {mark:<4}"
+                      f" → {'★' * star}  {n:>7} 件")
+
+    # 都道府県ごと・地域ごとの最小値（★ で絞って 10 問を組めるかの目安）
+    by_pref = defaultdict(Counter)
+    for r in rows:
+        by_pref[r["prefCode"]][r["stars"]] += 1
+    print("都道府県ごとの ★ 別件数の最小値: "
+          + " / ".join(f"{'★' * s} {min(c[s] for c in by_pref.values())}" for s in (1, 2, 3)))
+
+    anchors = town_anchor_rows(rows)
+    hit = sum(1 for r in anchors if r["stars"] == dict(TOWN_ANCHORS)[r["display"]])
+    print(f"既知の町名での検算（同じ表記は {TOWN_ANCHOR_MAX} 件まで）: "
+          f"一致 {hit}/{len(anchors)}")
+    print(markdown_table_town_anchors(anchors))
+
+    if args.json:
+        args.json.write_text(
+            "\n".join(json.dumps(r, ensure_ascii=False) for r in rows) + "\n", encoding="utf-8"
+        )
+        print(f"書き出し {args.json}")
+
+    if args.sample:
+        rng = random.Random(args.seed)
+        picked = rng.sample(rows, min(args.sample, len(rows)))
+        picked.sort(key=lambda r: (r["stars"], r["prefCode"], r["lgCode"], r["display"]))
+        sstars = Counter(r["stars"] for r in picked)
+        print(f"サンプル {len(picked)} 件（seed={args.seed}）: "
+              + " / ".join(f"{'★' * s} {sstars[s]}" for s in (1, 2, 3)))
+        table = markdown_table_towns(picked)
+        if args.markdown:
+            args.markdown.write_text(table + "\n", encoding="utf-8")
+            print(f"書き出し {args.markdown}")
+        else:
+            print(table)
+    return 0
+
+
 def main() -> int:
-    ap = argparse.ArgumentParser(description="市区町村名に難易度 ★ を付ける試作（Issue #33）")
+    ap = argparse.ArgumentParser(description="地名に難易度 ★ を付ける（Issue #33・#46）")
     ap.add_argument("--questions", type=Path,
                     default=REPO / "public" / "questions" / DATA_VERSION / "easy.json")
+    ap.add_argument("--difficult-dir", type=Path,
+                    default=REPO / "public" / "questions" / DATA_VERSION / "difficult",
+                    help="--towns のときに読む町名の問題バンク")
     ap.add_argument("--geo", type=Path, default=REPO / "public" / "geo" / "municipalities.json")
     ap.add_argument("--kanjidic", type=Path, default=KANJIDIC2_CACHE)
     ap.add_argument("--download", action="store_true", help="KANJIDIC2 が無ければ取得する")
+    ap.add_argument("--towns", action="store_true",
+                    help="市区町村名のかわりに町名（mode d）を判定する（B2×B4×B5・A1 なし）")
     ap.add_argument("--nanori", choices=("b", "c"), default="c",
                     help="名乗り読みでしか分解できないものを (b) 変化あり とみなすか（既定 c）")
     ap.add_argument("--major-exempt", action="store_true",
@@ -485,6 +725,11 @@ def main() -> int:
     ap.add_argument("--markdown", type=Path, help="サンプル表の書き出し先")
     ap.add_argument("--json", type=Path, help="全件の判定を JSON Lines で書き出す")
     args = ap.parse_args()
+
+    if args.towns:
+        if args.major_exempt:
+            ap.error("--major-exempt は市区町村名だけの軸（A2）なので --towns と併用できない")
+        return main_towns(args)
 
     questions = json.loads(args.questions.read_text(encoding="utf-8"))
     geo = json.loads(args.geo.read_text(encoding="utf-8"))

@@ -1,5 +1,6 @@
 import type { Mode, Stars } from '../engine/types.ts'
 import { modeName } from '../engine/modes.ts'
+import { allSetLabel } from '../engine/score.ts'
 import { starsHeaderNote } from '../engine/stars.ts'
 import { isValidNickname } from '../engine/ranking.ts'
 import { TIME_LIMIT_CHOICES, useTimeLimit } from '../hooks/useTimeLimit.ts'
@@ -25,7 +26,7 @@ export default function Challenge({
   rangeLabel: string
   mode: Mode
   total: number
-  /** 全市区町村名（その都道府県の市区町村を全部） */
+  /** 母集団を全部出すセット（'e' ＝ 全市区町村名／'d' ＝ 全町名）。文言は allSetLabel が決める */
   all: boolean
   /** 難易度の絞り込み。null ＝ 絞っていない（そのときは帯に出さない） */
   stars: Stars | null
@@ -59,7 +60,7 @@ export default function Challenge({
         <p className="paper__subtitle">
           範囲: {rangeLabel} ／ 科目: {modeName(mode)}
           {stars !== null && ` ／ ${starsHeaderNote(stars)}`} ／ 問題数:{' '}
-          {all ? `全市区町村名（${total} 問）` : `${total} 問`} ／ 制限: {timeLimitLabel}
+          {all ? allSetLabel(mode, total) : `${total} 問`} ／ 制限: {timeLimitLabel}
         </p>
       </div>
 

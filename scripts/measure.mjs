@@ -114,6 +114,19 @@ const CLICK = (label) => `(() => {
   b.click(); return 'ok'
 })()`
 
+// <select> は click では動かないので value を入れて change を発火する（市区町村の選択）
+const SELECT = (label, value) => `(() => {
+  const el = [...document.querySelectorAll('select')].find((s) => s.closest('label')?.textContent.includes(${JSON.stringify(label)}))
+  if (!el) return 'NO SELECT: ' + ${JSON.stringify(label)}
+  const opt = [...el.options].find((o) => o.value === ${JSON.stringify(value)})
+  if (!opt) return 'NO OPTION: ' + ${JSON.stringify(value)}
+  if (opt.disabled) return 'DISABLED OPTION: ' + ${JSON.stringify(value)}
+  const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set
+  setter.call(el, ${JSON.stringify(value)})
+  el.dispatchEvent(new Event('change', { bubbles: true }))
+  return 'ok'
+})()`
+
 const TYPE = (text) => `(() => {
   const el = document.querySelector('.answer-input') || document.querySelector('input[type=text]')
   if (!el) return 'NO INPUT'
@@ -223,6 +236,27 @@ try {
     await record(s, 'cover', w, h)
     await s.go('#/select', 3000)
     await record(s, 'select', w, h)
+
+    // --- 範囲・科目: 町名 × 難易度（行は増えない）と、町名 × 全町名（市区町村の <select> が 1 行増える）
+    console.log('  ' + (await s.ev(CLICK('市区町村名＋町名'))))
+    console.log('  ' + (await s.ev(CLICK('難易度: ★3'))))
+    await sleep(500)
+    await record(s, 'select-d-stars', w, h)
+
+    // ハッシュだけを変える移動では画面が作り直されないので、表紙を経由して選択を白紙に戻す
+    await s.go('#/', 1500)
+    await s.go('#/select', 3000)
+    console.log('  ' + (await s.ev(CLICK('関東地方'))))
+    await sleep(500)
+    console.log('  ' + (await s.ev(CLICK('千葉県'))))
+    await sleep(500)
+    console.log('  ' + (await s.ev(CLICK('市区町村名＋町名'))))
+    console.log('  ' + (await s.ev(CLICK('問題数: 全町名'))))
+    await sleep(500)
+    console.log('  ' + (await s.ev(SELECT('市区町村', '122351')))) // 匝瑳市
+    await sleep(500)
+    await record(s, 'select-d-all', w, h)
+    await s.go('#/', 1500)
 
     // --- 地名帳
     await s.go('#/atlas', 2600)

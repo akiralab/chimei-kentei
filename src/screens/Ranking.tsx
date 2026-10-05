@@ -1,11 +1,12 @@
 /**
  * これまでのランキング。
  *
- * - `#/ranking` … 区分（市区町村名 / 市区町村名＋町名 / 全市区町村名）ごとに、都道府県の回答人数を一覧で見せる
+ * - `#/ranking` … 区分（市区町村名 / 市区町村名＋町名 / 全問）ごとに、都道府県の回答人数を一覧で見せる
  * - `#/ranking/{prefCode}` … その都道府県・その区分の上位 30 件
  *
- * 区分は 3 つ。10 問の 2 科目と、全市区町村名（問題数が県ごとに違い、得点は正答率）は
- * 1 問の重みが違うので同じ一覧に混ぜない。全国（scope '00'）に全市区町村名は無い。
+ * 区分は 3 つ。10 問の 2 科目と、全問（全市区町村名・全町名。問題数が範囲ごとに違い、
+ * 得点は正答率）は 1 問の重みが違うので同じ一覧に混ぜない。どちらの「全問」なのかは
+ * 行の注記（engine/score.ts の allRowNote）で見分ける。全国（scope '00'）に全問は無い。
  *
  * 地図は置かない（範囲選択の主役なので、ここでは一覧だけにする）。
  * 区分は localStorage（useRankingMode）でトップと詳細を引き継ぐ。
@@ -15,7 +16,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { BankMeta, PrefectureStat, RankingMode, RankingRow } from '../engine/types.ts'
 import { ALL_RANKING_MODE } from '../engine/types.ts'
 import { RANKING_MODES, RANKING_MODE_LABELS, rankingModeName } from '../engine/modes.ts'
-import { isAllRow, rowCounts, starsOfRow } from '../engine/score.ts'
+import { allSetName, isAllRow, rowCounts, starsOfRow } from '../engine/score.ts'
 import { starsRowNote } from '../engine/stars.ts'
 import { loadMeta } from '../engine/bank.ts'
 import { scopeLabel } from '../engine/scope.ts'
@@ -47,7 +48,7 @@ function formatDate(iso: string): string {
 
 /**
  * その区分の件数・人数。byMode が無い古いデータは合計で代用するが、
- * 全市区町村名は登録できるようになる前のデータに存在しないので 0 件とする。
+ * 全問（全市区町村名・全町名）は登録できるようになる前のデータに存在しないので 0 件とする。
  */
 function countOf(stat: PrefectureStat | undefined, mode: RankingMode): { entries: number; players: number } {
   if (!stat) return { entries: 0, players: 0 }
@@ -139,10 +140,10 @@ export default function Ranking({ prefCode }: { prefCode?: string } = {}) {
   const titleOf = (code: string): string =>
     code === SCOPE_NATIONWIDE ? '全国' : (prefName.get(code) ?? `都道府県 ${code}`)
 
-  /** 全国（scope '00'）の一覧。全市区町村名は都道府県ごとの出題なので区分として出さない */
+  /** 全国（scope '00'）の一覧。全問は都道府県・市区町村ごとの出題なので区分として出さない */
   const nationwideOnly = prefCode === SCOPE_NATIONWIDE
 
-  /** 区分の切替（市区町村名 / 市区町村名＋町名 / 全市区町村名）。トップと詳細で同じものを出す */
+  /** 区分の切替（市区町村名 / 市区町村名＋町名 / 全問）。トップと詳細で同じものを出す */
   const modeSwitch = (
     <div className="mode-switch">
       {RANKING_MODES.map((m) => (
@@ -212,7 +213,7 @@ export default function Ranking({ prefCode }: { prefCode?: string } = {}) {
                   <span className="ranking__rank">{i + 1}</span>
                   <span className="ranking__name">{r.nickname}</span>
                   <span className="ranking__score">
-                    {/* 全市区町村名は問題数が県ごとに違うので、正解数と問題数も見せる */}
+                    {/* 全問は問題数が範囲ごとに違うので、正解数と問題数も見せる */}
                     {isAllRow(r) && r.total !== undefined && (
                       <span className="q-suffix">正解 {rowCounts(r).correct} / {r.total} 問・</span>
                     )}
@@ -229,9 +230,11 @@ export default function Ranking({ prefCode }: { prefCode?: string } = {}) {
                       </>
                     )}
                   </span>
-                  {/* 4 列グリッドの 2 行目として全幅に置く（科目・範囲・登録日・挑戦リンク） */}
+                  {/* 4 列グリッドの 2 行目として全幅に置く（科目・範囲・登録日・挑戦リンク）。
+                      区分「全問」は全市区町村名と全町名が同居するので、ここでは
+                      どちらなのかが分かる名前を出す（engine/score.ts の allSetName） */}
                   <span className="q-pref" style={{ gridColumn: '1 / -1', margin: 0 }}>
-                    {isAllRow(r) ? rankingModeName(ALL_RANKING_MODE) : r.mode === undefined ? '—' : rankingModeName(r.mode)}{' '}
+                    {isAllRow(r) ? allSetName(r.mode ?? 'e') : r.mode === undefined ? '—' : rankingModeName(r.mode)}{' '}
                     ／ {labelOfScope(r.scope)} ／{' '}
                     {formatDate(r.createdAt)}{' '}
                     <a className="btn btn--ghost" href={quizPath(r.setId)}>

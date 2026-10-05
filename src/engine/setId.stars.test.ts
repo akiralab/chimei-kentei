@@ -4,7 +4,7 @@ import { buildSetId, canHaveStars, parseSetId, parseStarsSegment } from './setId
 const VER = 'abr20260925r2'
 
 describe('難易度（-s{1,2,3}）のセット ID', () => {
-  it('市区町村名のときだけ末尾に -s{n} が付き、同じ値に戻る', () => {
+  it('末尾に -s{n} が付き、同じ値に戻る', () => {
     expect(buildSetId(VER, 'e', '12', '0417', false, 3)).toBe(`${VER}-e-12-0417-s3`)
     expect(parseSetId(`${VER}-e-12-0417-s3`)).toEqual({
       dataVersion: VER,
@@ -55,11 +55,29 @@ describe('難易度（-s{1,2,3}）のセット ID', () => {
     expect(() => buildSetId(VER, 'e', '12', '0417', false, 4 as 1)).toThrow(/難易度/)
   })
 
-  it('町名（d）に難易度は付かない', () => {
+  it('町名（d）にも難易度が付く（Issue #46）', () => {
     expect(canHaveStars('e')).toBe(true)
-    expect(canHaveStars('d')).toBe(false)
-    expect(() => buildSetId(VER, 'd', '12', '0417', false, 3)).toThrow(/難易度/)
-    expect(parseSetId(`${VER}-d-12-0417-s3`)).toBeNull()
+    expect(canHaveStars('d')).toBe(true)
+    expect(buildSetId(VER, 'd', '12', '0417', false, 3)).toBe(`${VER}-d-12-0417-s3`)
+    expect(parseSetId(`${VER}-d-12-0417-s3`)).toEqual({
+      dataVersion: VER,
+      mode: 'd',
+      scope: '12',
+      seed: '0417',
+      all: false,
+      stars: 3,
+    })
+    // 全町名（d × 6 桁）＋ ★ も同じ並び（-all が先）
+    expect(buildSetId(VER, 'd', '122351', '1234', true, 2)).toBe(`${VER}-d-122351-1234-all-s2`)
+    expect(parseSetId(`${VER}-d-122351-1234-all-s2`)).toEqual({
+      dataVersion: VER,
+      mode: 'd',
+      scope: '122351',
+      seed: '1234',
+      all: true,
+      stars: 2,
+    })
+    // all の単位は守る（d × 都道府県の -all は読まない）
     expect(parseSetId(`${VER}-d-12-0417-all-s3`)).toBeNull()
   })
 

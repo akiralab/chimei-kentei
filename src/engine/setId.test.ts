@@ -27,6 +27,15 @@ describe('buildSetId / parseSetId', () => {
     expect(parseSetId('abr20260925-e-00-0007')?.scope).toBe('00')
   })
 
+  it('末尾の区切り（-all / -s{n}）は科目ごとの単位を守るものだけ読む', () => {
+    // 全町名（町名 × 市区町村）と町名 × 難易度は読める
+    expect(parseSetId('abr20260925r2-d-122351-1234-all')?.all).toBe(true)
+    expect(parseSetId('abr20260925r2-d-12-1234-s3')?.stars).toBe(3)
+    // 町名 × 都道府県の全部、市区町村名 × 市区町村の全部は作らない
+    expect(parseSetId('abr20260925r2-d-12-1234-all')).toBeNull()
+    expect(parseSetId('abr20260925r2-e-122351-1234-all')).toBeNull()
+  })
+
   it('不正な setId は null', () => {
     expect(parseSetId('')).toBeNull()
     expect(parseSetId('abr20260925-e-12')).toBeNull()
