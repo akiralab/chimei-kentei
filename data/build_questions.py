@@ -8,8 +8,9 @@
 契約  : src/engine/types.ts の Question / BankMeta（キー順も宣言順に合わせる）
 実行  : python3 data/build_questions.py   （= npm run build:questions）
 
-難易度 ★（easy の `stars`）は **build_stars.py が正本**。ここはそれを呼んで
-easy の各問に 1〜3 を書き込むだけで、軸・表・閾値はいっさい持たない。
+難易度 ★（easy と difficult の `stars`）は **build_stars.py が正本**。ここはそれを呼んで
+各問に 1〜3 を書き込むだけで、軸・表・閾値はいっさい持たない
+（市区町村名は judge_all＝A1×B2×B4、町名は judge_towns＝B2×B4×B5）。
 KANJIDIC2（既定 ~/workspace/abr-data/raw/kanjidic2/kanjidic2.xml.gz）が無いと
 難易度を付けられないので、場所を `--kanjidic` で渡すか `--download` で取得する。
 """
@@ -33,11 +34,14 @@ SOURCE = (
 # meta.json に添える難易度の説明（画面には出さない。データの出自を JSON だけで辿れるようにする）。
 # 軸の中身を変えるときは build_stars.py が正本で、ここは「どの軸を使ったか」だけを書く。
 STARS_NOTE = (
-    "難易度 stars（★1〜3）は市区町村名（easy）だけに付く。"
-    "A1 = 人口（国勢調査 2020 の全国分位で有名／ふつう／無名）、"
-    "B2 = 公式の読みを漢字の音訓で分解できるか（素直／変化あり／読めない）、"
-    "B4 = 幹のうち最も難しい漢字（教育／常用／人名用／表外）の 3 軸。"
-    "B2×A1 の素点に B4 を加算して ★3 で打ち切る。判定の正本は data/build_stars.py。"
+    "難易度 stars（★1〜3）は市区町村名（easy）と町名（difficult）の全問に付く。"
+    "共通の軸は B2 = 公式の読みを漢字の音訓で分解できるか（素直／変化あり／読めない）と "
+    "B4 = 幹のうち最も難しい漢字（教育／常用／人名用／表外）。"
+    "市区町村名は A1 = 人口（国勢調査 2020 の全国分位で有名／ふつう／無名）を加えた 3 軸で、"
+    "B2×A1 の素点に B4 を加算する。"
+    "町名は A1 を使わず（B2×B4×B5）、B2 の素点（素直 1／変化あり 2／読めない 3）に B4 と "
+    "B5 = 同じ表記が全国の町名で 2 通り以上に読まれる（B2 が素直のときだけ +1）を加算する。"
+    "どちらも ★3 で打ち切る。判定の正本は data/build_stars.py。"
     "読みの出典は KANJIDIC2（EDRDG, CC BY-SA 4.0）"
 )
 
@@ -264,7 +268,7 @@ def build_difficult(name_csv: Path, ward_to_city: dict, pref_names: dict, report
     return by_pref
 
 
-# --- 難易度 ★（easy のみ。判定は build_stars.py） ------------------------
+# --- 難易度 ★（判定は build_stars.py） -----------------------------------
 def attach_stars(questions: list, geo: dict, kd: dict, report: dict) -> None:
     """easy の各問に `stars`（1〜3）を**破壊的に**書き込む。
 
@@ -281,6 +285,30 @@ def attach_stars(questions: list, geo: dict, kd: dict, report: dict) -> None:
         q["stars"] = stars_by_id[q["id"]]
     report["stars"] = dict(sorted(Counter(q["stars"] for q in questions).items()))
     report["stars_bands"] = (upper, lower)
+
+
+def attach_town_stars(difficult: dict, kd: dict, report: dict) -> None:
+    """difficult の各問に `stars`（1〜3）を**破壊的に**書き込む。
+
+    判定は build_stars.judge_towns に任せる（B5 ＝ 同表記異読みは渡した町名全体で
+    数えるので、**全国 107,681 件をまとめて渡す**こと。都道府県ごとに呼ぶと
+    「本町 ＝ 3 通り」が県内の通り数に縮んで ★ が変わる）。
+    """
+    from build_stars import judge_towns  # noqa: PLC0415 — 循環 import を避けるため遅延
+
+    all_questions = [q for code in sorted(difficult) for q in difficult[code]]
+    rows = judge_towns(all_questions, kd)
+    stars_by_id = {r["id"]: r["stars"] for r in rows}
+    for q in all_questions:
+        q["stars"] = stars_by_id[q["id"]]
+    report["town_stars"] = dict(sorted(Counter(q["stars"] for q in all_questions).items()))
+    report["town_b5"] = sum(1 for r in rows if r["b5"])
+
+
+def stars_triple(questions: list) -> list:
+    """`[★1 の件数, ★2, ★3]`。meta の difficultStars / townStars の形。"""
+    counts = Counter(q["stars"] for q in questions)
+    return [counts.get(s, 0) for s in (1, 2, 3)]
 
 
 def load_stars_inputs(geo_path: Path, kanjidic_path: Path, download: bool):
@@ -345,6 +373,18 @@ def main() -> int:
         pref_name_by_code[q["prefCode"]] = q["pref"]
 
     difficult = build_difficult(name_csv, ward_to_city, pref_name_by_code, report)
+    attach_town_stars(difficult, kd, report)
+
+    # 市区町村ごとの町名の件数と ★ 別内訳。選択画面が meta だけで
+    # 「全町名（97 問）」と「★★★ 26問」を出せるようにする（町名 0 件は 0 / [0,0,0]）
+    towns_by_lg: dict = defaultdict(list)
+    for qs in difficult.values():
+        for q in qs:
+            towns_by_lg[q["lgCode"]].append(q)
+    for city in cities_meta:
+        in_city = towns_by_lg.get(city["lgCode"], [])
+        city["towns"] = len(in_city)
+        city["townStars"] = stars_triple(in_city)
 
     easy_by_pref = Counter(q["prefCode"] for q in easy)
     meta = {
@@ -358,6 +398,7 @@ def main() -> int:
                 "name": pref_name_by_code[code],
                 "easyCount": easy_by_pref[code],
                 "difficultCount": len(difficult.get(code, [])),
+                "difficultStars": stars_triple(difficult.get(code, [])),
             }
             for code in sorted(pref_name_by_code)
         ],
@@ -387,6 +428,15 @@ def main() -> int:
     print(f"政令指定都市     : {report['seirei_cities']} 市（区コードを市コードへ集約）")
     print(f"difficult       : {report['difficult_total']} 件 / {len(difficult)} 都道府県")
     print(f"  最小 {lo[0]}={lo[1]}  最大 {hi[0]}={hi[1]}")
+    print("  難易度 ★: " + " / ".join(
+        f"{'★' * s} {report['town_stars'].get(s, 0)} 件"
+        f"（{report['town_stars'].get(s, 0) / report['difficult_total']:.0%}）" for s in (1, 2, 3)
+    ))
+    print(f"  B5（同表記異読みで +1 が効いた町名）: {report['town_b5']} 件"
+          f"（判定は data/build_stars.py の judge_towns）")
+    towns = [c["towns"] for c in meta["cities"]]
+    print(f"  町名を持つ市区町村: {sum(1 for n in towns if n)} / {len(towns)} 件"
+          f"（最大 {max(towns)}）")
     for k, v in report["difficult_stat"].items():
         print(f"  {k}: {v}")
     print(f"出力 {args.out_dir} / 合計 {total / 1024 / 1024:.1f} MiB")

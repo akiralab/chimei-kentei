@@ -22,18 +22,22 @@ from build_stars import (  # noqa: E402
     B4_LABELS,
     FAME_LABELS,
     STAR_TABLE,
+    TOWN_B2_BASE,
+    TOWN_B5_BONUS,
     b4_rank,
     classify_b2,
     combine,
     decompose,
     fame_band,
     format_segments,
+    judge_towns,
     kanji_rank,
     kun_forms,
     nanori_candidates,
     plain_candidates,
     quantile,
     strip_okurigana,
+    town_reading_counts,
     variant_candidates,
     _with_repeat,
 )
@@ -97,6 +101,22 @@ READINGS = {
     "和": (("わ", "お", "か"), ("やわ.らぐ", "やわ.らげる", "なご.む", "なご.やか", "あ.える"),
           ("あい", "いず", "かず", "かつ", "かつり", "かづ", "たけ", "ち", "とも", "な",
            "にぎ", "まさ", "やす", "よし", "より", "わだこ", "わっ")),
+    # 町名のアンカー（Issue #46）で要る字
+    "放": (("ほう",), ("はな.す", "-っぱな.し", "はな.つ", "はな.れる", "こ.く", "ほう.る"),
+          ("はなれ",)),
+    "出": (("しゅつ", "すい"), ("で.る", "-で", "だ.す", "-だ.す", "い.でる", "い.だす"),
+          ("いず", "いづ", "いで", "じ", "すっ", "すつ", "てん")),
+    "舎": (("しゃ", "せき"), ("やど.る",), ("さ", "とり")),
+    "人": (("じん", "にん"), ("ひと", "-り", "-と"), ("じ", "と", "ね", "ひこ", "ふみ")),
+    "御": (("ぎょ", "ご"), ("おん-", "お-", "み-"), ("う",)),
+    "器": (("き",), ("うつわ",), ()),
+    "所": (("しょ",), ("ところ", "-ところ", "どころ", "とこ"), ("せ",)),
+    "央": (("おう",), (), ("あきら", "え", "お", "さと", "ちか", "てる", "なか", "ひさ",
+                          "ひろ", "や")),
+    "島": (("とう",), ("しま",), ()),
+    "橋": (("きょう",), ("はし",), ("ばせ",)),
+    "町": (("ちょう",), ("まち",), ()),
+    "中": (("ちゅう",), ("なか", "うち", "あた.る"), ("あたる", "かなえ")),
 }
 
 
@@ -110,6 +130,8 @@ GRADES = {
     "田": 1, "毛": 2, "南": 2, "風": 2, "原": 2, "我": 6, "孫": 4,
     "子": 1, "渋": 8, "谷": 2, "東": 2, "平": 3, "戸": 2, "大": 1,
     "和": 3,
+    "放": 3, "出": 1, "舎": 5, "人": 1, "御": 8, "器": 4, "所": 3,
+    "央": 3, "島": 3, "橋": 3, "町": 1, "中": 1,
 }
 
 
@@ -350,6 +372,109 @@ class TestStarTable(unittest.TestCase):
             row = STAR_TABLE[level]
             self.assertLessEqual(row["有名"], row["ふつう"])
             self.assertLessEqual(row["ふつう"], row["無名"])
+
+
+class TestJudgeTowns(unittest.TestCase):
+    """町名（mode d）の ★ ＝ B2 の素点 ＋ B4 ＋ B5（Issue #46 の案 C。A1 は使わない）。
+
+    B5（同じ表記が全国で 2 通り以上に読まれる）は **渡した町名全体**で数えるので、
+    下の TOWNS は「全国の母集団」を小さく模したもの。本町・中島・新橋 は実データと
+    同じ読みの組を並べて、読みの種類数まで含めて検算する。
+    """
+
+    # (都道府県, lgCode, 市区町村, 町名, 読み) — 実データ（difficult/*.json）からの抜粋
+    TOWNS = (
+        ("大阪府", "271004", "大阪市鶴見区", "放出東", "はなてんひがし"),
+        ("東京都", "131211", "足立区", "舎人", "とねり"),
+        ("愛知県", "231002", "名古屋市昭和区", "御器所", "ごきそ"),
+        ("北海道", "012203", "士別市", "中央", "ちゅうおう"),
+        ("北海道", "012246", "千歳市", "中央", "ちゅうおう"),
+        ("北海道", "012173", "江別市", "中島", "なかじま"),
+        ("岩手県", "034835", "下閉伊郡岩泉町", "中島", "なかしま"),
+        ("宮城県", "042021", "石巻市", "新橋", "しんばし"),
+        ("静岡県", "222151", "御殿場市", "新橋", "にいはし"),
+        ("千葉県", "122335", "富里市", "新橋", "にっぱし"),
+        ("北海道", "012025", "函館市", "本町", "ほんちょう"),
+        ("北海道", "012041", "旭川市", "本町", "もとまち"),
+        ("東京都", "131130", "渋谷区", "本町", "ほんまち"),
+    )
+
+    @classmethod
+    def setUpClass(cls):
+        questions = [
+            {
+                "id": f"o:{lg}:{display}",
+                "prefCode": lg[:2],
+                "pref": pref,
+                "lgCode": lg,
+                "city": city,
+                "display": display,
+                "answer": answer,
+            }
+            for pref, lg, city, display, answer in cls.TOWNS
+        ]
+        cls.questions = questions
+        cls.rows = judge_towns(questions, KD)
+        cls.by_key = {(r["display"], r["answer"]): r for r in cls.rows}
+
+    def row(self, display: str, answer: str) -> dict:
+        return self.by_key[(display, answer)]
+
+    def test_件数と並びは渡したとおり(self):
+        self.assertEqual(len(self.rows), len(self.TOWNS))
+        self.assertEqual([r["id"] for r in self.rows], [q["id"] for q in self.questions])
+
+    def test_同表記異読みを数える(self):
+        counts = town_reading_counts(self.questions)
+        self.assertEqual(counts["中央"], 1)   # ちゅうおう だけ（2 市にあっても 1 通り）
+        self.assertEqual(counts["中島"], 2)   # なかじま / なかしま
+        self.assertEqual(counts["新橋"], 3)   # しんばし / にいはし / にっぱし
+        self.assertEqual(counts["本町"], 3)   # ほんちょう / もとまち / ほんまち
+
+    def test_名乗りと分解不能は_3(self):
+        # 放出東 … 名乗り（出=てん）でしか割れない
+        r = self.row("放出東", "はなてんひがし")
+        self.assertEqual((r["b2"], r["b4detail"], r["stars"]), ("c", "教育: 放出東", 3))
+        self.assertEqual(r["b2detail"], "名乗り: 放=はな(訓)＋出=てん(名)＋東=ひがし(訓)")
+        # 舎人 … 名乗りを使っても割れない
+        r = self.row("舎人", "とねり")
+        self.assertEqual((r["b2"], r["b2detail"], r["stars"]), ("c", "分解不能", 3))
+        # 御器所 … 分解不能 ＋ 常用（御）。B4 を足しても ★3 で打ち切られる
+        r = self.row("御器所", "ごきそ")
+        self.assertEqual((r["b2"], r["b4detail"], r["stars"]), ("c", "常用: 御", 3))
+
+    def test_素直で読みが_1_通りなら_1(self):
+        r = self.row("中央", "ちゅうおう")
+        self.assertEqual(r["b2detail"], "中=ちゅう(音)＋央=おう(音)")
+        self.assertEqual((r["b2"], r["readings"], r["b5"], r["stars"]), ("a", 1, False, 1))
+
+    def test_連濁は読みが割れていても_2_のまま(self):
+        # B5 を (b) にも足すと 中島・新橋 が ★3 になるので、a のときだけ足す
+        r = self.row("中島", "なかじま")
+        self.assertEqual(r["b2detail"], "中=なか(訓)＋島=じま(訓→連濁)")
+        self.assertEqual((r["b2"], r["readings"], r["b5"], r["stars"]), ("b", 2, False, 2))
+        r = self.row("新橋", "しんばし")
+        self.assertEqual(r["b2detail"], "新=しん(音)＋橋=ばし(訓→連濁)")
+        self.assertEqual((r["b2"], r["readings"], r["b5"], r["stars"]), ("b", 3, False, 2))
+
+    def test_素直で読みが割れていれば_B5_で_2_に上がる(self):
+        r = self.row("本町", "ほんちょう")
+        self.assertEqual(r["b2detail"], "本=ほん(音)＋町=ちょう(音)")
+        self.assertEqual((r["b2"], r["readings"], r["b5"], r["stars"]), ("a", 3, True, 2))
+        # 同じ表記の別の読み（もとまち）も素直なので同じ ★2
+        self.assertEqual(self.row("本町", "もとまち")["stars"], 2)
+
+    def test_素点は_B2_の段階そのもので_B5_の加算は_1(self):
+        self.assertEqual(TOWN_B2_BASE, {"a": 1, "b": 2, "c": 3})
+        self.assertEqual(TOWN_B5_BONUS, 1)
+        for r in self.rows:
+            self.assertEqual(r["baseStars"], TOWN_B2_BASE[r["b2"]])
+            self.assertIn(r["stars"], (1, 2, 3))
+
+    def test_A1_は使わない(self):
+        # 人口を渡していないので、行に A1 の項目が無いこと（judge_all との違い）
+        for key in ("a1", "population"):
+            self.assertNotIn(key, self.rows[0])
 
 
 if __name__ == "__main__":
