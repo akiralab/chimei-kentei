@@ -164,15 +164,61 @@ describe('地名帳の入口', () => {
     expect(screen.queryByRole('button', { name: '全国' })).toBeNull()
   })
 
-  it('表紙の副ボタンから #/atlas へ行ける', async () => {
+  it('下タブバーの「地名帳」から #/atlas へ行ける', async () => {
     await renderAt('#/')
     const link = screen.getByRole('link', { name: '地名帳' })
     expect(link).toHaveAttribute('href', '#/atlas')
+    // タブは用紙の外（第 3 波 D1）
+    expect(link.closest('.paper')).toBeNull()
 
     // jsdom は <a href="#..."> のクリックでハッシュを動かさないので、同じ遷移をルータ経由で起こす
     goto(link.getAttribute('href') as string)
     await settle()
     expect(screen.getByRole('heading', { name: '地名帳' })).toBeInTheDocument()
+  })
+
+  it('入口の底に「範囲・科目へ」「タイトルへ戻る」は置かない（下タブバーが引き取った）', async () => {
+    await renderAt('#/atlas')
+
+    for (const name of ['範囲・科目へ', 'タイトルへ戻る']) {
+      expect(screen.queryByRole('link', { name })).toBeNull()
+      expect(screen.queryByRole('button', { name })).toBeNull()
+    }
+  })
+})
+
+describe('地名帳の絞り込みは 2 行に畳む（第 3 波 受け入れ ⑪）', () => {
+  it('1 行目に 都道府県 ＋ 地域、2 行目に 難易度 ＋ 検索 を置く', async () => {
+    await renderAt('#/atlas/13')
+
+    const rows = [...document.querySelectorAll('.atlas-list .switch-row, .paper > .switch-row')]
+    expect(rows).toHaveLength(2)
+    // 1 行目
+    expect(rows[0].querySelector('select')).toHaveAttribute('aria-label', '都道府県をえらぶ')
+    expect(rows[0].querySelector('[aria-label="地域"]')).not.toBeNull()
+    // 2 行目
+    expect(rows[1].querySelector('[aria-label="難易度"]')).not.toBeNull()
+    expect(rows[1].querySelector('input[type="search"]')).toHaveAttribute(
+      'aria-label',
+      '市区町村名・よみで絞り込む',
+    )
+  })
+
+  it('地域を持たない都道府県でも 2 行のまま（1 行目は都道府県だけ）', async () => {
+    await renderAt('#/atlas/12')
+
+    const rows = [...document.querySelectorAll('.paper > .switch-row')]
+    expect(rows).toHaveLength(2)
+    expect(rows[0].querySelector('[aria-label="地域"]')).toBeNull()
+  })
+
+  it('一覧の底に「範囲・科目へ」「タイトルへ戻る」は置かない', async () => {
+    await renderAt('#/atlas/13')
+
+    for (const name of ['範囲・科目へ', 'タイトルへ戻る']) {
+      expect(screen.queryByRole('link', { name })).toBeNull()
+      expect(screen.queryByRole('button', { name })).toBeNull()
+    }
   })
 })
 

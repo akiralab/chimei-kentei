@@ -1,4 +1,5 @@
 import { useHashRoute } from './hooks/useHashRoute.ts'
+import { clearAnswerSheet } from './hooks/answerSheet.ts'
 import Cover from './screens/Cover.tsx'
 import Select from './screens/Select.tsx'
 import Quiz from './screens/Quiz.tsx'
@@ -7,6 +8,7 @@ import Ranking from './screens/Ranking.tsx'
 import Review from './screens/Review.tsx'
 import Atlas from './screens/Atlas.tsx'
 import HowTo from './screens/HowTo.tsx'
+import TabBar from './components/TabBar.tsx'
 
 export default function App() {
   // navigated が false なら「ページを開いた直後の画面」＝共有リンクからの着地（出題なら挑戦状を挟む）
@@ -29,21 +31,14 @@ export default function App() {
           lgCode={route.name === 'atlasRow' ? route.lgCode : undefined}
         />
       )}
-      {/* .footer-credit は黒板の上に載る（白系の文字色）ため .paper の外に置く。
-          狭い画面（480px 以下）では正式名が 2 行に折れて用紙の高さを食うので、
-          略称 ABR に差し替える。正式名は <abbr title> に残す（どちらを見せるかは CSS） */}
-      <p className="footer-credit">
-        出典: デジタル庁{' '}
-        <span className="footer-credit__full">アドレス・ベース・レジストリ</span>
-        <abbr className="footer-credit__abbr" title="アドレス・ベース・レジストリ">
-          ABR
-        </abbr>
-        （
-        <a href="https://creativecommons.org/licenses/by/4.0/deed.ja" target="_blank" rel="noreferrer">
-          CC BY 4.0
-        </a>
-        ）
-      </p>
+      {/* 戻る導線は全画面でここ 1 か所（第 3 波 D1）。用紙（.paper）の外・黒板の中に固定で置く。
+          出題中も出すので（決定 ③）、出題中にタブを押したときだけ進行中の答案を捨てる
+          ＝ 以前の用紙右上「タイトルへ戻る」と同じ始末。どのタブも押せば移動するだけなので、
+          App にルート別の分岐表は増えない */}
+      <TabBar
+        route={route}
+        onLeave={route.name === 'quiz' ? () => clearAnswerSheet(route.setId) : undefined}
+      />
     </div>
   )
 }

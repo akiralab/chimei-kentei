@@ -3,15 +3,17 @@ import { isValidNickname } from '../engine/ranking.ts'
 import { SCOPE_NATIONWIDE, buildSetId, todaySeed } from '../engine/setId.ts'
 import { starsAria, starsMark } from '../engine/stars.ts'
 import { useNickname } from '../hooks/useNickname.ts'
-import { ATLAS_PATH, HOWTO_PATH, RANKING_PATH, REVIEW_PATH, SELECT_PATH, navigate, quizPath } from '../router.ts'
+import { HOWTO_PATH, SELECT_PATH, navigate, quizPath } from '../router.ts'
 
 /**
  * 表紙。「小テストが配られた瞬間」の 1 枚。
  * スクロールさせない前提なので、要素は 5 つ（見出し・吹き出し・氏名欄・注記・ボタン）に絞る。
  * 装飾（赤ペンの丸・鉛筆・ゴム印）は .cover__prop で、画像を持たず CSS と絵文字だけで描く。
  *
- * ボタンは 2 つとも主ボタン。「今日の10問」は全員が同じ 10 問（全国・市区町村名・★★★・日付シード）を
- * 解くので、範囲選択を経由せず表紙から 1 タップで始められるようにする。
+ * **主ボタンは「はじめる」1 つ**（第 3 波 D2・決定 ④）。ランキング・間違えた問題・地名帳への
+ * 副ボタン行は下タブバーが引き取ったので置かない。「今日の10問」は全員が同じ 10 問
+ * （全国・市区町村名・★★★・日付シード）を解く副の遊び方なので、用紙に貼った付箋
+ * （.sticky-note）の体で主ボタンの下に落とす。「？」（あそびかた）は見出し行に残す。
  */
 
 /**
@@ -69,43 +71,30 @@ export default function Cover() {
         <button type="button" className="btn btn--primary cover__start" onClick={start} disabled={!ready}>
           はじめる
         </button>
-        {/* 見える字は 375px で折り返さない長さに抑える（「今日の10問（全国・市区町村名）」は折り返した）。
-            ★★★ であることは下の注記と読み上げ名で補う */}
+      </p>
+
+      {/* 用紙に貼った付箋。主ボタンと同じ格では見せない（副の遊び方なので .btn のまま）。
+          見える字は 375px で折り返さない長さに抑え、★★★ は付箋の中の注記と読み上げ名で補う */}
+      <div className="sticky-note">
         <button
           type="button"
-          className="btn btn--primary cover__today"
+          className="btn cover__today"
           aria-label={`今日の10問（全国・${starsAria(TODAY_STARS)}）`}
           onClick={startToday}
           disabled={!ready}
         >
           今日の10問（全国）
         </button>
-      </p>
-
-      {/* ボタンのラベルに入れると折り返すので、難易度は 1 行の注記に出す。
-          ★ の記号は読み上げに向かないので隠し、読み上げ用の言い方を添える（engine/stars.ts） */}
-      <p className="cover__note cover__today-note">
-        今日の10問は全国の
-        <span className="stars" aria-hidden="true">
-          {starsMark(TODAY_STARS)}
-        </span>
-        <span className="sr-only">{starsAria(TODAY_STARS)}</span>
-        から出題。
-      </p>
-
-      {/* 副ボタンは 3 つ。「ランキングを見る」のままだと 375px で「地名帳」が 2 行目に落ち、
-          表紙が 12px スクロールしたので見える字を「ランキング」に縮めた（読み上げ名は元のまま）*/}
-      <p className="cover__sub-actions">
-        <a className="btn btn--ghost cover__ranking" href={RANKING_PATH} aria-label="ランキングを見る">
-          ランキング
-        </a>
-        <a className="btn btn--ghost" href={REVIEW_PATH}>
-          間違えた問題
-        </a>
-        <a className="btn btn--ghost" href={ATLAS_PATH}>
-          地名帳
-        </a>
-      </p>
+        {/* ★ の記号は読み上げに向かないので隠し、読み上げ用の言い方を添える（engine/stars.ts） */}
+        <p className="cover__note cover__today-note">
+          全国の
+          <span className="stars" aria-hidden="true">
+            {starsMark(TODAY_STARS)}
+          </span>
+          <span className="sr-only">{starsAria(TODAY_STARS)}</span>
+          から出題。だれが押しても同じ 10 問。
+        </p>
+      </div>
 
       {/* 用紙の余白の小物。読み上げ不要 */}
       <span className="cover__prop cover__prop--circle" aria-hidden="true" />

@@ -9,7 +9,7 @@ import type { WrongItem } from '../engine/wrongList.ts'
 import { modeName } from '../engine/modes.ts'
 import { clearWrongList, newestFirst, readWrongList } from '../engine/wrongList.ts'
 import { BOARD_SCROLL, useBoardModifier } from '../hooks/useBoardModifier.ts'
-import { COVER_PATH, SELECT_PATH, navigate } from '../router.ts'
+import { SELECT_PATH, navigate } from '../router.ts'
 
 /** 都道府県の絞り込みで「すべて」を表す値 */
 const ALL = ''
@@ -116,12 +116,10 @@ export default function Review() {
         </>
       )}
 
+      {/* 底は同じ画面の中・次の行動だけ。表紙へ戻る導線は下タブバーが持つ（第 3 波 D1）*/}
       <p>
         <button type="button" className="btn btn--primary" onClick={() => navigate(SELECT_PATH)}>
           この県でもう一度
-        </button>
-        <button type="button" className="btn btn--ghost" onClick={() => navigate(COVER_PATH)}>
-          タイトルへ戻る
         </button>
         {items.length > 0 && (
           <button type="button" className="btn btn--ghost" onClick={clearAll}>

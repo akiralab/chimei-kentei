@@ -22,7 +22,7 @@ import type { PrefectureCollection } from '../geo/load.ts'
 import { defaultGeoSource } from '../geo/load.ts'
 import { isSubregionScope, subregionById, subregionOf, subregionsOf, wholePrefLabel } from '../geo/subregions.ts'
 import { useMediaQuery, WIDE_QUERY } from '../hooks/useMediaQuery.ts'
-import { ATLAS_PATH, COVER_PATH, SELECT_PATH, atlasPath, navigate } from '../router.ts'
+import { ATLAS_PATH, atlasPath, navigate } from '../router.ts'
 import type { AtlasRow } from '../components/AtlasList.tsx'
 import AtlasList from '../components/AtlasList.tsx'
 import AtlasNav from '../components/AtlasNav.tsx'
@@ -233,11 +233,6 @@ export default function Atlas({ scope, lgCode }: Props) {
         <h1 className="paper__title">地名帳</h1>
         <p>市区町村の一覧を読み込めませんでした。</p>
         <p>{error}</p>
-        <p>
-          <a className="btn btn--ghost" href={COVER_PATH}>
-            タイトルへ戻る
-          </a>
-        </p>
       </div>
     )
   }
@@ -267,15 +262,6 @@ export default function Atlas({ scope, lgCode }: Props) {
           loading={mapLoading}
           onSelect={(code) => navigate(atlasPath(code))}
         />
-
-        <p>
-          <a className="btn btn--ghost" href={SELECT_PATH}>
-            範囲・科目へ
-          </a>
-          <a className="btn btn--ghost" href={COVER_PATH}>
-            タイトルへ戻る
-          </a>
-        </p>
       </div>
     )
   }
@@ -334,97 +320,103 @@ export default function Atlas({ scope, lgCode }: Props) {
         </p>
       </div>
 
-      <label className="field">
-        <span className="field__label">都道府県</span>
-        <select
-          className="field__input"
-          value={prefCode ?? ''}
-          onChange={(e) => changePref(e.target.value)}
-          aria-label="都道府県をえらぶ"
-        >
-          {meta.prefectures.map((p) => (
-            <option key={p.code} value={p.code}>
-              {p.name}
-            </option>
-          ))}
-        </select>
-      </label>
+      {/* 絞り込みは 2 行に畳む（第 3 波 受け入れ ⑪）。1 行目は 都道府県 ＋ 地域、
+          2 行目は 難易度 ＋ 検索。空いた縦はそのまま一覧の行数に回る */}
+      <div className="switch-row">
+        <label className="field">
+          <span className="field__label">都道府県</span>
+          <select
+            className="field__input field__input--wide"
+            value={prefCode ?? ''}
+            onChange={(e) => changePref(e.target.value)}
+            aria-label="都道府県をえらぶ"
+          >
+            {meta.prefectures.map((p) => (
+              <option key={p.code} value={p.code}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </label>
 
-      {/* 地域（北海道 4・東京都 3）。1 つ目は都道府県まるごと（「全道」「全域」） */}
-      {subregions.length > 0 && prefCode !== undefined && (
-        <div className="mode-switch mode-switch--compact" role="group" aria-label="地域">
+        {/* 地域（北海道 4・東京都 3）。1 つ目は都道府県まるごと（「全道」「全域」） */}
+        {subregions.length > 0 && prefCode !== undefined && (
+          <div className="mode-switch mode-switch--compact" role="group" aria-label="地域">
+            <button
+              type="button"
+              className={scope.length === 2 ? 'mode-switch__item is-selected' : 'mode-switch__item'}
+              aria-pressed={scope.length === 2}
+              aria-label={`地域: ${wholePrefLabel(prefCode) ?? '全域'}`}
+              onClick={() => navigate(atlasPath(prefCode))}
+            >
+              {wholePrefLabel(prefCode) ?? '全域'}
+            </button>
+            {subregions.map((sub) => (
+              <button
+                key={sub.id}
+                type="button"
+                className={scope === sub.id ? 'mode-switch__item is-selected' : 'mode-switch__item'}
+                aria-pressed={scope === sub.id}
+                aria-label={`地域: ${sub.name}`}
+                onClick={() => navigate(atlasPath(sub.id))}
+              >
+                {sub.name}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="switch-row">
+        {/* 難易度 ＝ 市区町村名 1 問ごとに付いた ★1〜3（easy.json の stars）。
+            範囲選択（Select.tsx）の難易度切替と同じマークアップ。検索と **両方** 効く。
+            問題バンクに無い 41 件は ★ を持たないので、★ を選んでいる間は出ない */}
+        <div className="mode-switch mode-switch--compact mode-switch--fit" role="group" aria-label="難易度">
           <button
             type="button"
-            className={scope.length === 2 ? 'mode-switch__item is-selected' : 'mode-switch__item'}
-            aria-pressed={scope.length === 2}
-            aria-label={`地域: ${wholePrefLabel(prefCode) ?? '全域'}`}
-            onClick={() => navigate(atlasPath(prefCode))}
+            className={stars === STARS_ALL ? 'mode-switch__item is-selected' : 'mode-switch__item'}
+            aria-pressed={stars === STARS_ALL}
+            aria-label={starsSwitchLabel(STARS_ALL)}
+            onClick={() => setStars(STARS_ALL)}
           >
-            {wholePrefLabel(prefCode) ?? '全域'}
+            <span className="mode-switch__full" aria-hidden="true">
+              全部
+            </span>
+            {/* 狭い画面では ★ 3 つ分の幅を確保するため 1 文字に落とす */}
+            <span className="mode-switch__abbr" aria-hidden="true">
+              全
+            </span>
           </button>
-          {subregions.map((sub) => (
+          {STARS_CHOICES.map((s) => (
             <button
-              key={sub.id}
+              key={s}
               type="button"
-              className={scope === sub.id ? 'mode-switch__item is-selected' : 'mode-switch__item'}
-              aria-pressed={scope === sub.id}
-              aria-label={`地域: ${sub.name}`}
-              onClick={() => navigate(atlasPath(sub.id))}
+              className={stars === s ? 'mode-switch__item is-selected' : 'mode-switch__item'}
+              aria-pressed={stars === s}
+              aria-label={starsSwitchLabel(s)}
+              // 件数は幅を食うのでラベルには出さず、ツールチップに回す（範囲選択と同じ）
+              title={`${rangeName}の${starsMark(s)}は ${countAt(s)} 件`}
+              onClick={() => setStars(s)}
             >
-              {sub.name}
+              <span className="stars" aria-hidden="true">
+                {starsMark(s)}
+              </span>
             </button>
           ))}
         </div>
-      )}
 
-      {/* 難易度 ＝ 市区町村名 1 問ごとに付いた ★1〜3（easy.json の stars）。
-          範囲選択（Select.tsx）の難易度切替と同じマークアップ。検索と **両方** 効く。
-          問題バンクに無い 41 件は ★ を持たないので、★ を選んでいる間は出ない */}
-      <div className="mode-switch mode-switch--compact mode-switch--fit" role="group" aria-label="難易度">
-        <button
-          type="button"
-          className={stars === STARS_ALL ? 'mode-switch__item is-selected' : 'mode-switch__item'}
-          aria-pressed={stars === STARS_ALL}
-          aria-label={starsSwitchLabel(STARS_ALL)}
-          onClick={() => setStars(STARS_ALL)}
-        >
-          <span className="mode-switch__full" aria-hidden="true">
-            全部
-          </span>
-          {/* 狭い画面では ★ 3 つ分の幅を確保するため 1 文字に落とす */}
-          <span className="mode-switch__abbr" aria-hidden="true">
-            全
-          </span>
-        </button>
-        {STARS_CHOICES.map((s) => (
-          <button
-            key={s}
-            type="button"
-            className={stars === s ? 'mode-switch__item is-selected' : 'mode-switch__item'}
-            aria-pressed={stars === s}
-            aria-label={starsSwitchLabel(s)}
-            // 件数は幅を食うのでラベルには出さず、ツールチップに回す（範囲選択と同じ）
-            title={`${rangeName}の${starsMark(s)}は ${countAt(s)} 件`}
-            onClick={() => setStars(s)}
-          >
-            <span className="stars" aria-hidden="true">
-              {starsMark(s)}
-            </span>
-          </button>
-        ))}
+        <label className="field">
+          <span className="field__label">検索</span>
+          <input
+            className="field__input field__input--wide"
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="漢字でもかなでも"
+            aria-label="市区町村名・よみで絞り込む"
+          />
+        </label>
       </div>
-
-      <label className="field">
-        <span className="field__label">検索</span>
-        <input
-          className="field__input"
-          type="search"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="漢字でもかなでも"
-          aria-label="市区町村名・よみで絞り込む"
-        />
-      </label>
 
       {rows.length === 0 ?
         <p>
@@ -434,15 +426,6 @@ export default function Atlas({ scope, lgCode }: Props) {
           </button>
         </p>
       : <AtlasList rows={rows} label={`${rangeName}の市区町村`} />}
-
-      <p>
-        <a className="btn btn--ghost" href={SELECT_PATH}>
-          範囲・科目へ
-        </a>
-        <a className="btn btn--ghost" href={COVER_PATH}>
-          タイトルへ戻る
-        </a>
-      </p>
     </div>
   )
 

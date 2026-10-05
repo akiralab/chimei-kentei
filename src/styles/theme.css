@@ -67,9 +67,11 @@ body {
   height: 100dvh;
   overflow: hidden;
   /* ノッチ・ホームインジケータを避ける（殻に入れたとき用）。ウェブでは env() が 0 なので
-     見た目は変わらない。* { box-sizing: border-box } が効いているので高さは増えない */
+     見た目は変わらない。* { box-sizing: border-box } が効いているので高さは増えない。
+     **下だけは下タブバー（.tabbar）のぶんを空ける。** 帯の上端に黒板色の余白（56 − 46 = 10px）が
+     あるので、用紙との隙間に --space-4 を重ねない（縦が最も苦しい 375x667 で 16px を節約する）*/
   padding: calc(var(--space-4) + env(safe-area-inset-top)) calc(var(--space-3) + env(safe-area-inset-right))
-    calc(var(--space-4) + env(safe-area-inset-bottom)) calc(var(--space-3) + env(safe-area-inset-left));
+    calc(var(--tabbar-h) + env(safe-area-inset-bottom)) calc(var(--space-3) + env(safe-area-inset-left));
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1069,6 +1071,9 @@ select.field__input {
   gap: var(--space-4);
   /* 用紙が黒板いっぱいに伸びたときに中身を中央へ。縮んだときは上詰め */
   justify-content: center;
+  /* 用紙の底は飾り（鉛筆・花丸）だけの帯にする。第 3 波で飾りを全幅で出すようにしたので、
+     最後の中身（付箋）と重ならない高さをここで確保する */
+  padding-bottom: var(--space-8);
 }
 
 /* 表紙の帯は中央寄せ（他の画面は氏名欄・得点欄を右に流す）*/
@@ -1166,40 +1171,16 @@ select.field__input {
 
 /* 表紙は必ず 1 画面に収まるので、ボタンを底に貼り付ける必要がない。
    貼り付けると用紙色の帯が小物（鉛筆）を隠してしまうので戻す */
-.cover > .cover__actions,
-.cover > .cover__sub-actions {
+.cover > .cover__actions {
   position: static;
   padding-block: 0;
   background: none;
   box-shadow: none;
 }
 
-/* 「今日の10問」の難易度（★★★）。ボタンのラベルに入れると 375px で折り返すので
-   すぐ下の 1 行に出す。表紙は 1 画面に収めるのが絶対条件なので、上の gap だけ詰める */
+/* 付箋の中の注記（「全国の★★★から出題。…」）。ボタンのすぐ下に詰める */
 .cover__today-note {
-  margin-top: calc(-1 * var(--space-3));
-}
-
-/* 「ランキングを見る」は控えめに。主役は「はじめる」 */
-.cover__sub-actions {
-  margin: var(--space-1) 0 0;
-}
-
-/* 副ボタンが 3 つ（ランキング・間違えた問題・地名帳）あるので、スマホ幅では
-   既定の左右余白だと 2 行に折れて用紙があふれる。本文を 16px にしたことで
-   375px でも折れるようになったため、詰める範囲を 430px まで広げた（2026-10-05）。
-   この行だけ左右と文字を 1 段落として 1 行に保つ */
-@media (max-width: 430px) {
-  .cover__sub-actions .btn {
-    padding-inline: var(--space-2);
-    font-size: var(--fs-sm);
-  }
-}
-
-.cover__ranking {
-  min-height: var(--tap-min);
-  padding: var(--space-1) var(--space-4);
-  font-size: var(--fs-sm);
+  margin-top: var(--space-1);
 }
 
 /* 主役のボタン。押したくなる大きさと、紙がひらひらする程度の浮き */
@@ -1216,12 +1197,12 @@ select.field__input {
   animation: none;
 }
 
-/* もう 1 つの主ボタン。ラベルが長いので字と左右の余白だけ詰める（高さは「はじめる」と同じ）*/
+/* 付箋の中のボタン。主ボタン（.btn--primary）ではないので浮かせず、
+   付箋の紙に直接書いた体にする（枠は .btn のまま・地は付箋の色） */
 .cover__today {
-  min-height: 56px;
-  padding: var(--space-3) var(--space-5);
-  font-size: var(--fs-lg);
-  box-shadow: 0 4px 0 var(--color-ink);
+  padding: var(--space-1) var(--space-4);
+  font-size: var(--fs-md);
+  background: transparent;
 }
 
 @keyframes cover-float {
@@ -1280,22 +1261,10 @@ select.field__input {
   transform: rotate(9deg);
 }
 
-/* 狭い画面では用紙を圧迫するので、右上のゴム印を下げる */
-@media (max-width: 420px) {
-  .cover__prop--stamp {
-    display: none;
-  }
-}
-
-/* 用紙の下の飾り（鉛筆・花丸）は副ボタンの行と同じ高さにある。副ボタンが 3 つになって
-   行が用紙の端から端まで伸びたので、**重ならなくなる幅でだけ**出す。
-   実測（表紙 #/）では 519px 以下で花丸が「地名帳」に、鉛筆が「ランキング」に重なる */
-@media (max-width: 519px) {
-  .cover__prop--pencil,
-  .cover__prop--circle {
-    display: none;
-  }
-}
+/* 第 3 波（D2・決定 ④）で副ボタン行（ランキング・間違えた問題・地名帳）を外し、
+   飾りと重なる行が用紙の底から消えたので、**3 つとも全幅で出す**
+   （以前は 420px 以下でゴム印、519px 以下で鉛筆と花丸を display: none にしていた）。
+   重ならない保証は下の .cover の底余白（飾りだけの帯）と、付箋の幅の上限で取る */
 
 /* --------------------------------------------------------------------------
    16.5 .skeleton — 読み込み中の答案（PaperSkeleton）
@@ -1342,54 +1311,6 @@ select.field__input {
   50% {
     opacity: 0.45;
   }
-}
-
-/* --------------------------------------------------------------------------
-   17. .footer-credit — 出典表記
-   -------------------------------------------------------------------------- */
-
-.footer-credit {
-  max-width: var(--paper-max);
-  margin: 0 auto;
-  font-family: var(--font-body);
-  font-size: var(--fs-xs);
-  /* 13px にすると 375px 幅で 2 行に折れる。行間を詰めて折れたぶんの縦を取り返す
-     （出典そのものを 1 か所へ集約するのは第 3 波 D3）*/
-  line-height: 1.45;
-  text-align: center;
-  color: rgba(255, 255, 255, 0.55); /* 黒板の上に載るため白系 */
-}
-
-/* 正式名と略称。どちらか 1 つだけを見せる（markup は両方持つ）*/
-.footer-credit__abbr {
-  display: none;
-}
-
-/* 480px 以下では「アドレス・ベース・レジストリ」が 2 行に折れて用紙の高さを食う。
-   略称に差し替えて 1 行に収める。正式名は abbr の title に残る */
-@media (max-width: 480px) {
-  .footer-credit__full {
-    display: none;
-  }
-
-  .footer-credit__abbr {
-    display: inline;
-    /* 既定の点線下線は CC BY リンクの下線と紛らわしいので消す */
-    text-decoration: none;
-  }
-}
-
-.footer-credit a {
-  color: inherit;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  /* 指で押せる 44px を、行の高さを増やさずに確保する。
-     inline-block の baseline は中の行のベースラインなので文字の位置はずれず、
-     負の margin で line box への寄与を元の 1 行ぶん（1.45em）に戻している */
-  display: inline-block;
-  min-height: var(--tap-min);
-  line-height: var(--tap-min);
-  margin-block: calc((1.45em - var(--tap-min)) / 2);
 }
 
 /* --------------------------------------------------------------------------
@@ -1448,13 +1369,14 @@ select.field__input {
     margin-bottom: var(--space-3);
   }
 
-  /* 本文 16px で表紙の副ボタンが 1 行に収まらなくなった分の詰め（375x667）*/
+  /* 表紙は飾り 3 つと付箋が増えたので、低い画面（375x667）では主ボタンの上余白を落とす */
   .cover__actions {
     margin-top: 0;
   }
 
-  .cover__sub-actions {
-    margin-top: 0;
+  /* 飾りだけの帯は 1 段詰める（--space-8 のままだと 375x667 で付箋が収まらない）*/
+  .cover {
+    padding-bottom: var(--space-6);
   }
 }
 
@@ -1747,4 +1669,125 @@ select.field__input {
 /* 1 節目の見出しは帯（margin-bottom 済み）のすぐ下に来るので、.paper__section の上余白を落とす */
 .howto__section:first-of-type > .paper__section {
   margin-top: 0;
+}
+
+/* --------------------------------------------------------------------------
+   21. .tabbar — 下タブバー（第 3 波 D1）
+   教科書の小口インデックス。黒板色の帯の上に、用紙色（クリーム地）のタブ 4 枚を
+   上辺だけ角丸で並べる。選択中は蛍光マーカー（.marker--yellow と同じ色）で塗る。
+   置き場所は .board の中・.paper の外（App.tsx）。.board の padding-bottom が
+   同じ高さを空けているので、1 画面契約の画面でも .board--scroll の画面でも
+   用紙がこの帯の下に隠れない（CONTRACT.md「1 画面運用」）。
+   -------------------------------------------------------------------------- */
+
+.tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  /* 用紙（.paper__header は z-index 2・飾りのゴム印は 3）より前に出す */
+  z-index: 10;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: calc(var(--tabbar-h) + env(safe-area-inset-bottom));
+  /* ホームインジケータのぶんは帯の下に足す（タブ本体はその上に残る）*/
+  padding-top: 0;
+  padding-right: calc(var(--space-2) + env(safe-area-inset-right));
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: calc(var(--space-2) + env(safe-area-inset-left));
+  background-color: var(--color-board-deep);
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.3);
+}
+
+.tabbar__item {
+  flex: 1 1 0;
+  min-width: 0;
+  /* 指で押せる高さ（--tap-min = 44px）を下回らせない */
+  height: var(--tabbar-tab-h);
+  min-height: var(--tap-min);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  /* 下限 13px（--fs-sm）。4 枚が 375px に並ぶので、ここより上げない */
+  font-size: var(--fs-sm);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  color: var(--color-pencil);
+  text-decoration: none;
+  background-color: var(--color-paper-edge);
+  /* 上辺だけ角丸＝紙を差し込んだインデックスの見た目 */
+  border-radius: var(--radius-paper) var(--radius-paper) 0 0;
+}
+
+/* 現在地。蛍光マーカーで塗り、1 枚だけ高くして前に出す。
+   色だけに頼らないよう markup 側が aria-current="page" を持つ（CONTRACT.md）*/
+.tabbar__item.is-current {
+  height: calc(var(--tabbar-tab-h) + 6px);
+  font-weight: 700;
+  color: var(--color-ink);
+  background-color: var(--color-marker-yellow);
+  box-shadow: 0 -2px 0 var(--color-ink);
+}
+
+/* --------------------------------------------------------------------------
+   22. .sticky-note — 用紙に貼った付箋（表紙の「今日の10問」）
+   淡い黄色の小さな紙を少し傾けて貼る。影は 1 段だけ。
+   -------------------------------------------------------------------------- */
+
+.sticky-note {
+  align-self: center;
+  /* 用紙の底の飾り（左の鉛筆・右の花丸）に届かない幅で止める */
+  max-width: 15rem;
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  text-align: center;
+  background-color: var(--color-sticky);
+  border-radius: 2px;
+  box-shadow: var(--shadow-chip);
+  transform: rotate(-2deg);
+}
+
+/* --------------------------------------------------------------------------
+   23. .paper__share — 見出し行の右端の「共有」（結果）
+   .paper__help（丸い「？」）と同じ格・同じ位置。2 文字ぶんの幅だけ広い。
+   -------------------------------------------------------------------------- */
+
+.paper__share {
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
+.paper__share .btn {
+  min-height: var(--tap-min);
+  padding-inline: var(--space-3);
+  font-size: var(--fs-sm);
+}
+
+/* --------------------------------------------------------------------------
+   24. 1 行に混ぜる記入欄（地名帳の 都道府県 ＋ 地域 ／ 難易度 ＋ 検索）
+   .switch-row は切替（.mode-switch）を 2 つ並べる想定だったが、地名帳では
+   <select> と検索欄も同じ行に混ぜる（第 3 波 受け入れ ⑪。一覧の行数を稼ぐため）。
+   -------------------------------------------------------------------------- */
+
+.switch-row > .field {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* --------------------------------------------------------------------------
+   25. .howto__link — あそびかたの節 7 の外部リンク（CC BY 4.0）
+   アプリ内で外部へ出るのはここ 1 か所だけ（第 3 波 D3・決定 ②）。
+   タップ領域 44px を、行の高さを増やさずに確保する（旧 .footer-credit a と同じ手）。
+   -------------------------------------------------------------------------- */
+
+.howto__link {
+  display: inline-block;
+  min-height: var(--tap-min);
+  line-height: var(--tap-min);
+  margin-block: calc((1.8em - var(--tap-min)) / 2);
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }

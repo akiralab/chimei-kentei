@@ -155,25 +155,8 @@
   }
 }
 
-/* 回答中の「タイトルへ戻る」。.paper__header の右端に寄せ、解答欄から離す。
-   ボタンの見た目は .btn.btn--ghost のまま、この位置でだけ小さく詰める（縦を食わないため） */
-.layout__exit {
-  margin-left: auto;
-}
-
-.layout__exit .btn {
-  min-height: var(--tap-min);
-  padding: var(--space-1) var(--space-3);
-  font-size: var(--fs-xs);
-}
-
-/* 広い画面（マウス操作）だけ 1 段低くする。用紙 1 枚に収める方を取る。
-   --tap-min を下回ってよいのは 720px 以上だけ（src/styles/CONTRACT.md） */
-@media (min-width: 720px) {
-  .layout__exit .btn {
-    min-height: 32px;
-  }
-}
+/* 回答中の「タイトルへ戻る」（.layout__exit）は第 3 波で外した。
+   出題中の離脱は下タブバー（.tabbar）に 1 本化したので、用紙の中に出口を置かない。 */
 
 /* --------------------------------------------------------------------------
    2. .map-* — 地図パネルの共通部品

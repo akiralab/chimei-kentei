@@ -9,9 +9,9 @@ import { rangeLabelOf } from '../engine/scope.ts'
 import { SCOPE_NATIONWIDE, parseSetId } from '../engine/setId.ts'
 import { useMediaQuery, WIDE_QUERY } from '../hooks/useMediaQuery.ts'
 import { useNickname } from '../hooks/useNickname.ts'
-import { answerSheetKey, writeAnswerSheet } from '../hooks/answerSheet.ts'
+import { writeAnswerSheet } from '../hooks/answerSheet.ts'
 import { readTimeLimit, writeQuizTimeLimit } from '../hooks/useTimeLimit.ts'
-import { COVER_PATH, SELECT_PATH, navigate, resultPath } from '../router.ts'
+import { SELECT_PATH, navigate, resultPath } from '../router.ts'
 import MunicipalityMap from '../components/MunicipalityMap.tsx'
 import MunicipalityInfo from '../components/MunicipalityInfo.tsx'
 import PaperSkeleton from '../components/PaperSkeleton.tsx'
@@ -63,8 +63,6 @@ export default function Quiz({ setId, direct = false }: { setId: string; direct?
   const [started, setStarted] = useState(false)
   /** 挑戦状を出しているあいだ。砂時計も問ごとの計測も動かさない */
   const pending = direct && !started
-  /** 「タイトルへ戻る」を押した後。タイマーと結果への自動遷移を止めるだけのフラグ */
-  const [exiting, setExiting] = useState(false)
   const startedAt = useRef(0)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const [nickname, setNickname] = useNickname()
@@ -103,7 +101,7 @@ export default function Quiz({ setId, direct = false }: { setId: string; direct?
 
   // 問ごとの計測開始。制限ありのときだけカウントダウンし、0 で自動パスする
   useEffect(() => {
-    if (!question || feedback || exiting || pending) return
+    if (!question || feedback || pending) return
     startedAt.current = Date.now()
     inputRef.current?.focus()
     if (!limited) return
@@ -122,7 +120,7 @@ export default function Quiz({ setId, direct = false }: { setId: string; direct?
       setFeedback({ correct: false, answer: question.answer })
     }, 100)
     return () => clearInterval(timer)
-  }, [question, feedback, exiting, pending, limited, timeLimitMs])
+  }, [question, feedback, pending, limited, timeLimitMs])
 
   /** 次の問へ（最後の問なら結果へ）。計測は次の問の表示から始まるので、正解を眺めていた時間は数えない */
   const advance = useCallback(() => {
@@ -142,13 +140,13 @@ export default function Quiz({ setId, direct = false }: { setId: string; direct?
 
   // 10 問終わったら答案を保存して結果へ
   useEffect(() => {
-    if (!set || feedback || exiting) return
+    if (!set || feedback) return
     if (index < set.questions.length || records.length < set.questions.length) return
     writeAnswerSheet(set.setId, records)
     // 結果画面が「この回の条件」で ⏳ の印を出せるように控える
     writeQuizTimeLimit(set.setId, timeLimitMs)
     navigate(resultPath(set.setId))
-  }, [set, index, records, feedback, exiting, timeLimitMs])
+  }, [set, index, records, feedback, timeLimitMs])
 
   const answerNow = () => {
     if (!question || feedback) return
@@ -165,20 +163,6 @@ export default function Quiz({ setId, direct = false }: { setId: string; direct?
     setFeedback({ correct, answer: question.answer })
   }
 
-  /**
-   * 回答中にタイトルへ戻る。進行中の答案は保存せず破棄する（確認ダイアログは出さない）。
-   * exiting を立ててからの遷移なので、カウントダウンと結果への自動遷移は先に止まる。
-   */
-  const backToCover = () => {
-    setExiting(true)
-    try {
-      sessionStorage.removeItem(answerSheetKey(setId))
-    } catch {
-      // 保存できない環境では消すものも無い
-    }
-    navigate(COVER_PATH)
-  }
-
   if (error) {
     return (
       <div className="paper">
@@ -187,11 +171,6 @@ export default function Quiz({ setId, direct = false }: { setId: string; direct?
         <p>
           <button type="button" className="btn btn--primary" onClick={() => navigate(SELECT_PATH)}>
             範囲をえらび直す
-          </button>
-        </p>
-        <p>
-          <button type="button" className="btn btn--ghost" onClick={() => navigate(COVER_PATH)}>
-            タイトルへ戻る
           </button>
         </p>
       </div>
@@ -273,12 +252,6 @@ export default function Quiz({ setId, direct = false }: { setId: string; direct?
             <span className="field">
               <span className="field__label">氏名</span>
               <span className="field__input">{nickname || '名無し'}</span>
-            </span>
-            {/* 解答欄・解答ボタンから離れた用紙の右上。押すと答案を捨てて表紙へ */}
-            <span className="layout__exit">
-              <button type="button" className="btn btn--ghost" onClick={backToCover}>
-                タイトルへ戻る
-              </button>
             </span>
           </div>
 

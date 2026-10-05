@@ -927,14 +927,50 @@ describe('結果', () => {
     expect(all('.ranking__row')).toHaveLength(1)
   })
 
-  it('「この問題で挑ませる」で出題 URL をクリップボードへ入れる', async () => {
+  it('見出し行の「共有」で出題 URL をクリップボードへ入れる（navigator.share が無いとき）', async () => {
     await openResult()
 
-    fireEvent.click(screen.getByRole('button', { name: 'この問題で挑ませる' }))
+    const shareBtn = screen.getByRole('button', { name: '共有' })
+    // 共有は見出し行の右端に 1 つだけ（第 3 波 決定 ⑤）
+    expect(shareBtn.closest('.paper__header')).not.toBeNull()
+
+    fireEvent.click(shareBtn)
     await settle()
 
     expect(writeText).toHaveBeenCalledTimes(1)
     expect(writeText.mock.calls[0][0]).toContain(`#/q/${SET_ID}`)
+  })
+
+  it('navigator.share があれば共有シートへ（題名・得点入りの文面・リンク）', async () => {
+    const share = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'share', { value: share, configurable: true })
+    try {
+      await openResult()
+
+      fireEvent.click(screen.getByRole('button', { name: '共有' }))
+      await settle()
+
+      expect(share).toHaveBeenCalledTimes(1)
+      const payload = share.mock.calls[0][0] as { title: string; text: string; url: string }
+      expect(payload.title).toBe('地名読み検定')
+      expect(payload.text).toContain('千葉県・市区町村名')
+      expect(payload.text).toContain('点。この問題で挑戦 → ')
+      expect(payload.url).toContain(`#/q/${SET_ID}`)
+      // 共有シートに回したときはクリップボードを触らない
+      expect(writeText).not.toHaveBeenCalled()
+    } finally {
+      Reflect.deleteProperty(navigator, 'share')
+    }
+  })
+
+  it('用紙の底の操作は「ランキングに登録」と「もう一度（別の問題）」の 2 つだけ', async () => {
+    await openResult()
+
+    const bottom = [...document.querySelectorAll('.paper > p > .btn')].map((b) => b.textContent)
+    expect(bottom).toEqual(['ランキングに登録', 'もう一度（別の問題）'])
+    for (const name of ['タイトルへ戻る', '間違えた問題を見る', 'この問題で挑ませる']) {
+      expect(screen.queryByRole('button', { name })).toBeNull()
+    }
   })
 
   it('答案が無ければ範囲選択へ戻る', async () => {
@@ -1096,13 +1132,13 @@ describe('出題の表示', () => {
   })
 })
 
-// ------------------------------------------------- 7. 表紙 → ランキングの導線
+// ------------------------------------------------- 7. タブバー → ランキングの導線
 
 describe('ランキングへの導線', () => {
-  it('表紙の「ランキングを見る」のリンク先が #/ranking で、開くと都道府県の一覧が出る', async () => {
+  it('下タブバーの「順位」のリンク先が #/ranking で、開くと都道府県の一覧が出る', async () => {
     renderApp()
 
-    const link = screen.getByRole('link', { name: 'ランキングを見る' })
+    const link = screen.getByRole('link', { name: '順位' })
     expect(link).toHaveAttribute('href', '#/ranking')
 
     // jsdom は <a href="#..."> のクリックでハッシュを動かさないので、同じ遷移をルータ経由で起こす
@@ -1229,7 +1265,8 @@ describe('間違えた問題', () => {
       mode: 'e',
     })
 
-    fireEvent.click(screen.getByRole('button', { name: '間違えた問題を見る' }))
+    // 「見直し」タブで #/review へ（jsdom はフラグメントのクリックで遷移しないのでルータ経由）
+    goto(screen.getByRole('link', { name: '見直し' }).getAttribute('href') as string)
     await settle()
 
     expect(hash()).toBe('#/review')
@@ -1241,19 +1278,20 @@ describe('間違えた問題', () => {
   it('登録しなければ記録しない', async () => {
     await playWithOneWrong()
 
-    fireEvent.click(screen.getByRole('button', { name: 'タイトルへ戻る' }))
+    // 登録せずに「検定」タブで表紙へ戻る
+    goto(screen.getByRole('link', { name: '検定' }).getAttribute('href') as string)
     await settle()
 
     expect(hash()).toBe('#/')
     expect(readWrongList()).toHaveLength(0)
   })
 
-  it('表紙から「間違えた問題」へ行ける', async () => {
+  it('下タブバーの「見直し」から間違えた問題へ行ける', async () => {
     localStorage.setItem(NICKNAME_KEY, 'たろう')
     renderApp()
     await settle()
 
-    const link = screen.getByRole('link', { name: '間違えた問題' })
+    const link = screen.getByRole('link', { name: '見直し' })
     expect(link).toHaveAttribute('href', '#/review')
 
     // jsdom は <a href="#..."> のクリックでハッシュを動かさないので、同じ遷移をルータ経由で起こす

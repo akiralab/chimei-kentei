@@ -25,7 +25,7 @@ import { defaultRankingStore } from '../engine/ranking-factory.ts'
 import { connectionMessage } from '../hooks/connection.ts'
 import { useRankingMode } from '../hooks/useRankingMode.ts'
 import PaperSkeleton from '../components/PaperSkeleton.tsx'
-import { COVER_PATH, RANKING_PATH, SELECT_PATH, navigate, quizPath, rankingPrefPath } from '../router.ts'
+import { RANKING_PATH, SELECT_PATH, navigate, quizPath, rankingPrefPath } from '../router.ts'
 
 /** 都道府県の詳細で一度に見せる件数 */
 const PREF_LIMIT = 30
@@ -168,6 +168,7 @@ export default function Ranking({ prefCode }: { prefCode?: string } = {}) {
     </div>
   )
 
+  /** 用紙の底。同じ画面の中の移動（都道府県の一覧へ）と次の行動だけを残す（第 3 波 D1）*/
   const footer = (
     <p>
       {prefCode !== undefined && (
@@ -177,9 +178,6 @@ export default function Ranking({ prefCode }: { prefCode?: string } = {}) {
       )}
       <button type="button" className="btn" onClick={() => navigate(SELECT_PATH)}>
         もう一度（範囲選択へ）
-      </button>
-      <button type="button" className="btn btn--ghost" onClick={() => navigate(COVER_PATH)}>
-        タイトルへ戻る
       </button>
     </p>
   )

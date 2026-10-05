@@ -232,7 +232,7 @@ describe('ランキングに届かないとき', () => {
       expect(document.querySelectorAll('.review__row')).toHaveLength(10)
     })
     expect(screen.getByRole('button', { name: 'ランキングに登録' })).toBeEnabled()
-    expect(screen.getByRole('button', { name: 'この問題で挑ませる' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '共有' })).toBeInTheDocument()
     expect(screen.getByText('80')).toBeInTheDocument()
     spy.mockRestore()
   })
@@ -333,7 +333,8 @@ describe('全市区町村名', () => {
     await waitFor(() => {
       expect(penComments()).toContain('1 位で登録しました。')
     })
-    expect(screen.getByRole('button', { name: '間違えた問題を見る' })).toBeInTheDocument()
+    // 「間違えた問題を見る」は下タブバーの「見直し」が引き取った（第 3 波 決定 ⑤）
+    expect(screen.queryByRole('button', { name: '間違えた問題を見る' })).toBeNull()
     const saved = JSON.parse(localStorage.getItem(rankingKey(SET_ALL)) ?? '[]') as ResultEntry[]
     expect(saved.map((e) => e.score)).toEqual([72])
     expect(readWrongList()).not.toHaveLength(0)
@@ -411,7 +412,9 @@ describe('旧版のセットID', () => {
     render(<Result setId="abr20260925-e-12-1234" />)
 
     expect(await screen.findByText('この問題セットは古い版のため開けません。')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'タイトルへ戻る' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '範囲をえらび直す' })).toBeInTheDocument()
+    // 表紙へ戻る導線は用紙に置かない（下タブバーが持つ）
+    expect(screen.queryByRole('button', { name: 'タイトルへ戻る' })).toBeNull()
     // 問題バンクも読みに行かない
     expect(vi.mocked(fetch)).not.toHaveBeenCalled()
   })

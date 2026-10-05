@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { QuestionSet, RankingRow } from '../engine/types.ts'
 import { OUTDATED_SET_MESSAGE, buildQuestionSet, defaultSource, isCurrentDataVersion } from '../engine/bank.ts'
+import { modeName } from '../engine/modes.ts'
 import { rangeLabelOf } from '../engine/scope.ts'
+import { buildShare } from '../engine/share.ts'
 import { parseSetId } from '../engine/setId.ts'
 import { defaultStorage, getClientToken, isValidNickname, provisionalRank } from '../engine/ranking.ts'
 import { allRowNote, scoreOf, starsOfRow } from '../engine/score.ts'
@@ -13,7 +15,7 @@ import { readAnswerSheet } from '../hooks/answerSheet.ts'
 import { readQuizTimeLimit, readTimeLimit } from '../hooks/useTimeLimit.ts'
 import { connectionMessage } from '../hooks/connection.ts'
 import { BOARD_SCROLL, useBoardModifier } from '../hooks/useBoardModifier.ts'
-import { COVER_PATH, REVIEW_PATH, SELECT_PATH, absoluteUrl, navigate, quizPath } from '../router.ts'
+import { SELECT_PATH, absoluteUrl, navigate, quizPath } from '../router.ts'
 import PaperSkeleton from '../components/PaperSkeleton.tsx'
 
 const KANJI_NUM = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十']
@@ -209,8 +211,30 @@ export default function Result({ setId }: { setId: string }) {
     setNotice('氏名が 1〜12 文字ではありません。')
   }
 
+  /**
+   * 共有（見出し行の右端の 1 ボタン。第 3 波 D5・決定 ⑤）。
+   *
+   * `navigator.share` があれば OS の共有シートに題名・得点入りの文面・リンクを渡す。
+   * 無ければ従来どおりリンクをクリップボードへ入れて「コピーしました」。
+   * シートを取り消した（AbortError）場合も失敗した場合も、画面に何も出さずに黙って終える
+   * （取り消しはユーザーの意思なので赤ペンの一言を出す理由がない）。
+   */
   const share = async () => {
     const url = absoluteUrl(quizPath(setId))
+    if (typeof navigator.share === 'function') {
+      const payload = buildShare({
+        range: set ? rangeLabelOf(set) : '',
+        subject: set ? modeName(set.mode) : '',
+        score: records === null ? null : score,
+        url,
+      })
+      try {
+        await navigator.share(payload)
+      } catch {
+        // 取り消し・失敗のどちらでも黙って戻る
+      }
+      return
+    }
     try {
       await navigator.clipboard.writeText(url)
       setNotice('この問題の URL をコピーしました。')
@@ -231,11 +255,6 @@ export default function Result({ setId }: { setId: string }) {
             範囲をえらび直す
           </button>
         </p>
-        <p>
-          <button type="button" className="btn btn--ghost" onClick={() => navigate(COVER_PATH)}>
-            タイトルへ戻る
-          </button>
-        </p>
       </div>
     )
   }
@@ -253,6 +272,13 @@ export default function Result({ setId }: { setId: string }) {
     <div className="paper">
       <div className="paper__header">
         <h1 className="paper__title">答案</h1>
+        {/* 共有は見出し行の右端に 1 つだけ（あそびかたの「？」と同じ位置の作法）。
+            登録の前でも押せる。文面は engine/share.ts が組む */}
+        <span className="paper__share">
+          <button type="button" className="btn btn--ghost" onClick={() => void share()}>
+            共有
+          </button>
+        </span>
         <span className="field">
           <span className="field__label">氏名</span>
           <span className="field__input">{nickname || '名無し'}</span>
@@ -313,6 +339,8 @@ export default function Result({ setId }: { setId: string }) {
       )}
       {shareUrl && <p className="review__mine">{shareUrl}</p>}
 
+      {/* 用紙の底の操作は 2 つだけ（決定 ⑤）。「間違えた問題を見る」「タイトルへ戻る」は
+          下タブバーの「見直し」「検定」が引き取った */}
       <p>
         <button
           type="button"
@@ -322,19 +350,8 @@ export default function Result({ setId }: { setId: string }) {
         >
           ランキングに登録
         </button>
-        <button type="button" className="btn" onClick={() => void share()}>
-          この問題で挑ませる
-        </button>
         <button type="button" className="btn btn--ghost" onClick={() => navigate(SELECT_PATH)}>
           もう一度（別の問題）
-        </button>
-        {registered && (
-          <button type="button" className="btn btn--ghost" onClick={() => navigate(REVIEW_PATH)}>
-            間違えた問題を見る
-          </button>
-        )}
-        <button type="button" className="btn btn--ghost" onClick={() => navigate(COVER_PATH)}>
-          タイトルへ戻る
         </button>
       </p>
 
