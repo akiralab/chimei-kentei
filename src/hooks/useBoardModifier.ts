@@ -21,5 +21,5 @@ export function useBoardModifier(modifier: string): void {
   }, [modifier])
 }
 
-/** 結果・間違えた問題の 2 画面だけが使う例外（src/styles/CONTRACT.md「1 画面運用」） */
+/** 結果・間違えた問題・あそびかたの 3 画面だけが使う例外（src/styles/CONTRACT.md「1 画面運用」） */
 export const BOARD_SCROLL = 'board--scroll'

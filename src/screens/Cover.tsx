@@ -3,7 +3,7 @@ import { isValidNickname } from '../engine/ranking.ts'
 import { SCOPE_NATIONWIDE, buildSetId, todaySeed } from '../engine/setId.ts'
 import { starsAria, starsMark } from '../engine/stars.ts'
 import { useNickname } from '../hooks/useNickname.ts'
-import { ATLAS_PATH, RANKING_PATH, REVIEW_PATH, SELECT_PATH, navigate, quizPath } from '../router.ts'
+import { ATLAS_PATH, HOWTO_PATH, RANKING_PATH, REVIEW_PATH, SELECT_PATH, navigate, quizPath } from '../router.ts'
 
 /**
  * 表紙。「小テストが配られた瞬間」の 1 枚。
@@ -41,6 +41,10 @@ export default function Cover() {
       <div className="paper__header">
         <h1 className="paper__title cover__title">地名読み検定</h1>
         <p className="paper__subtitle cover__subtitle">この地名、読めますか</p>
+        {/* 行は足さない（帯の右下に重ねる）。見える字は「？」だけで、名前は aria-label に持たせる */}
+        <a className="btn btn--ghost paper__help" href={HOWTO_PATH} aria-label="どうやって遊ぶの？">
+          ？
+        </a>
       </div>
 
       <p className="cover__bubble">目指せ！全国の自治体マスター！</p>

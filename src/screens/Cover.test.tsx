@@ -100,6 +100,15 @@ describe('表紙のボタン', () => {
     expect(screen.getByRole('link', { name: 'ランキングを見る' })).toHaveAttribute('href', '#/ranking')
   })
 
+  it('見出し行の「？」はあそびかたへ。読み上げ名は「どうやって遊ぶの？」', () => {
+    render(<Cover />)
+    const help = screen.getByRole('link', { name: 'どうやって遊ぶの？' })
+    expect(help).toHaveAttribute('href', '#/howto')
+    expect(help.textContent).toBe('？')
+    // 副ボタンの行には足さない（375px で折り返すため）
+    expect(document.querySelector('.cover__sub-actions .paper__help')).toBeNull()
+  })
+
   it('「はじめる」は範囲選択へ、Enter キーも範囲選択へ', () => {
     render(<Cover />)
     typeNickname('たろう')

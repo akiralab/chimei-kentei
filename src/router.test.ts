@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   ATLAS_PATH,
   COVER_PATH,
+  HOWTO_PATH,
   SELECT_PATH,
   atlasPath,
   hasNavigated,
@@ -36,6 +37,16 @@ describe('parseHash', () => {
     expect(parseHash('#/nope')).toEqual({ name: 'cover' })
     expect(parseHash('#/q/')).toEqual({ name: 'cover' })
     expect(parseHash('#/q/a/b')).toEqual({ name: 'cover' })
+  })
+
+  it('あそびかた', () => {
+    expect(parseHash(HOWTO_PATH)).toEqual({ name: 'howto' })
+    expect(parseHash('#/howto')).toEqual({ name: 'howto' })
+  })
+
+  it('あそびかたに余計なセグメントが付いた URL は表紙へ落とす', () => {
+    expect(parseHash('#/howto/x')).toEqual({ name: 'cover' })
+    expect(parseHash('#/howto/')).toEqual({ name: 'cover' })
   })
 
   it('地名帳は 入口 / 一覧 / 行 の 3 段', () => {

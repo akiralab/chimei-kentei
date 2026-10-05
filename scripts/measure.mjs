@@ -224,6 +224,12 @@ try {
     await s.go('#/select', 3000)
     await record(s, 'select', w, h)
 
+    // --- あそびかた（.board--scroll。指標は docOverY / lastButtonCut で、paper.overY は見ない）。
+    //     表紙・選択の paper.overY が 0 のままであること（見出し行の「？」で縦が増えていない）も
+    //     上の 2 件で確かめている
+    await s.go('#/howto', 2200)
+    await record(s, 'howto', w, h)
+
     // --- 地名帳
     await s.go('#/atlas', 2600)
     await record(s, 'atlas', w, h)

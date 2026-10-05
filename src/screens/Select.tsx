@@ -6,7 +6,7 @@ import { MODES, MODE_LABELS, modeName } from '../engine/modes.ts'
 import { STARS_ALL, STARS_CHOICES, starsHeaderNote, starsMark, starsSwitchLabel } from '../engine/stars.ts'
 import { scopeLabel } from '../engine/scope.ts'
 import { SCOPE_NATIONWIDE, buildSetId, canBeAll, canHaveStars, randomSeed } from '../engine/setId.ts'
-import { navigate, quizPath } from '../router.ts'
+import { HOWTO_PATH, navigate, quizPath } from '../router.ts'
 import { TIME_LIMIT_CHOICES, useTimeLimit } from '../hooks/useTimeLimit.ts'
 import type { PrefectureCollection } from '../geo/load.ts'
 import { defaultGeoSource } from '../geo/load.ts'
@@ -250,6 +250,9 @@ export default function Select() {
           {starsParam !== undefined && ` ／ ${starsHeaderNote(starsParam)}`} ／ 問題数: {countLabel} ／ 制限:{' '}
           {timeLimitLabel}
         </p>
+        <a className="btn btn--ghost paper__help" href={HOWTO_PATH} aria-label="どうやって遊ぶの？">
+          ？
+        </a>
       </div>
 
       <RegionPicker

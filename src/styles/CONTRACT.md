@@ -30,9 +30,11 @@
 | `.atlas` / `.atlas__row` / `.atlas__name` / `.atlas__kana` / `.is-selected` | 地名帳の一覧（地名 ｜ よみ）。`.ranking` と同じく `.paper` の内側だけがスクロールする |
 | `.atlas-nav` | 地名帳の移動（「← 一覧へ」「前／次」「3 / 23」） |
 | `.footer-credit` | 出典表記 |
-| `.board--scroll` | `.board` の修飾子。結果・間違えた問題の 2 画面だけ、用紙ごと縦スクロールする（下の「1 画面運用」の例外） |
+| `.board--scroll` | `.board` の修飾子。結果・間違えた問題・あそびかたの 3 画面だけ、用紙ごと縦スクロールする（下の「1 画面運用」の例外） |
 | `.skeleton` / `.skeleton__line` | 読み込み中の答案（`PaperSkeleton`）。罫線の上に薄い長方形を数行 |
 | `.layout__map--folded` / `.layout__map-label`（**map.css**） | 出題画面の地図を解答前に 1 行へ畳む修飾子と、その中の範囲名 |
+| `.paper__help` | 見出し行（`.paper__header`）の右端に置く丸い「？」。あそびかた（`#/howto`）への入口。行を足さない（表紙では帯の右下に重ねる） |
+| `.howto` / `.howto__section` / `.howto__exit` | あそびかた（`.paper` に併記する修飾子）と 7 節の本文（節見出しは `h2` に `.paper__section` を付け、本文は `ul`）、帯の右端の「表紙へ」。**帯の sticky は `.board--scroll` の中では効かない**ので、「表紙へ」は用紙の末尾にも置く |
 
 ## 追加した補助クラス（2026-10-02 / design 側）
 
@@ -111,11 +113,11 @@ Dela Gothic One は字幅を詰めた極太デザインで、1.4rem 前後の漢
   つまり画面側は**ボタンを `<p>` か `<div>` で包む**こと（現行の 4 画面はすべてそうなっている）。包まないと底に貼り付かない
 - 確認したビューポート: 375×667 と 1280×800。表紙・範囲選択・出題は用紙の内側スクロールも不要、結果だけ `.review` / `.ranking` が内側で動く。どの画面も `body` はスクロールしない
 
-#### 例外: 結果・間違えた問題の 2 画面（2026-10-05 / 第 2 波）
+#### 例外: 結果・間違えた問題・あそびかたの 3 画面（2026-10-05 / 第 2 波）
 
 **`.board--scroll` を付けた画面だけは、用紙ごと縦にスクロールしてよい。他の画面は従来どおり 1 画面に収める。**
 
-- 対象は **結果（`#/result/...`）と間違えた問題（`#/review`）の 2 画面だけ**。内容が本質的に「10 行＋操作（＋順位表）」で、どう詰めても 1 画面に入らない。内側スクロールに押し込むと底のボタンが切れる（設計ノート §13.6 決定 2）
+- 対象は **結果（`#/result/...`）・間違えた問題（`#/review`）・あそびかた（`#/howto`）の 3 画面だけ**。内容が本質的に「10 行＋操作（＋順位表）」「7 節の読み物」で、どう詰めても 1 画面に入らない。内側スクロールに押し込むと底のボタンが切れる（設計ノート §13.6 決定 2）
 - 画面側は `useBoardModifier(BOARD_SCROLL)`（`src/hooks/useBoardModifier.ts`）を呼ぶ。`.board` を描くのは `App.tsx` なので、**画面が自分で宣言して App には分岐表を置かない**
 - CSS は `.board--scroll` が `height: auto` / `min-height: 100dvh` / `justify-content: flex-start`、その中の `.paper` が `flex: none` / `max-height: none` / `overflow: visible`、`.review` と `.ranking` も内側スクロールをやめる。`html` / `body` の `overflow: hidden` は `:has(.board--scroll)` で解く
 - 用紙の `padding-bottom` に `env(safe-area-inset-bottom)` を足してある（ホームインジケータの上に最後のボタンが来ないように）
