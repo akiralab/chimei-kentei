@@ -6,6 +6,7 @@ import Result from './screens/Result.tsx'
 import Ranking from './screens/Ranking.tsx'
 import Review from './screens/Review.tsx'
 import Atlas from './screens/Atlas.tsx'
+import HowTo from './screens/HowTo.tsx'
 
 export default function App() {
   // navigated が false なら「ページを開いた直後の画面」＝共有リンクからの着地（出題なら挑戦状を挟む）
@@ -19,6 +20,7 @@ export default function App() {
       {route.name === 'ranking' && <Ranking />}
       {route.name === 'rankingPref' && <Ranking key={route.prefCode} prefCode={route.prefCode} />}
       {route.name === 'review' && <Review />}
+      {route.name === 'howto' && <HowTo />}
       {/* 地名帳の 3 ルートは 1 つの要素にまとめる（別の位置に書くと React が作り直して
           検索語と読み込んだ meta が消える）。key も付けない */}
       {(route.name === 'atlas' || route.name === 'atlasScope' || route.name === 'atlasRow') && (

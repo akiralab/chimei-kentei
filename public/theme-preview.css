@@ -1931,3 +1931,79 @@ select.field__input {
   font-variant-numeric: tabular-nums;
   color: var(--color-pencil);
 }
+
+/* --------------------------------------------------------------------------
+   20. .paper__help / .howto — あそびかた（#/howto）とその入口の「？」
+   遊ぶ人向けの案内ページ。1 画面契約の例外（.board--scroll）で用紙ごと縦に伸びる。
+   -------------------------------------------------------------------------- */
+
+/* 見出し行の右端に置く丸い「？」（表紙・範囲選択）。見える字は「？」だけで、
+   読み上げ名は markup 側の aria-label（「どうやって遊ぶの？」）に任せる。
+   **行を足さない**のが条件なので、.paper__header の flex の余りで右へ寄せるだけ */
+.paper__help {
+  margin-left: auto;
+  flex: 0 0 auto;
+  width: var(--tap-min);
+  min-width: var(--tap-min);
+  height: var(--tap-min);
+  padding: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-lg);
+  line-height: 1;
+  border-radius: 50%;
+}
+
+/* 表紙の帯は中央寄せ（.cover__title が flex-basis: 100%）なので、flex に混ぜると
+   「？」が 3 行目に落ちて 375x667 の 1 画面契約が崩れる。行を増やさずに済ませるため、
+   帯の右下（副題と同じ段）へ重ねる。
+   帯は既定では sticky だが、**縦に余裕のない画面（§17.5）では position: static に戻る**ので
+   そのままだと「？」が用紙の底に落ちる。表紙は 1 画面で内側スクロールしないため、
+   表紙の帯だけ relative を敷き直して位置の基準を固定する */
+.cover > .paper__header {
+  position: relative;
+}
+
+.cover > .paper__header > .paper__help {
+  position: absolute;
+  /* 帯は用紙の端まで広がっている（左右の負マージン）ので、用紙の本文と同じ位置まで内側へ戻す */
+  right: clamp(var(--space-3), 3vw, var(--space-6));
+  /* 副題の段に合わせる（大見出しの右端とすれ違う高さ）。421px 以上で出る
+     「満点」のゴム印は帯の上端なので当たらない */
+  bottom: var(--space-2);
+  margin-left: 0;
+}
+
+/* 「表紙へ」。出題画面の .layout__exit と同じ格で帯の右端に置く。
+   **帯は sticky では残らない**（.board--scroll が overflow-y: auto ＝ スクロールポート
+   そのものなので、その中の sticky は動かない）。なので読み終えた位置から戻れるよう、
+   用紙の末尾にも同じボタンを置く（結果・間違えた問題と同じ形） */
+.howto__exit {
+  margin-left: auto;
+}
+
+.howto__exit .btn {
+  min-height: var(--tap-min);
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--fs-xs);
+}
+
+/* 本文に混ざる ★ は前後の文字と詰まって見えるので、わずかに離す */
+.howto__section .stars {
+  margin: 0 0.15em;
+}
+
+/* 本文。節は h2（.paper__section）＋ ul だけで、絵も外部リンクも持たない */
+.howto__section > ul {
+  margin: 0;
+  padding-left: var(--space-5);
+  font-size: var(--fs-md);
+}
+
+.howto__section > ul > li + li {
+  margin-top: var(--space-2);
+}
+
+/* 1 節目の見出しは帯（margin-bottom 済み）のすぐ下に来るので、.paper__section の上余白を落とす */
+.howto__section:first-of-type > .paper__section {
+  margin-top: 0;
+}

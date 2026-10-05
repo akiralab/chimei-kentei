@@ -1,7 +1,8 @@
 /**
  * ハッシュルーティング。'#/' 表紙 / '#/select' 範囲・科目 / '#/q/{setId}' 出題 / '#/result/{setId}' 結果 /
  * '#/ranking' これまでのランキング / '#/ranking/{prefCode}' 都道府県の詳細 / '#/review' 間違えた問題 /
- * '#/atlas' 地名帳の入口 / '#/atlas/{scope}' 一覧 / '#/atlas/{scope}/{lgCode}' 行を選択。
+ * '#/atlas' 地名帳の入口 / '#/atlas/{scope}' 一覧 / '#/atlas/{scope}/{lgCode}' 行を選択 /
+ * '#/howto' あそびかた。
  * 不明なハッシュは表紙へ。
  */
 export type Route =
@@ -15,12 +16,14 @@ export type Route =
   | { name: 'atlas' }
   | { name: 'atlasScope'; scope: string }
   | { name: 'atlasRow'; scope: string; lgCode: string }
+  | { name: 'howto' }
 
 export const COVER_PATH = '#/'
 export const SELECT_PATH = '#/select'
 export const RANKING_PATH = '#/ranking'
 export const REVIEW_PATH = '#/review'
 export const ATLAS_PATH = '#/atlas'
+export const HOWTO_PATH = '#/howto'
 
 /**
  * 地名帳の範囲の文法。セット ID と同じく 2 桁の都道府県か 3 文字の地域（`\d{2}[a-z]`）。
@@ -59,6 +62,7 @@ export function parseHash(hash: string): Route {
   if (path === '/ranking') return { name: 'ranking' }
   if (path === '/review') return { name: 'review' }
   if (path === '/atlas') return { name: 'atlas' }
+  if (path === '/howto') return { name: 'howto' }
   const ar = /^\/atlas\/([^/?#]+)(?:\/([^/?#]+))?$/.exec(path)
   if (ar) {
     // 綴りが合わなければ素直に表紙へ落とす（網羅的な検証はしない。設計 §12.4）
