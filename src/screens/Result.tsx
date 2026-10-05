@@ -272,13 +272,6 @@ export default function Result({ setId }: { setId: string }) {
     <div className="paper">
       <div className="paper__header">
         <h1 className="paper__title">答案</h1>
-        {/* 共有は見出し行の右端に 1 つだけ（あそびかたの「？」と同じ位置の作法）。
-            登録の前でも押せる。文面は engine/share.ts が組む */}
-        <span className="paper__share">
-          <button type="button" className="btn btn--ghost" onClick={() => void share()}>
-            共有
-          </button>
-        </span>
         <span className="field">
           <span className="field__label">氏名</span>
           <span className="field__input">{nickname || '名無し'}</span>
@@ -289,6 +282,14 @@ export default function Result({ setId }: { setId: string }) {
           {/* 難易度は絞ったときだけ。setId から読むので、出題を組み直せなくても出せる */}
           {parsed?.stars != null && `${starsHeaderNote(parsed.stars)} ／ `}正解 {correct} / {total} 問 ／ 所要時間{' '}
           {formatDuration(timeMs)} ／ 制限 {timeLimitMs > 0 ? `${Math.round(timeLimitMs / 1000)}秒` : 'なし'}
+        </span>
+        {/* 共有は見出し行の右端に 1 つだけ（あそびかたの「？」と同じ位置の作法）。
+            帯は .paper__title の margin-right: auto で右へ流れるので、**最後に置く**だけで右端に着く。
+            登録の前でも押せる。文面は engine/share.ts が組む */}
+        <span className="paper__share">
+          <button type="button" className="btn btn--ghost" onClick={() => void share()}>
+            共有
+          </button>
         </span>
       </div>
 

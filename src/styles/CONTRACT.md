@@ -30,12 +30,14 @@
 | `.ranking` / `.ranking__row` / `.is-me` | 順位表 |
 | `.atlas` / `.atlas__row` / `.atlas__name` / `.atlas__kana` / `.is-selected` | 地名帳の一覧（地名 ｜ よみ）。`.ranking` と同じく `.paper` の内側だけがスクロールする |
 | `.atlas-nav` | 地名帳の移動（「← 一覧へ」「前／次」「3 / 23」） |
-| `.footer-credit` | 出典表記 |
+| `.tabbar` / `.tabbar__item` / `.is-current` | 下タブバー（`<nav aria-label="メインメニュー">`）とその 4 枚のタブ・現在地。**`.paper` の外**（`.board` の直下）に固定で 1 本だけ置く。下の「1 画面運用」を参照 |
+| `.sticky-note` | 用紙に貼った付箋（淡い黄色・少し傾ける・影 1 段）。表紙の「今日の10問」のような副の導線を主ボタンと分けて置く |
+| `.paper__share` | 見出し行（`.paper__header`）の右端に置く「共有」。`.paper__help`（丸い「？」）と同じ格・同じ位置で、2 文字ぶんだけ広い |
 | `.board--scroll` | `.board` の修飾子。結果・間違えた問題・あそびかたの 3 画面だけ、用紙ごと縦スクロールする（下の「1 画面運用」の例外） |
 | `.skeleton` / `.skeleton__line` | 読み込み中の答案（`PaperSkeleton`）。罫線の上に薄い長方形を数行 |
 | `.layout__map--folded` / `.layout__map-label`（**map.css**） | 出題画面の地図を解答前に 1 行へ畳む修飾子と、その中の範囲名 |
 | `.paper__help` | 見出し行（`.paper__header`）の右端に置く丸い「？」。あそびかた（`#/howto`）への入口。行を足さない（表紙では帯の右下に重ねる） |
-| `.howto` / `.howto__section` / `.howto__exit` | あそびかた（`.paper` に併記する修飾子）と 7 節の本文（節見出しは `h2` に `.paper__section` を付け、本文は `ul`）、帯の右端の「表紙へ」。**帯の sticky は `.board--scroll` の中では効かない**ので、「表紙へ」は用紙の末尾にも置く |
+| `.howto` / `.howto__section` / `.howto__link` | あそびかた（`.paper` に併記する修飾子）と 7 節の本文（節見出しは `h2` に `.paper__section` を付け、本文は `ul`）、節 7 の外部リンク（CC BY 4.0）。**出典の正本はこのページの節 7**で、アプリ内で外部へ出るのもここ 1 か所だけ。戻る導線は持たない（下タブバーの「検定」） |
 
 ## 追加した補助クラス（2026-10-02 / design 側）
 
@@ -99,12 +101,20 @@ Dela Gothic One は字幅を詰めた極太デザインで、1.4rem 前後の漢
 | `.cover__bubble` | 赤ペンの吹き出し（「目指せ！…」）。尻尾は `::before` / `::after` |
 | `.cover__field` | 表紙のニックネーム欄。`.field` に足して中央寄せ・拡大 |
 | `.cover__note` | 氏名欄の下の注記 |
-| `.cover__actions` / `.cover__sub-actions` | 「はじめる」と「ランキングを見る」の置き場 |
+| `.cover__actions` | 主ボタン「はじめる」の置き場。**表紙の主ボタンは 1 つだけ**（第 3 波 決定 ④） |
 | `.cover__start` | `.btn.btn--primary` に足して拡大＋浮きアニメ（`prefers-reduced-motion` で停止） |
-| `.cover__ranking` | `.btn.btn--ghost` に足して控えめに縮める |
-| `.cover__prop` / `--pencil` / `--circle` / `--stamp` | 用紙の余白の小物（鉛筆・赤ペンの花丸・「満点」のゴム印）。画像を使わず絵文字と CSS だけ。`aria-hidden="true"` を付ける |
+| `.cover__today` / `.cover__today-note` | 付箋（`.sticky-note`）の中の「今日の10問（全国）」と、その下の ★★★ の注記 |
+| `.cover__prop` / `--pencil` / `--circle` / `--stamp` | 用紙の余白の小物（鉛筆・赤ペンの花丸・「満点」のゴム印）。画像を使わず絵文字と CSS だけ。`aria-hidden="true"` を付ける。**3 つとも全幅で出す**ので、`.cover` は底に飾りだけの帯（`padding-bottom`）を持つ |
 
 ### 1 画面運用（ページをスクロールさせない）
+
+> **読み替え（2026-10-05 / 第 3 波）: `.board` には `.paper` 1 枚と、用紙の外に下タブバー（`.tabbar`）1 本。**
+> 以前の「`.board` には `.paper` 1 枚だけ」から変えた（Issue #51 決定 1）。タブバーは
+> `position: fixed; bottom: 0` ＋ `padding-bottom: env(safe-area-inset-bottom)` で、高さは `--tabbar-h`（56px）。
+> **`.board` の `padding-bottom` が同じ高さを空けている**ので、1 画面契約の画面でも `.board--scroll` の
+> 画面でも用紙が帯の下に隠れない。戻る導線は全画面でこの 1 本に集約し、
+> **用紙の中に「タイトルへ戻る／範囲・科目へ／表紙へ」を置かない**（計測の `backInPaper` が 0 であること）。
+> 同じ画面の中の移動（地名帳の「← 一覧へ」「前／次」、順位表の「都道府県の一覧へ」）は用紙に残す。
 
 - `body` は `height: 100%` + `overflow: hidden`。`.board` は `height: 100dvh` + `overflow: hidden` で上下中央寄せ
 - `.paper` は `display: flex; flex-direction: column; max-height: 100%; min-height: 0; overflow-y: auto`
@@ -122,7 +132,7 @@ Dela Gothic One は字幅を詰めた極太デザインで、1.4rem 前後の漢
 - 画面側は `useBoardModifier(BOARD_SCROLL)`（`src/hooks/useBoardModifier.ts`）を呼ぶ。`.board` を描くのは `App.tsx` なので、**画面が自分で宣言して App には分岐表を置かない**
 - CSS は `.board--scroll` が `height: auto` / `min-height: 100dvh` / `justify-content: flex-start`、その中の `.paper` が `flex: none` / `max-height: none` / `overflow: visible`、`.review` と `.ranking` も内側スクロールをやめる。`html` / `body` の `overflow: hidden` は `:has(.board--scroll)` で解く
 - 用紙の `padding-bottom` に `env(safe-area-inset-bottom)` を足してある（ホームインジケータの上に最後のボタンが来ないように）
-- 底のボタン群は sticky にしない（用紙の末尾に自然に置く）。`.footer-credit` はスクロールの末尾に来る
+- 底のボタン群は sticky にしない（用紙の末尾に自然に置く）
 - 計測は `paper.overY` ではなく `docOverY` / `lastButtonCut` / `reviewVisibleFirstView` で見る（`scripts/measure-expr.js`）
 
 ### 入力
@@ -179,7 +189,8 @@ Dela Gothic One は字幅を詰めた極太デザインで、1.4rem 前後の漢
 | 守っている部品 | 置き場所 |
 |---|---|
 | `.btn`（`.btn--ghost` 含む） | `theme.css` |
-| `.cover__ranking` / `.atlas-nav .btn` / `.layout__exit .btn` | `theme.css` / `map.css`（小さく詰める修飾が当たる場所） |
+| `.atlas-nav .btn` / `.paper__share .btn` / `.howto__link` | `theme.css`（小さく詰める修飾が当たる場所） |
+| `.tabbar__item`（高さ `--tabbar-tab-h` ＝ 46px） | `theme.css` |
 | `.mode-switch__item`（`min-width` も） / `.pref-grid__item` / `input.field__input` ・ `select.field__input` | `theme.css` |
 | `.jp-map__all` | `map.css` |
 
@@ -201,11 +212,11 @@ Dela Gothic One は字幅を詰めた極太デザインで、1.4rem 前後の漢
 | トークン / クラス | 値 | 備考 |
 |---|---|---|
 | `--fs-md`（本文） | **16px**（`1rem`） | 15px から引き上げ（設計ノート §13.6 決定 3）。iOS の本文に寄せる |
-| `--fs-xs` | **13px**（`0.8125rem`） | 12px から引き上げ。出典クレジット・情報カードのラベル・注記がここに乗る |
+| `--fs-xs` | **13px**（`0.8125rem`） | 12px から引き上げ。情報カードのラベル・注記がここに乗る |
 | `.stars` / `.q-number__stars` / `.review__stars` | `max(<em 指定>, 0.8125rem)` | `--fs-sm` の帯の中で 11.7px まで潰れていた |
 
 **`--fs-xs` より小さいトークンを足さない。** 計測（`npm run measure` の `fontUnder16`）に除外は作らず、
-`.footer-credit a` も含めて 13px 未満が 0 件であることを見る。
+下タブバーの文字（`--fs-sm`）も含めて 13px 未満が 0 件であることを見る。
 
 ### 出題画面の地図は解答前に畳む（899px 以下）
 
@@ -228,5 +239,16 @@ Dela Gothic One は字幅を詰めた極太デザインで、1.4rem 前後の漢
 ### safe-area
 
 `.board` の padding に `env(safe-area-inset-*)` を足してある。ウェブでは 0 なので見た目は変わらない。
-用紙の外に部品を置く変更（第 3 波の下タブバー）では、その部品側でも
-`padding-bottom: env(safe-area-inset-bottom)` を見ること。
+下タブバー（`.tabbar`）も自分で `padding-bottom: env(safe-area-inset-bottom)` を持ち、
+`.board` の `padding-bottom` は `calc(var(--tabbar-h) + env(safe-area-inset-bottom))` で同じぶんを空ける。
+
+## v1 追加（2026-10-05 / スマホアプリ化 第 3 波）
+
+| クラス / トークン | 役割 |
+|---|---|
+| `--tabbar-h`（56px）/ `--tabbar-tab-h`（46px） | 下タブバーの帯とタブ本体の高さ。差の 10px が黒板色のまま残り、教科書の小口インデックスに見せる |
+| `--color-sticky` | 付箋（`.sticky-note`）の淡い黄色。蛍光マーカー（`--color-marker-yellow`）より薄い |
+| `.switch-row--wrap` | `.switch-row` の修飾子。狭い画面でも折り返しを許す（地名帳の 都道府県 ＋ 地域。地域が 5 つある北海道は 375px で 1 行に入らない） |
+
+**外した部品**: `.footer-credit`（出典は あそびかたの節 7 へ集約）・`.cover__sub-actions` / `.cover__ranking`
+（副ボタン行は下タブバーが引き取った）・`.layout__exit`（出題中の「タイトルへ戻る」）・`.howto__exit`。

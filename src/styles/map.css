@@ -85,8 +85,27 @@
    作るために見出しとカードの余白も削る（「東京都のどこ？」は用紙の帯の
    「範囲: 東京都」と同じことしか言わないので落とす）*/
 @media (max-width: 899px) and (max-height: 740px) {
+  /* 第 3 波: 下タブバー（56px）が入ったぶん用紙は縮むが、**地図はむしろ広げる**。
+     下の 3 つ（用紙の底の余白・2 カラムの隙間・問いの下の余白）で 14px を回収し、
+     そのうち 4px を第 2 波から残っていた 4px のはみ出しに充て、残りを地図に回す */
   .layout__map {
-    height: min(23dvh, 190px);
+    height: min(25dvh, 190px);
+  }
+
+  .layout {
+    gap: var(--space-2);
+  }
+
+  .layout__quiz > .paper {
+    padding-bottom: var(--space-4);
+  }
+
+  .layout__quiz .q-prompt {
+    margin-bottom: var(--space-2);
+  }
+
+  .layout__quiz .answer-input {
+    margin-top: var(--space-2);
   }
 
   .layout__map .map-muni__caption {
@@ -95,11 +114,20 @@
 
   .layout__map .info-card {
     padding: var(--space-1) var(--space-2);
+    /* パネルの下端いっぱいに敷く。浮かせる 8px はそのまま地図の見える高さになる */
+    inset-inline: 0;
+    bottom: 0;
+    border-radius: 0 0 var(--radius-paper) var(--radius-paper);
   }
 
-  .layout__map .info-card__stats,
-  .layout__map .info-card__source {
+  .layout__map .info-card__stats {
     margin-top: 0;
+  }
+
+  /* 出典の正本はあそびかたの節 7（第 3 波 D3・決定 ②）。地図に重ねる帯では省き、
+     そのぶんを地図の見える高さに回す */
+  .layout__map .info-card__source {
+    display: none;
   }
 }
 

@@ -37,6 +37,12 @@
         font-size: var(--fs-xs);
         color: rgba(255, 255, 255, 0.5);
       }
+      /* 下タブバーは本番では position: fixed（画面の底）。このページは 1 枚に複数の画面を
+         縦に並べるので、見本のときだけ流し込みに戻して黒板の底に置く */
+      .preview-tabbar .tabbar {
+        position: static;
+        width: 100%;
+      }
       .preview-row {
         display: flex;
         flex-wrap: wrap;
@@ -85,9 +91,14 @@
         <p class="cover__actions">
           <button class="btn btn--primary cover__start" type="button">はじめる</button>
         </p>
-        <p class="cover__sub-actions">
-          <a class="btn btn--ghost cover__ranking" href="#/ranking">ランキングを見る</a>
-        </p>
+
+        <!-- 用紙に貼った付箋（.sticky-note）。主ボタンは「はじめる」1 つだけ（第 3 波 決定 ④） -->
+        <div class="sticky-note">
+          <button class="btn cover__today" type="button">今日の10問（全国）</button>
+          <p class="cover__note cover__today-note">
+            全国の<span class="stars" aria-hidden="true">★★★</span>から出題。だれが押しても同じ 10 問。
+          </p>
+        </div>
 
         <span class="cover__prop cover__prop--circle" aria-hidden="true"></span>
         <span class="cover__prop cover__prop--pencil" aria-hidden="true">✏️</span>
@@ -404,7 +415,35 @@
       </section>
     </div>
 
-    <p class="footer-credit">
+    <p class="preview-label">⑤ 下タブバー（.tabbar）と付箋（.sticky-note）</p>
+    <p class="preview-note">
+      タブバーは本番では .board の中・.paper の外に position: fixed で 1 本だけ置く（この見本だけ
+      流し込みに戻してある）。現在地は .is-current ＋ aria-current="page" の両方で示す。
+      高さは --tabbar-h（56px）、タブ本体は --tabbar-tab-h（46px）で、差の 10px が黒板色に残る
+    </p>
+    <div class="board preview-tabbar">
+      <section class="paper">
+        <header class="paper__header">
+          <h2 class="paper__title">答案</h2>
+          <!-- 見出し行の右端。.paper__help（丸い「？」）と同じ位置の作法 -->
+          <span class="paper__share"><button class="btn btn--ghost" type="button">共有</button></span>
+        </header>
+        <p>用紙の中に「タイトルへ戻る／範囲・科目へ／表紙へ」は置かない。戻る導線は下のタブバー 1 本。</p>
+        <div class="sticky-note">
+          <button class="btn" type="button">今日の10問（全国）</button>
+          <p class="cover__note cover__today-note">付箋は淡い黄色・少し傾ける・影 1 段。</p>
+        </div>
+      </section>
+
+      <nav class="tabbar" aria-label="メインメニュー">
+        <a class="tabbar__item is-current" href="#/" aria-current="page">検定</a>
+        <a class="tabbar__item" href="#/atlas">地名帳</a>
+        <a class="tabbar__item" href="#/ranking">順位</a>
+        <a class="tabbar__item" href="#/review">見直し</a>
+      </nav>
+    </div>
+
+    <p class="preview-note">
       住所データ: デジタル庁「アドレス・ベース・レジストリ」（abr20260925）を加工して作成。<br />
       これはテーマのスタイルガイドで、アプリ本体ではありません。正本の CSS は
       <code>src/styles/tokens.css</code> ／ <code>src/styles/theme.css</code>。

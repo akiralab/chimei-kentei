@@ -322,7 +322,7 @@ export default function Atlas({ scope, lgCode }: Props) {
 
       {/* 絞り込みは 2 行に畳む（第 3 波 受け入れ ⑪）。1 行目は 都道府県 ＋ 地域、
           2 行目は 難易度 ＋ 検索。空いた縦はそのまま一覧の行数に回る */}
-      <div className="switch-row">
+      <div className="switch-row switch-row--wrap">
         <label className="field">
           <span className="field__label">都道府県</span>
           <select
@@ -341,7 +341,7 @@ export default function Atlas({ scope, lgCode }: Props) {
 
         {/* 地域（北海道 4・東京都 3）。1 つ目は都道府県まるごと（「全道」「全域」） */}
         {subregions.length > 0 && prefCode !== undefined && (
-          <div className="mode-switch mode-switch--compact" role="group" aria-label="地域">
+          <div className="mode-switch mode-switch--compact mode-switch--fit" role="group" aria-label="地域">
             <button
               type="button"
               className={scope.length === 2 ? 'mode-switch__item is-selected' : 'mode-switch__item'}
@@ -412,7 +412,7 @@ export default function Atlas({ scope, lgCode }: Props) {
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="漢字でもかなでも"
+            placeholder="かな・漢字"
             aria-label="市区町村名・よみで絞り込む"
           />
         </label>
