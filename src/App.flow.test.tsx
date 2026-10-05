@@ -410,10 +410,10 @@ describe('範囲・科目', () => {
     expect(allButton).toHaveAttribute('aria-pressed', 'true')
     expect(el('.paper__subtitle').textContent).toContain('問題数: 全 15 問')
 
-    // 町名を含める科目に切り替えると 10 問に戻る（全市区町村名は市区町村名だけの機能）
+    // 町名を含める科目に切り替えると「全部」の単位が全町名になり、市区町村を選ぶまで始められない
     fireEvent.click(screen.getByRole('button', { name: '市区町村名＋町名' }))
-    expect(screen.getByRole('button', { name: '問題数: 10 問' })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByRole('button', { name: '問題数: 全市区町村名（15 問）' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '問題数: 全町名' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: '市区町村を選ぶと始められます' })).toBeDisabled()
 
     fireEvent.click(screen.getByRole('button', { name: '市区町村名' }))
     fireEvent.click(screen.getByRole('button', { name: '問題数: 全市区町村名（15 問）' }))
@@ -429,21 +429,81 @@ describe('範囲・科目', () => {
 
   // ---- 難易度（★1〜3。Issue #33 / PR #38 の build_stars.py） ----
 
-  it('市区町村名のときだけ難易度の行が出て、町名も に切り替えると消える', async () => {
+  it('難易度の行は両科目で出て、選んだ ★ は科目を替えても残る（Issue #46）', async () => {
     await openSelect()
 
-    // 全国のままでも難易度は選べる（★ は市区町村名の問に付いているので範囲に依らない）
+    // 全国のままでも難易度は選べる（★ は問ごとに付いているので範囲に依らない）
     expect(screen.getByRole('group', { name: '難易度' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '難易度: 全部' })).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(screen.getByRole('button', { name: '難易度: ★3' }))
 
+    // 町名を含める科目でも行は消えない（町名にも ★1〜3 が付いた）
     fireEvent.click(screen.getByRole('button', { name: '市区町村名＋町名' }))
-    expect(screen.queryByRole('group', { name: '難易度' })).toBeNull()
-    expect(screen.queryByRole('button', { name: '難易度: ★3' })).toBeNull()
-
-    // 市区町村名に戻すと行も戻り、「全部」に戻っている（町名のあいだの選択を引きずらない）
-    fireEvent.click(screen.getByRole('button', { name: '市区町村名' }))
     expect(screen.getByRole('group', { name: '難易度' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '難易度: 全部' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: '難易度: ★3' })).toHaveAttribute('aria-pressed', 'true')
+
+    fireEvent.click(screen.getByRole('button', { name: '市区町村名' }))
+    expect(screen.getByRole('button', { name: '難易度: ★3' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('町名 × ★★★ の 10 問は setId に -s3 が付き、出題にも ★ が出る', async () => {
+    await openSelect()
+
+    fireEvent.click(screen.getByRole('button', { name: '千葉県' }))
+    fireEvent.click(screen.getByRole('button', { name: '市区町村名＋町名' }))
+    fireEvent.click(screen.getByRole('button', { name: '難易度: ★3' }))
+    fireEvent.click(screen.getByRole('button', { name: '始める' }))
+    await settle()
+
+    expect(hash()).toMatch(new RegExp(`^#/q/${DATA_VERSION}-d-12-\\d{4}-s3$`))
+    await settle()
+    expect(el('.q-number .stars').textContent).toBe('★★★')
+    expect(screen.getByLabelText('難易度 3')).toBeInTheDocument()
+  })
+
+  it('町名 × 全町名は市区町村を選んでから始められ、setId は 6 桁 scope の -all になる', async () => {
+    await openSelect()
+
+    fireEvent.click(screen.getByRole('button', { name: '千葉県' }))
+    fireEvent.click(screen.getByRole('button', { name: '市区町村名＋町名' }))
+    // 市区町村の <select> は全町名を選ぶまで出さない（1 画面に収めるため）
+    expect(screen.queryByLabelText('市区町村')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: '問題数: 全町名' }))
+    const picker = screen.getByLabelText('市区町村')
+    // 町名を持つのは 1 件目（千市1 の 30 件）だけ。ほかは「町名なし」で押せない
+    expect(screen.getByRole('option', { name: '千市1（30問）' })).toBeEnabled()
+    expect(screen.getByRole('option', { name: '千市2（町名なし）' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '市区町村を選ぶと始められます' })).toBeDisabled()
+
+    fireEvent.change(picker, { target: { value: '120001' } })
+    expect(screen.getByRole('button', { name: '問題数: 全町名（30 問）' })).toHaveAttribute('aria-pressed', 'true')
+    expect(el('.paper__subtitle').textContent).toContain('いまの範囲: 千市1')
+    expect(el('.paper__subtitle').textContent).toContain('問題数: 全 30 問')
+
+    fireEvent.click(screen.getByRole('button', { name: '始める' }))
+    await settle()
+    expect(hash()).toMatch(new RegExp(`^#/q/${DATA_VERSION}-d-120001-\\d{4}-all$`))
+    await settle()
+    expect(el('.q-number__text').textContent).toBe('問1 / 30')
+  })
+
+  it('全町名から 10 問に戻すと市区町村を捨てて都道府県に戻る', async () => {
+    await openSelect()
+
+    fireEvent.click(screen.getByRole('button', { name: '千葉県' }))
+    fireEvent.click(screen.getByRole('button', { name: '市区町村名＋町名' }))
+    fireEvent.click(screen.getByRole('button', { name: '問題数: 全町名' }))
+    fireEvent.change(screen.getByLabelText('市区町村'), { target: { value: '120001' } })
+    expect(el('.paper__subtitle').textContent).toContain('いまの範囲: 千市1')
+
+    fireEvent.click(screen.getByRole('button', { name: `問題数: ${QUESTIONS_PER_SET} 問` }))
+    expect(screen.queryByLabelText('市区町村')).toBeNull()
+    expect(el('.paper__subtitle').textContent).toContain('いまの範囲: 千葉県')
+
+    fireEvent.click(screen.getByRole('button', { name: '始める' }))
+    await settle()
+    expect(hash()).toMatch(new RegExp(`^#/q/${DATA_VERSION}-d-12-\\d{4}$`))
   })
 
   it('★★★ を選んで始めると setId に -s3 が付き、出題画面に ★★★ が出る', async () => {
@@ -481,7 +541,7 @@ describe('範囲・科目', () => {
     expect(screen.getByRole('button', { name: '問題数: 全市区町村名（3 問）' })).toBeInTheDocument()
   })
 
-  it('地図の見出しの数は難易度に連れて動き、町名のときは出さない', async () => {
+  it('地図の見出しの数は難易度と科目に連れて動く', async () => {
     await openSelect()
     fireEvent.click(screen.getByRole('button', { name: '千葉県' }))
     expect(el('.jp-map__note').textContent).toBe('千葉県 15問')
@@ -494,9 +554,13 @@ describe('範囲・科目', () => {
     fireEvent.click(screen.getByRole('button', { name: '難易度: ★2' }))
     expect(el('.jp-map__note').textContent).toBe('千葉県 ★★ 3問')
 
-    // 町名は easy の件数ではないので数を出さない（科目を戻せばまた出る）
+    // 町名も出す（meta の townStars で地域まで数えられるようになった）。
+    // 千葉県の町名は 30 件で ★1〜3 が 10 件ずつ
     fireEvent.click(screen.getByRole('button', { name: '市区町村名＋町名' }))
-    expect(document.querySelector('.jp-map__note')).toBeNull()
+    expect(el('.jp-map__note').textContent).toBe('千葉県 ★★ 10問')
+    fireEvent.click(screen.getByRole('button', { name: '難易度: 全部' }))
+    expect(el('.jp-map__note').textContent).toBe('千葉県 30問')
+
     fireEvent.click(screen.getByRole('button', { name: '市区町村名' }))
     expect(el('.jp-map__note').textContent).toBe('千葉県 15問')
   })

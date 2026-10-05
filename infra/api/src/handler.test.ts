@@ -3,7 +3,7 @@
  * DynamoDB はメモリ上の偽物、問題バンクは src/engine/__fixtures__ に差し替える。
  */
 import { beforeEach, describe, expect, it } from 'vitest'
-import { fixtureSource } from '../../../src/engine/__fixtures__/questions.ts'
+import { DIFFICULT_12, fixtureSource } from '../../../src/engine/__fixtures__/questions.ts'
 import { DATA_VERSION, buildQuestionSet } from '../../../src/engine/bank.ts'
 import type { QuestionSet } from '../../../src/engine/types.ts'
 import type {
@@ -471,13 +471,69 @@ describe('難易度つきの setId', () => {
     expect(res.statusCode).toBe(400)
   })
 
-  it('町名（d）に難易度を付けた setId は読めない', async () => {
+  it('町名（d）× ★ の setId も受け付け、その難易度だけで再採点する（Issue #46）', async () => {
+    const setId = `${DATA_VERSION}-d-12-1234-s3`
+    const set = await buildQuestionSet('d', '12', '1234', fixtureSource(), false, 3)
+    expect(set.setId).toBe(setId)
+    expect(set.questions.every((q) => q.stars === 3)).toBe(true)
+
+    const handler = makeHandler(memoryDdb())
+    const answers = set.questions.map((q, i) => ({
+      questionId: q.id,
+      input: i < 8 ? q.answer : 'ちがう',
+      ms: 3000,
+      passed: false,
+    }))
+    const res = await handler(postEvent({ setId, nickname: 'たろう', clientToken: 'tok-y', answers }))
+    expect(res.statusCode).toBe(201)
+    // 区分は科目のまま（難易度では分けない）
+    expect(parse(res).entry).toMatchObject({ setId, score: 80, correct: 8, total: 10, mode: 'd', scope: '12' })
+  })
+})
+
+// ---------------------------------------------------------------- 全町名
+
+describe('POST /results（全町名の `-all` セット）', () => {
+  /** フィクスチャの千葉県 1 番目の自治体（町名 30 件） */
+  const CITY = DIFFICULT_12[0].lgCode
+  const SET_TOWNS = `${DATA_VERSION}-d-${CITY}-1234-all`
+
+  it('6 桁 scope の -all を受け付け、その市区町村の町名を全部で再採点する', async () => {
+    const set = await buildQuestionSet('d', CITY, '1234', fixtureSource(), true)
+    expect(set.setId).toBe(SET_TOWNS)
+    expect(set.questions).toHaveLength(DIFFICULT_12.length)
+
+    const ddb = memoryDdb()
+    const handler = makeHandler(ddb)
+    const answers = set.questions.map((q, i) => ({
+      questionId: q.id,
+      input: i < 21 ? q.answer : 'ちがう',
+      ms: 2000,
+      passed: false,
+    }))
+    const res = await handler(postEvent({ setId: SET_TOWNS, nickname: 'たろう', clientToken: 'tok-t', answers }))
+    expect(res.statusCode).toBe(201)
+    // 21 / 30 = 70 点（10 問のときの「正答数 × 10」ではない）
+    expect(parse(res).entry).toMatchObject({
+      setId: SET_TOWNS,
+      score: 70,
+      correct: 21,
+      total: 30,
+      mode: 'd',
+      scope: CITY,
+    })
+    // 区分「全問」として数える（全市区町村名と同じ `all` フラグ・同じカウンタ）
+    expect(ddb.items.get(`${setPk(SET_TOWNS)}|entry#2026-10-02T12:00:00.000Z#id-1`)).toMatchObject({ all: true })
+    expect(ddb.items.get(`${STATS_PK}|12#all`)).toMatchObject({ entries: 1, players: 1 })
+  })
+
+  it('町名 × 都道府県の -all は読めない（全町名の単位は市区町村）', async () => {
     const handler = makeHandler(memoryDdb())
     const res = await handler(
       postEvent({
-        setId: `${DATA_VERSION}-d-12-1234-s3`,
+        setId: `${DATA_VERSION}-d-12-1234-all`,
         nickname: 'たろう',
-        clientToken: 'tok-y',
+        clientToken: 'tok-u',
         answers: answersFor(7),
       }),
     )
