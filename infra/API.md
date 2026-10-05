@@ -12,6 +12,7 @@ GitHub Pages は静的配信のため、ランキングは別ホストの API �
   - 都道府県単位（`GET /results?prefCode=`・`GET /stats/prefectures`）は区分ごとに分ける。アイテムの区分は `all` フラグ（無い古いアイテムは 10 問の科目）。全町名の scope は 6 桁なので、先頭 2 桁で親の都道府県の一覧に入る。
   - 全国（scope `'00'`）に全問は無い（都道府県・市区町村ごとの出題なので）。問題バンクは公開サイト `https://akiralab.github.io/chimei-kentei/questions/` から取得する（環境変数 `BANK_BASE_URL` ＋ `DATA_VERSION`）。
 - **setId の先頭は問題バンクの版**（`DATA_VERSION`。現行 `abr20260925r2`）。サーバーは自分がバンドルした版で再導出するため、**版が違う setId は 400**（`invalid`）になる。版を上げたときは Pages のデプロイ後に `npm run deploy:api` が必要（→ [data/README.md の「版の扱い」](../data/README.md#版の扱い)）。
+- **出題対象は `skip` の無い問だけ**（`Question.skip`。読みにひらがな・「ー」以外が混ざる町名 345 件。Issue #50）。抽出（`src/engine/sampler.ts`）が `skip` を飛ばすので、サーバーの再導出にも入らない（API のコードは変更なし）。**抽出の挙動が変わるので、版を据え置いたままでも `npm run deploy:api` による再デプロイが要る** — 再デプロイ前は `skip` を引いていたセットだけ、answers の questionId が一致せず 400（`invalid`）になる。
 - **1 セット 1 登録**（setId × clientToken）。2 回目は 409。
 - clientToken と answers は一覧に出さない。
 

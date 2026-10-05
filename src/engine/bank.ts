@@ -111,6 +111,14 @@ export interface Pool {
   widened: boolean
 }
 
+/**
+ * 出題できる問だけ（`skip` が付いていないもの。types.ts の `Question.skip`）。
+ * meta.json の件数も同じ数え方なので、ここを通せば画面の件数と出題が揃う（Issue #50）
+ */
+function askable(list: Question[]): Question[] {
+  return list.filter((q) => q.skip === undefined)
+}
+
 function uniqueById(list: Question[]): Question[] {
   const seen = new Set<string>()
   const out: Question[] = []
@@ -176,6 +184,9 @@ export async function buildPool(mode: Mode, scope: string, source: BankSource = 
  *  - `'d'` 全町名 … scope は 6 桁（市区町村）。その市区町村の町名（difficult）だけで、
  *    **市区町村名そのものは含めない**（「全町名（97 問）」の 97 を `meta.cities[].towns` と一致させる）
  *
+ * どちらも **`skip` の問は外す**（正解できない問題なので全問の答案にも入れない。Issue #50）。
+ * これで件数が `meta.cities[].towns` と一致する。
+ *
  * 並びは id 順。母集団なので出題順はここでは決めない（sampleQuestions の担当）
  */
 export async function allQuestions(
@@ -190,7 +201,7 @@ export async function allQuestions(
     throw new Error(`都道府県コードが問題バンクにありません: ${prefCode}`)
   }
   const pool = mode === 'e' ? await source.easy() : await source.difficult(prefCode)
-  return pool.filter(scopeMatcher(scope)).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+  return askable(pool.filter(scopeMatcher(scope))).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
 }
 
 /** 母集団が足りないときの案内に使う範囲名。地域は「島しょ」、都道府県は出題の pref から */
@@ -286,13 +297,17 @@ export async function buildQuestionSet(
   }
   // 難易度で絞るのは広げ判定（buildPool）の **あと**。絞って足りなくても広げない
   const narrowed = filterByStars(pool.questions, stars)
+  // 「足りない」は **出題できる件数**（skip を除く）で判定する。sampleQuestions には
+  // skip を含む narrowed をそのまま渡す — シャッフルを母集団全体に対して回すことで、
+  // skip を引かなかった既存セットが前と同じ 10 問のままになる（Issue #50）
+  const askableCount = askable(narrowed).length
   // 地域は都道府県へ広げないので、ここで初めて「10 問に足りない」が起こり得る（例 島しょ × 市区町村名 9 件）。
   // 難易度で絞ったときも同じ案内に乗せる（例 鳥取県 × ★★★ は 4 件）
-  if (narrowed.length < QUESTIONS_PER_SET) {
+  if (askableCount < QUESTIONS_PER_SET) {
     const hint = mode === 'e' ? '全市区町村名で解いてください。' : '範囲を広げてください。'
     throw new Error(
       `${poolRangeName(pool.scope, pool.questions)}の${poolConditionName(mode, stars)}は ` +
-        `${narrowed.length} 件しかないので、${QUESTIONS_PER_SET} 問を組めません。${hint}`,
+        `${askableCount} 件しかないので、${QUESTIONS_PER_SET} 問を組めません。${hint}`,
     )
   }
   return {

@@ -15,11 +15,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from build_questions import (  # noqa: E402
     KANJI_ONLY,
+    askable,
+    attach_skips,
     attach_stars,
     load_stars_inputs,
     check_digit,
     city_code_from_ward,
     has_kanji,
+    skip_reason,
+    stars_triple,
     to_hira,
 )
 from build_stars import kun_forms  # noqa: E402
@@ -188,6 +192,65 @@ class TestAttachStars(unittest.TestCase):
         self.assertEqual(sum(self.report["stars"].values()), 5)
         upper, lower = self.report["stars_bands"]
         self.assertEqual((upper, lower), (4000, 3000))
+
+
+# --- ルール h（skip: reading・Issue #50） ---------------------------------
+class TestSkipReason(unittest.TestCase):
+    """読みにひらがな・ー 以外が混ざる問を出題から外す判定。"""
+
+    def test_ひらがなと長音符だけなら出題できる(self):
+        for answer in ("そうさ", "はなてんひがし", "とーきょー", "ほんちょう", "ー"):
+            with self.subTest(answer=answer):
+                self.assertIsNone(skip_reason(answer))
+
+    def test_全角数字が混ざる読みは_reading(self):
+        # 実データで外れる 345 件の代表例（デジタル庁のカナが漢数字を数字で書いているもの）
+        for answer in ("にし１１じょうきた", "ふじちょうひがし１せん", "たんのちょう１く", "がろちょう４じょう"):
+            with self.subTest(answer=answer):
+                self.assertEqual(skip_reason(answer), "reading")
+
+    def test_半角数字やカタカナや記号も_reading(self):
+        for answer in ("にし11じょう", "ニセコ", "ほん・ちょう", "", "ほんちょうA"):
+            with self.subTest(answer=answer):
+                self.assertEqual(skip_reason(answer), "reading")
+
+
+class TestAttachSkips(unittest.TestCase):
+    def setUp(self):
+        self.questions = [
+            {"id": "o:012211:西十一条北", "answer": "にし１１じょうきた", "stars": 3},
+            {"id": "o:122351:堀川", "answer": "ほりかわ", "stars": 2},
+            {"id": "o:012084:端野町一区", "answer": "たんのちょう１く", "stars": 3},
+        ]
+
+    def test_該当する問だけに_skip_が付く(self):
+        self.assertEqual(attach_skips(self.questions), 2)
+        self.assertEqual([q.get("skip") for q in self.questions], ["reading", None, "reading"])
+
+    def test_skip_は最後のキーとして足す(self):
+        # difficult/*.json の差分が「skip の追加」だけに収まるよう、キー順は崩さない
+        # （src/engine/types.ts の Question は stars の次に skip を宣言している）
+        attach_skips(self.questions)
+        self.assertEqual(list(self.questions[0]), ["id", "answer", "stars", "skip"])
+
+    def test_stars_も_id_も並びも残す(self):
+        # JSON から消さない（母集団の並びが変わると既存セットの 10 問が再現できない）
+        before = [q["id"] for q in self.questions]
+        attach_skips(self.questions)
+        self.assertEqual([q["id"] for q in self.questions], before)
+        self.assertEqual([q["stars"] for q in self.questions], [3, 2, 3])
+
+    def test_askable_は_skip_を除いた問だけを返す(self):
+        attach_skips(self.questions)
+        self.assertEqual([q["id"] for q in askable(self.questions)], ["o:122351:堀川"])
+        # meta の件数（towns / townStars / difficultCount）はこちらで数える
+        self.assertEqual(stars_triple(askable(self.questions)), [0, 1, 0])
+        self.assertEqual(stars_triple(self.questions), [0, 1, 2])
+
+    def test_二度通しても件数は増えない(self):
+        self.assertEqual(attach_skips(self.questions), 2)
+        self.assertEqual(attach_skips(self.questions), 2)
+        self.assertEqual(len(askable(self.questions)), 1)
 
 
 class TestLoadStarsInputs(unittest.TestCase):

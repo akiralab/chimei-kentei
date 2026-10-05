@@ -31,9 +31,14 @@ function pick<T>(files: Record<string, () => Promise<T>>, suffix: string): Promi
 const NATIONWIDE: Record<Stars, number> = { 1: 566, 2: 601, 3: 533 }
 const EASY_TOTAL = 1700
 
-/** 町名 107,681 件の ★ の分布（judge_towns ＝ B2×B4×B5。Issue #46 の案 C） */
-const TOWNS_NATIONWIDE: Record<Stars, number> = { 1: 38_863, 2: 40_931, 3: 27_887 }
-const TOWNS_TOTAL = 107_681
+/**
+ * **出題できる**町名 107,336 件の ★ の分布（judge_towns ＝ B2×B4×B5。Issue #46 の案 C）。
+ * JSON の配列は 107,681 件だが、ルール h の `skip` 345 件は meta の件数から除く。
+ * skip の 345 件はすべて ★★★（読みを音訓で分解できない）なので、
+ * 減ったのは ★★★ だけ（27,887 → 27,542。Issue #50）
+ */
+const TOWNS_NATIONWIDE: Record<Stars, number> = { 1: 38_863, 2: 40_931, 3: 27_542 }
+const TOWNS_TOTAL = 107_336
 
 /** 全町名の検算に使う市区町村（Issue #46 のセット ID 例 `-d-122351-1234-all`） */
 const SOUSA = '122351'

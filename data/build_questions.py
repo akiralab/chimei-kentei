@@ -70,6 +70,44 @@ def has_kanji(stem: str) -> bool:
     return KANJI_ANY.search(stem) is not None
 
 
+# ルール h: 正解として受け付けられる読み（ひらがなと長音符だけ）。
+# 解答欄（src/components/HiraganaInput.tsx）はこれ以外の文字を打てないので、
+# ここに合わない読みは「正解できない問題」になる。実データで外れるのはすべて全角数字で、
+# デジタル庁のカナが漢数字を数字で書いているもの（西十一条北 ＝ にし１１じょうきた）。
+KANA_ANSWER = re.compile(r"^[ぁ-ゖー]+$")
+
+
+def skip_reason(answer: str) -> str | None:
+    """出題しない理由。読みがひらがな・長音符だけなら None（出題できる）。
+
+    ルール h。読みを数字から直すのは土地と後続の字で変わる（一線 ＝ いっせん／
+    一区 ＝ いっく／四条 ＝ よじょう・しじょう）ので、機械で付けた読みを正解にはしない
+    （Issue #50 の「採らない案」）。
+    """
+    return None if KANA_ANSWER.match(answer) else "reading"
+
+
+def attach_skips(questions: list) -> int:
+    """各問に `skip`（出題しない理由）を**破壊的に**書き込み、付いた件数を返す。
+
+    **JSON からは消さない。** 抽出（src/engine/sampler.ts）は id 順の母集団を setId の
+    乱数で部分シャッフルして選ぶので、母集団から 1 件消すとその範囲のセットがすべて
+    別の 10 問になる（既存の共有リンクと登録済みの答案が合わなくなる）。`stars` も残す。
+    """
+    n = 0
+    for q in questions:
+        reason = skip_reason(q["answer"])
+        if reason is not None:
+            q["skip"] = reason
+            n += 1
+    return n
+
+
+def askable(questions: list) -> list:
+    """出題できる問だけ（ルール h の `skip` が付いていないもの）。meta の件数はこれで数える。"""
+    return [q for q in questions if "skip" not in q]
+
+
 # ルール b: 市区町村の接尾辞とその読み
 SUFFIX_KANA = {"市": ("シ",), "区": ("ク",), "町": ("チョウ", "マチ"), "村": ("ソン", "ムラ")}
 
@@ -375,30 +413,40 @@ def main() -> int:
     difficult = build_difficult(name_csv, ward_to_city, pref_name_by_code, report)
     attach_town_stars(difficult, kd, report)
 
+    # ルール h（Issue #50）: 読みにひらがな・ー 以外が混ざる問に `skip` を付ける。
+    # ★ を付けた **あと**に通す（B5 ＝ 同表記異読みは母集団全体で数えるので、
+    # skip を先に外すと残る町名の ★ が動いてしまう）。
+    report["skip_easy"] = attach_skips(easy)
+    report["skip_difficult"] = sum(attach_skips(qs) for qs in difficult.values())
+    report["skipped_readings"] = report["skip_easy"] + report["skip_difficult"]
+
     # 市区町村ごとの町名の件数と ★ 別内訳。選択画面が meta だけで
-    # 「全町名（97 問）」と「★★★ 26問」を出せるようにする（町名 0 件は 0 / [0,0,0]）
+    # 「全町名（97 問）」と「★★★ 26問」を出せるようにする（町名 0 件は 0 / [0,0,0]）。
+    # **数えるのは出題できる問だけ**（skip を除く）＝ 画面の件数と出題が一致する
     towns_by_lg: dict = defaultdict(list)
     for qs in difficult.values():
-        for q in qs:
+        for q in askable(qs):
             towns_by_lg[q["lgCode"]].append(q)
     for city in cities_meta:
         in_city = towns_by_lg.get(city["lgCode"], [])
         city["towns"] = len(in_city)
         city["townStars"] = stars_triple(in_city)
 
-    easy_by_pref = Counter(q["prefCode"] for q in easy)
+    easy_by_pref = Counter(q["prefCode"] for q in askable(easy))
+    difficult_askable = {code: askable(qs) for code, qs in difficult.items()}
     meta = {
         "dataVersion": DATA_VERSION,
         "generatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
         "source": SOURCE,
         "starsNote": STARS_NOTE,
+        "skippedReadings": report["skipped_readings"],
         "prefectures": [
             {
                 "code": code,
                 "name": pref_name_by_code[code],
                 "easyCount": easy_by_pref[code],
-                "difficultCount": len(difficult.get(code, [])),
-                "difficultStars": stars_triple(difficult.get(code, [])),
+                "difficultCount": len(difficult_askable.get(code, [])),
+                "difficultStars": stars_triple(difficult_askable.get(code, [])),
             }
             for code in sorted(pref_name_by_code)
         ],
@@ -434,6 +482,10 @@ def main() -> int:
     ))
     print(f"  B5（同表記異読みで +1 が効いた町名）: {report['town_b5']} 件"
           f"（判定は data/build_stars.py の judge_towns）")
+    print(f"ルール h で出題しない（skip: reading）: {report['skipped_readings']} 件"
+          f"（町名 {report['skip_difficult']}／市区町村名 {report['skip_easy']}）")
+    print(f"  JSON には残して meta の件数から除く（出題できる町名は "
+          f"{report['difficult_total'] - report['skip_difficult']} 件）")
     towns = [c["towns"] for c in meta["cities"]]
     print(f"  町名を持つ市区町村: {sum(1 for n in towns if n)} / {len(towns)} 件"
           f"（最大 {max(towns)}）")
