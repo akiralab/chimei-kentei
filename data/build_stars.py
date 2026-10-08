@@ -11,9 +11,15 @@
     Issue #46 の案 C。**A1 は使わない**（町名に人口は無く、所属市区町村の人口は
     「町名の有名さ」を表さない）。B2 の素点（a=1／b=2／c=3）に B4 を加算し、
     **B5**（同じ表記が全国の町名で 2 通り以上に読まれる）を **B2 が a のときだけ** +1 する。
+    さらに町名だけ、(b) 変化あり の候補を 2 つ広げる（Issue #54）。
+      ① 五段動詞の訓読みの**連用形**（ふ.す → ふし・す.む → すみ）＝ 規則（renyokei_forms）
+      ② 地名で定着した名乗り読みの**人手の上書き表**（data/stars_manual.tsv）
+    どちらも **judge_towns だけ**が使う（judge_all ＝ 市区町村名は従来どおり名乗りを (c) に
+    置く。規則を当てると登別・盛岡・成田 などの ★ が動いて「今日の10問」の過去の
+    セットが別の 10 問になるため。Issue #54 の「やらないこと」）。
 
 **この判定が問題バンクの `stars` の正本。** `build_questions.py` が judge_all() /
-judge_towns() を呼んで各問に書き込む（＝ここを直すと問題バンクの難易度が変わるので、
+judge_towns_with_rules() を呼んで各問に書き込む（＝ここを直すと問題バンクの難易度が変わるので、
 変更後は `npm run build:questions` で作り直す）。このスクリプト単体では JSON を
 書き換えず、分布・クロス集計・アンカーの検算だけを出す。
 
@@ -22,6 +28,7 @@ judge_towns() を呼んで各問に書き込む（＝ここを直すと問題バ
     public/questions/{DATA_VERSION}/difficult/*.json   … --towns のときの町名 107,681 件
     public/geo/municipalities.json                     … lgCode → population（国勢調査 2020）
     KANJIDIC2                                          … 漢字の音読み・訓読み・名乗りと配当学年
+    data/stars_manual.tsv                              … 町名だけに当てる人手の上書き表（Issue #54）
 
 出力
     標準出力（既定）  … 帯の境界・★ の分布・クロス集計・アンカーの検算
@@ -37,6 +44,7 @@ judge_towns() を呼んで各問に書き込む（＝ここを直すと問題バ
     python3 data/build_stars.py --towns                           # 町名（B2×B4×B5・A1 なし）
     python3 data/build_stars.py --towns --sample 100 --seed 20261005 \
         --markdown /tmp/towns100.md                               # Issue #46 のサンプル表
+    python3 data/build_stars.py --towns --manual /dev/null        # 上書き表なしで町名を判定する
     python3 -m unittest data/test_build_stars.py                  # 分解判定の単体テスト
 
 漢字の読みの出典
@@ -57,6 +65,7 @@ import sys
 import urllib.request
 import xml.etree.ElementTree as ET
 from collections import Counter, defaultdict
+from functools import partial
 from pathlib import Path
 
 from build_questions import DATA_VERSION, to_hira
@@ -64,6 +73,8 @@ from build_questions import DATA_VERSION, to_hira
 REPO = Path(__file__).resolve().parent.parent
 KANJIDIC2_URL = "https://www.edrdg.org/kanjidic/kanjidic2.xml.gz"
 KANJIDIC2_CACHE = Path.home() / "workspace" / "abr-data" / "raw" / "kanjidic2" / "kanjidic2.xml.gz"
+# 町名だけに当てる人手の上書き表（Issue #54）。judge_towns が読む。
+STARS_MANUAL = Path(__file__).resolve().parent / "stars_manual.tsv"
 
 # --- A1: 人口の分位で 3 帯に切る ------------------------------------------
 # 全国一律の分位点（Issue #33「分位点は全国一律で切る」）。easy.json 1,700 件の人口分布は
@@ -141,6 +152,16 @@ EXTRA_KANA_READINGS = {
 # KANJIDIC2 に無くても「読めない字」としては数えない）。
 REPEAT_MARK = "々"
 
+# --- 連用形（五段動詞）と人手の上書き表の種別ラベル（Issue #54）---------------
+# ウ段 → イ段。送り仮名の末尾を変えて連用形を作る（す.む → すみ・ふ.す → ふし）。
+U_TO_I = {"う": "い", "く": "き", "ぐ": "ぎ", "す": "し", "つ": "ち",
+          "ぬ": "に", "ぶ": "び", "む": "み", "る": "り"}
+# 末尾が「る」で直前がエ段なら下一段（あ.ける・こ.える）。接頭辞 あけ・こえ は
+# kun_forms が既に出すので、連用形は作らない（あけり のような形を混ぜない）。
+E_ROW = "えけげせぜてでねへべぺめれ"
+VERB_KIND = "連用"  # 連用形で読んだ印。format_segments に「住=すみ(連用)」と出る
+MANUAL_KIND = "定着"  # 上書き表で読んだ印。「長谷=はせ(定着)」
+
 
 def strip_okurigana(kun: str) -> str:
     """KANJIDIC2 の訓読みから送り仮名と接辞マーク（-）を落とす。
@@ -158,9 +179,34 @@ def kun_forms(kun: str) -> list:
     return [full[:n] for n in range(len(stem), len(full) + 1) if full[:n]]
 
 
+def renyokei_forms(kun: str) -> list:
+    """五段動詞の訓読み（送り仮名付き）から連用形を作る（Issue #54）。
+    'ふ.す' → ['ふし']、'す.む' → ['すみ']、'あ.る' → ['あり']、'と.まる' → ['とまり']。
+
+    地名では動詞の連用形がそのまま使われる（住吉＝すみよし・伏見＝ふしみ・成田＝なりた）。
+    送り仮名の末尾がウ段なら、そこをイ段に変えた形を 1 つ返す。
+    返さないのは次の場合:
+      - 送り仮名が無い（'はら'・'まつ' のような名詞の訓。松＝まち を作らないため）
+      - 送り仮名の末尾がウ段でない（'ちい.さい'・'たか.い'）
+      - 末尾が「る」で直前がエ段 ＝ 下一段（'あ.ける' → あけり は作らない）
+    """
+    if "." not in kun:
+        return []
+    stem, okuri = kun.split(".", 1)
+    stem = stem.replace("-", "")
+    okuri = okuri.replace("-", "")
+    if not stem or not okuri or okuri[-1] not in U_TO_I:
+        return []
+    full = stem + okuri
+    if okuri[-1] == "る" and len(full) >= 2 and full[-2] in E_ROW:
+        return []
+    return [full[:-1] + U_TO_I[okuri[-1]]]
+
+
 def load_kanjidic(path: Path = KANJIDIC2_CACHE, download: bool = False) -> dict:
-    """KANJIDIC2 を読み、{漢字: {'on', 'kun', 'nanori', 'grade'}} を返す。
+    """KANJIDIC2 を読み、{漢字: {'on', 'kun', 'verb_stem', 'nanori', 'grade'}} を返す。
     読みはすべてひらがな。'kun' は kun_forms() で展開済み（先頭が幹）。
+    'verb_stem' は renyokei_forms() で作った五段動詞の連用形（Issue #54）。
     'grade' は常用漢字の配当学年 1〜6／中学 8／人名用 9・10／常用外は None。"""
     if not path.exists():
         if not download:
@@ -182,19 +228,22 @@ def load_kanjidic(path: Path = KANJIDIC2_CACHE, download: bool = False) -> dict:
         lit = ch.findtext("literal")
         if not lit:
             continue
-        on, kun = [], []
+        on, kun, verb_stem = [], [], []
         for r in ch.iter("reading"):
             if not r.text:
                 continue
             if r.get("r_type") == "ja_on":
                 on.append(to_hira(r.text).replace("-", "").split(".")[0])
             elif r.get("r_type") == "ja_kun":
-                kun.extend(kun_forms(to_hira(r.text)))
+                raw = to_hira(r.text)
+                kun.extend(kun_forms(raw))
+                verb_stem.extend(renyokei_forms(raw))
         nanori = [to_hira(n.text) for n in ch.iter("nanori") if n.text]
         grade = ch.findtext("misc/grade")
         table[lit] = {
             "on": on,
             "kun": kun,
+            "verb_stem": list(dict.fromkeys(verb_stem)),
             "nanori": nanori,
             "grade": int(grade) if grade else None,
         }
@@ -218,27 +267,88 @@ def plain_candidates(char: str, kd: dict) -> list:
     return _dedup(out)
 
 
-def variant_candidates(char: str, kd: dict) -> list:
+def load_manual(path: Path = STARS_MANUAL) -> dict:
+    """人手の上書き表（data/stars_manual.tsv）を読む（Issue #54）。
+
+    1 行 1 読み・タブ区切りで `kind`（kanji / word）・`key`・`reading`・`note` の 4 列。
+    `#` 始まりの行と空行はコメント。返す形は
+
+        {"kanji": {字: [(読み, 種別), ...]},        … variant_candidates に足す
+         "word":  {語: [(読み, 種別), ...]},        … decompose が 1 セグメントとして試す
+         "rows":  [{"kind", "key", "reading", "note", "readings"}, ...]}
+
+    `rows` は表に書いた順で、`readings` はその行の読みと音便のゆれ（連濁など）の集合。
+    `--towns` が「表のどの行が何件に効いたか」を数えるのに使う。
+    """
+    manual = {"kanji": defaultdict(list), "word": {}, "rows": []}
+    if not path.exists():
+        raise SystemExit(f"上書き表が無い: {path}\n  --manual で場所を渡すか、表を作る。")
+    for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        parts = line.split("\t")
+        if len(parts) < 3:
+            raise SystemExit(f"{path}:{lineno} 列が足りない（kind/key/reading/note）: {line!r}")
+        kind, key, reading = (p.strip() for p in parts[:3])
+        note = parts[3].strip() if len(parts) > 3 else ""
+        if kind not in ("kanji", "word"):
+            raise SystemExit(f"{path}:{lineno} kind は kanji か word: {kind!r}")
+        if kind == "kanji" and len(key) != 1:
+            raise SystemExit(f"{path}:{lineno} kanji の key は 1 字（語は word 行で）: {key!r}")
+        pairs = _dedup([(reading, MANUAL_KIND), *_sound_changes(reading, MANUAL_KIND)])
+        if kind == "kanji":
+            # 音便のゆれは variant_candidates がまとめて足すので、ここは読みそのものだけ
+            manual["kanji"][key].append((reading, MANUAL_KIND))
+        else:
+            # 語は decompose に直接渡る（variant_candidates を通らない）ので、ここで足す
+            manual["word"].setdefault(key, []).extend(pairs)
+        manual["rows"].append(
+            {"kind": kind, "key": key, "reading": reading, "note": note,
+             "readings": {r for r, _k in pairs}}
+        )
+    # 語は長い方から試す（短い語が長い語を食わないように）
+    manual["word"] = dict(sorted(manual["word"].items(), key=lambda kv: -len(kv[0])))
+    manual["kanji"] = dict(manual["kanji"])
+    return manual
+
+
+def variant_candidates(char: str, kd: dict, manual: dict | None = None,
+                       verb_stem: bool = False) -> list:
     """(b) 変化あり: (a) に音便のゆれを足す。連濁・半濁音化・促音化・長音のゆれ・
     末尾の母音の脱落と、漢字以外の字の追加読み（ケ→か など）。
-    **名乗り読みは含めない**（nanori_candidates を参照）。"""
+    **名乗り読みは含めない**（nanori_candidates を参照）。
+
+    町名だけ（Issue #54）、呼び出し側が次の 2 つを足せる。どちらも音便のゆれを通す。
+      verb_stem=True … 五段動詞の連用形（種別「連用」）
+      manual         … 人手の上書き表の kanji 行（種別「定着」）
+    """
     out = list(plain_candidates(char, kd))
     for r in EXTRA_KANA_READINGS.get(char, ()):
         out.append((r, "字"))
+    entry = kd.get(char)
+    if verb_stem and entry:
+        for r in entry.get("verb_stem", ()):
+            out.append((r, VERB_KIND))
+    if manual:
+        out.extend(manual["kanji"].get(char, ()))
     for r, kind in list(out):
         out.extend(_sound_changes(r, kind))
     return _dedup(out)
 
 
-def nanori_candidates(char: str, kd: dict) -> list:
+def nanori_candidates(char: str, kd: dict, manual: dict | None = None,
+                      verb_stem: bool = False) -> list:
     """(b) に名乗り読み（とその音便）を足した候補。
 
     既定ではこれを **(c) の内訳を人が読めるようにするためだけ**に使い、★ の判定では
     (b) に昇格させない（`--nanori b` で切り替えられる）。KANJIDIC2 の <nanori> には
     「その地名があるからこそ載っている読み」が入っているため: 宿=すく ← 宿毛、
     南=は・風=え・原=ばる ← 南風原。名乗りを (b) に入れると ★3 にしたい当て字が
-    そのまま ★2 に落ち、アンカーの一致が 7/11 → 4/11 に下がる。"""
-    out = list(variant_candidates(char, kd))
+    そのまま ★2 に落ち、アンカーの一致が 7/11 → 4/11 に下がる。
+
+    「どの名乗りを地名として認めるか」を 1 行ずつ選ぶのが人手の上書き表（Issue #54）で、
+    そちらは種別「定着」で (b) に入る。"""
+    out = list(variant_candidates(char, kd, manual, verb_stem))
     entry = kd.get(char)
     if entry:
         for r in entry["nanori"]:
@@ -277,11 +387,24 @@ def _dedup(pairs: list) -> list:
     return out
 
 
-def decompose(display: str, answer: str, candidates) -> list:
+def decompose(display: str, answer: str, candidates, words: dict | None = None) -> list:
     """`display` を 1 字ずつ読みに割り当てて `answer` を左から消費できるかを DP で判定する。
     割り当てられたら [(字, 読み, 種別), ...]、できなければ None。
-    `candidates(char, prev_reading)` が候補を返す。「々」は直前の字の読みを引き継ぐ。"""
+    `candidates(char, prev_reading)` が候補を返す。「々」は直前の字の読みを引き継ぐ。
+
+    `words`（{語: [(読み, 種別), ...]}）を渡すと、**語をまとめて 1 セグメント**としても
+    試す（長谷＝はせ のような熟字訓。Issue #54 の上書き表の word 行）。語を先に試し、
+    その先で行き詰まったら 1 字ずつの候補に戻るので、渡しても分解できる範囲は狭まらない。"""
     memo = {}
+
+    def options(i: int, prev: str) -> list:
+        out = []
+        if words:
+            for word, readings in words.items():  # 長い語から（load_manual が並べる）
+                if display.startswith(word, i):
+                    out.extend((len(word), r, k) for r, k in readings)
+        out.extend((1, r, k) for r, k in candidates(display[i], prev))
+        return out
 
     def rec(i: int, j: int, prev: str):
         if i == len(display):
@@ -290,11 +413,11 @@ def decompose(display: str, answer: str, candidates) -> list:
         if key in memo:
             return memo[key]
         memo[key] = None  # 同じ状態を 2 度展開しない
-        for reading, kind in candidates(display[i], prev):
+        for width, reading, kind in options(i, prev):
             if answer.startswith(reading, j):
-                tail = rec(i + 1, j + len(reading), reading)
+                tail = rec(i + width, j + len(reading), reading)
                 if tail is not None:
-                    memo[key] = [(display[i], reading, kind)] + tail
+                    memo[key] = [(display[i : i + width], reading, kind)] + tail
                     break
         return memo[key]
 
@@ -318,20 +441,59 @@ def _with_repeat(base, kd, sound_changes: bool):
     return inner
 
 
-def classify_b2(display: str, answer: str, kd: dict, nanori_level: str = "c") -> tuple:
+def classify_b2(display: str, answer: str, kd: dict, nanori_level: str = "c",
+                manual: dict | None = None, verb_stem: bool = False) -> tuple:
     """B2 の段階と、人が検算できる割り当てを返す → (level, 内訳).
     level は 'a' 素直 / 'b' 変化あり / 'c' 読めない。
-    nanori_level='b' にすると名乗り読みでの分解を (b) として認める。"""
-    for level, fn in (("a", plain_candidates), ("b", variant_candidates)):
-        segs = decompose(display, answer, _with_repeat(fn, kd, level != "a"))
-        if segs is not None:
-            return level, format_segments(segs)
-    segs = decompose(display, answer, _with_repeat(nanori_candidates, kd, True))
+    nanori_level='b' にすると名乗り読みでの分解を (b) として認める。
+
+    `manual`（人手の上書き表）と `verb_stem`（五段動詞の連用形）は **町名だけ**で有効に
+    する軸なので既定は無効。judge_towns が渡し、judge_all（市区町村名）は渡さない
+    （Issue #54 の「やらないこと」）。"""
+    level, detail, _segs = classify_b2_segments(
+        display, answer, kd, nanori_level, manual, verb_stem)
+    return level, detail
+
+
+def classify_b2_segments(display: str, answer: str, kd: dict, nanori_level: str = "c",
+                         manual: dict | None = None, verb_stem: bool = False) -> tuple:
+    """classify_b2 の中身。→ (level, 内訳, 割り当て).
+    割り当て [(字または語, 読み, 種別), ...] は「連用形・上書き表が効いたか」を
+    呼び出し側（judge_towns・--towns の検算）が数えるために返す。分解不能なら []。"""
+    words = manual["word"] if manual else None
+    variant = partial(variant_candidates, manual=manual, verb_stem=verb_stem)
+    nanori = partial(nanori_candidates, manual=manual, verb_stem=verb_stem)
+    # (a) 素直 には上書き表も連用形も入れない（素直な音訓だけ）
+    segs = decompose(display, answer, _with_repeat(plain_candidates, kd, False))
+    if segs is not None:
+        return "a", format_segments(segs), segs
+    segs = decompose(display, answer, _with_repeat(variant, kd, True), words)
+    if segs is not None:
+        return "b", format_segments(segs), segs
+    segs = decompose(display, answer, _with_repeat(nanori, kd, True), words)
     if segs is not None:
         if nanori_level == "b":
-            return "b", format_segments(segs)
-        return "c", "名乗り: " + format_segments(segs)
-    return "c", "分解不能"
+            return "b", format_segments(segs), segs
+        return "c", "名乗り: " + format_segments(segs), segs
+    return "c", "分解不能", []
+
+
+def used_verb_stem(segs: list) -> bool:
+    """割り当ての中で五段動詞の連用形を使ったか（Issue #54 の規則が効いた印）。"""
+    return any(kind.startswith(VERB_KIND) for _c, _r, kind in segs)
+
+
+def manual_hits(segs: list, manual: dict | None) -> list:
+    """割り当ての中で使った上書き表の行番号（表の順）。効いた行を数えるのに使う。"""
+    if not manual:
+        return []
+    hits = []
+    for i, row in enumerate(manual["rows"]):
+        for seg, reading, kind in segs:
+            if seg == row["key"] and kind.startswith(MANUAL_KIND) and reading in row["readings"]:
+                hits.append(i)
+                break
+    return hits
 
 
 def format_segments(segs: list) -> str:
@@ -434,19 +596,25 @@ def town_reading_counts(questions: list) -> dict:
     return {display: len(answers) for display, answers in readings.items()}
 
 
-def judge_towns(questions: list, kd: dict, nanori_level: str = "c") -> list:
+def judge_towns(questions: list, kd: dict, nanori_level: str = "c",
+                manual: dict | None = None, verb_stem: bool = False) -> list:
     """町名（mode d）の ★ を B2 × B4 × B5 で判定する（Issue #46 の案 C。A1 は使わない）。
 
     `questions` は difficult/{prefCode}.json の要素（id / prefCode / pref / lgCode /
     city / display / answer）。**B5 は渡した全体で数える**ので全国分をまとめて渡す。
 
-    返す行には判定の根拠（b2detail・b4detail・readings・b5）も入れて、
+    `manual`（人手の上書き表）・`verb_stem`（五段動詞の連用形）は町名だけの軸（Issue #54）。
+    **問題バンクに書く値は judge_towns_with_rules が正本**で、ここは両方を渡さない
+    「規則なし」の判定も取れるようにしてある（--towns の before → after の検算用）。
+
+    返す行には判定の根拠（b2detail・b4detail・readings・b5・verbStem・manual）も入れて、
     ★ がその値になった理由を人が 1 件ずつ検算できるようにする。
     """
     counts = town_reading_counts(questions)
     rows = []
     for q in questions:
-        level, detail = classify_b2(q["display"], q["answer"], kd, nanori_level)
+        level, detail, segs = classify_b2_segments(
+            q["display"], q["answer"], kd, nanori_level, manual, verb_stem)
         rank, rank_detail = b4_rank(q["display"], kd)
         n_readings = counts[q["display"]]
         b5 = level == "a" and n_readings >= 2
@@ -467,11 +635,24 @@ def judge_towns(questions: list, kd: dict, nanori_level: str = "c") -> list:
                 "b4detail": rank_detail,
                 "readings": n_readings,
                 "b5": b5,
+                "verbStem": used_verb_stem(segs),
+                "manual": manual_hits(segs, manual),
                 "baseStars": base,
                 "stars": min(3, base + bonus),
             }
         )
     return rows
+
+
+def judge_towns_with_rules(questions: list, kd: dict, manual: dict | None = None,
+                           manual_path: Path = STARS_MANUAL, nanori_level: str = "c") -> list:
+    """**問題バンクの町名の `stars` の正本**（Issue #54）。judge_towns に町名だけの軸
+    （五段動詞の連用形 ＋ 人手の上書き表）を両方当てて判定する。
+    build_questions.attach_town_stars と --towns の「after」はどちらもこれを呼ぶので、
+    **問題バンクの値と検算の値がずれない**。`manual` を渡さなければ表を読み込む。"""
+    return judge_towns(questions, kd, nanori_level,
+                       manual=manual if manual is not None else load_manual(manual_path),
+                       verb_stem=True)
 
 
 # --- アンカー（既知例での検算） -------------------------------------------
@@ -498,6 +679,7 @@ TOWN_ANCHORS = (
     ("放出東", 3),    # 名乗り（出=てん）でしか分解できない
     ("舎人", 3),      # 熟字訓・分解不能
     ("御器所", 3),    # 分解不能
+    ("東雲町", 3),    # 名乗り（東=しの）。上書き表に入れなかった読み（Issue #54）
     ("雑餉隈町", 3),  # 分解不能 ＋ 表外（餉）
     ("立売堀", 3),    # 分解不能
     ("太秦", 3),      # 分解不能 ＋ 人名用（秦）
@@ -512,6 +694,15 @@ TOWN_ANCHORS = (
     ("大平", 2),      # おおひら（a ＋ B5）と おおびら（b）がどちらも ★2
     ("白金", 2),      # a ＋ B5（しろがね／しろかね）
     ("十三", 1),      # a ＋ 読み 1 通り
+    # 以下は Issue #54 で ★3 から落ちたもの（規則＝連用形／上書き表＝定着した名乗り）
+    ("伏見", 2),      # b 伏=ふし（連用。ふ.す）
+    ("成田町", 2),    # b 成=なり（連用。な.る）
+    ("住吉町", 2),    # b 住=すみ（連用。す.む）
+    ("有明", 2),      # b 有=あり（連用。あ.る）
+    ("清水", 2),      # b 清=し（上書き表）
+    ("春日", 2),      # b 春=かす（上書き表）＋ 日=が（連濁）
+    ("常盤町", 2),    # b 常=とき・盤=わ（上書き表の 2 行）
+    ("長谷", 2),      # b 長谷=はせ（上書き表の word 行）
 )
 TOWN_ANCHOR_MAX = 2
 
@@ -625,15 +816,70 @@ def town_anchor_rows(rows: list) -> list:
     return picked
 
 
+def star_distribution(rows: list) -> str:
+    """★ の分布を 1 行で（件数と割合）。`rows` は judge_towns / judge_all の返り値。"""
+    stars = Counter(r["stars"] for r in rows)
+    return " / ".join(f"{'★' * s} {stars[s]:,} ({stars[s] / len(rows):.0%})" for s in (1, 2, 3))
+
+
+def askable_rows(rows: list, questions: list) -> list:
+    """出題できる問だけ（ルール h の `skip` が付いていないもの）。README の分布はこちら。"""
+    skipped = {q["id"] for q in questions if "skip" in q}
+    return [r for r in rows if r["id"] not in skipped]
+
+
+def print_rule_effects(rows: list, base_rows: list, manual: dict) -> None:
+    """規則（連用形）と上書き表が「(c) 読めない」から何件を動かしたかを出す（Issue #54）。
+    表の行ごとの件数も出して、1 件も効いていない行（＝消してよい行）を見つけられるようにする。"""
+    was_c = {r["id"] for r in base_rows if r["b2"] == "c"}
+    base_stars = {r["id"]: r["stars"] for r in base_rows}
+    moved = [r for r in rows if r["id"] in was_c and r["b2"] == "b"]
+    by_rule = [r for r in moved if r["verbStem"] and not r["manual"]]
+    by_manual = [r for r in moved if r["manual"] and not r["verbStem"]]
+    by_both = [r for r in moved if r["manual"] and r["verbStem"]]
+    print(f"(c) 読めない → (b) 変化あり に動いた町名: {len(moved):,} 件"
+          f"（規則（連用形）だけ {len(by_rule):,} ／ 上書き表だけ {len(by_manual):,} ／"
+          f" 両方 {len(by_both):,}）")
+    for label, group in (("規則（連用形）", by_rule), ("上書き表", by_manual), ("両方", by_both)):
+        dropped = [r for r in group if r["stars"] < base_stars[r["id"]]]
+        print(f"  {label}: {len(group):,} 件のうち ★ が下がったのは {len(dropped):,} 件"
+              f"（残りは B4 ＝ 人名用・表外の加算で ★★★ のまま）")
+    changed = [r for r in rows if r["stars"] != base_stars[r["id"]]]
+    moves = Counter((base_stars[r["id"]], r["stars"]) for r in changed)
+    print(f"★ が変わった町名: {len(changed):,} 件"
+          + ("（" + " / ".join(f"{'★' * a}→{'★' * b} {n:,}" for (a, b), n in sorted(moves.items()))
+             + "）" if changed else ""))
+
+    hits = Counter()
+    for r in moved:
+        for i in r["manual"]:
+            hits[i] += 1
+    print(f"上書き表の行ごとの効き（全 {len(manual['rows'])} 行・data/stars_manual.tsv）:")
+    for i, row in enumerate(manual["rows"]):
+        n = hits[i]
+        mark = "  ⚠ 0 件（この行は消してよい）" if not n else ""
+        print(f"  {row['kind']:<5} {row['key']}={row['reading']:<4} {n:>6,} 件{mark}"
+              f"  … {row['note']}")
+    zero = [row for i, row in enumerate(manual["rows"]) if not hits[i]]
+    print(f"  0 件の行: {len(zero)} 行"
+          + ("（" + "・".join(f"{r['key']}={r['reading']}" for r in zero) + "）" if zero else ""))
+
+
 def main_towns(args: argparse.Namespace) -> int:
     """--towns: 町名（mode d）の ★ を B2×B4×B5 で判定して分布とサンプルを出す。"""
     questions = load_town_questions(args.difficult_dir)
     kd = load_kanjidic(args.kanjidic, download=args.download)
-    rows = judge_towns(questions, kd, args.nanori)
+    manual = load_manual(args.manual)
+    # before: 町名だけの軸（連用形・上書き表）を当てない判定。after との差が Issue #54 の効果
+    base_rows = judge_towns(questions, kd, args.nanori)
+    rows = judge_towns_with_rules(questions, kd, manual, nanori_level=args.nanori)
 
-    print(f"町名 {len(rows)} 件 / KANJIDIC2 {len(kd)} 字 / 名乗りの扱い=({args.nanori})")
+    print(f"町名 {len(rows)} 件 / KANJIDIC2 {len(kd)} 字 / 名乗りの扱い=({args.nanori})"
+          f" / 上書き表 {len(manual['rows'])} 行（{args.manual}）")
     print("軸: B2（音訓分解）の素点 ＋ B4（漢字の難しさ）＋ B5（同表記異読み・a のみ +1）"
           "／ A1（人口）は使わない")
+    print("町名だけの軸（Issue #54）: 五段動詞の連用形（種別「連用」）と"
+          "人手の上書き表（種別「定着」）を (b) に入れる")
 
     b2 = Counter(r["b2"] for r in rows)
     print("B2: " + " / ".join(
@@ -651,9 +897,16 @@ def main_towns(args: argparse.Namespace) -> int:
     print(f"B5: 同じ表記が 2 通り以上に読まれる町名 {multi} 件 "
           f"／ そのうち B2 が (a) で +1 が効いた {b5} 件")
 
-    stars = Counter(r["stars"] for r in rows)
-    print(f"★ の分布（全 {len(rows)} 件）: "
-          + " / ".join(f"{'★' * s} {stars[s]} ({stars[s] / len(rows):.0%})" for s in (1, 2, 3)))
+    print(f"★ の分布（全 {len(rows):,} 件）")
+    print(f"  before（町名だけの軸なし）: {star_distribution(base_rows)}")
+    print(f"  after （連用形 ＋ 上書き表）: {star_distribution(rows)}")
+    askable_base = askable_rows(base_rows, questions)
+    askable_after = askable_rows(rows, questions)
+    print(f"★ の分布（出題できる {len(askable_after):,} 件・ルール h の skip を除く。"
+          f"README の表と同じ母集団）")
+    print(f"  before: {star_distribution(askable_base)}")
+    print(f"  after : {star_distribution(askable_after)}")
+    print_rule_effects(rows, base_rows, manual)
 
     cube = Counter((r["b2"], r["b4"], r["b5"]) for r in rows)
     print("B2 × B4 × B5 の各升（件数／確定する ★）:")
@@ -712,6 +965,8 @@ def main() -> int:
                     help="--towns のときに読む町名の問題バンク")
     ap.add_argument("--geo", type=Path, default=REPO / "public" / "geo" / "municipalities.json")
     ap.add_argument("--kanjidic", type=Path, default=KANJIDIC2_CACHE)
+    ap.add_argument("--manual", type=Path, default=STARS_MANUAL,
+                    help="町名に当てる人手の上書き表（Issue #54。--towns のときだけ読む）")
     ap.add_argument("--download", action="store_true", help="KANJIDIC2 が無ければ取得する")
     ap.add_argument("--towns", action="store_true",
                     help="市区町村名のかわりに町名（mode d）を判定する（B2×B4×B5・A1 なし）")

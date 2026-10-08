@@ -41,6 +41,8 @@ STARS_NOTE = (
     "B2×A1 の素点に B4 を加算する。"
     "町名は A1 を使わず（B2×B4×B5）、B2 の素点（素直 1／変化あり 2／読めない 3）に B4 と "
     "B5 = 同じ表記が全国の町名で 2 通り以上に読まれる（B2 が素直のときだけ +1）を加算する。"
+    "町名の B2 だけ、五段動詞の訓読みの連用形（住 = すみ・伏 = ふし）と"
+    "地名で定着した名乗り読みの表（data/stars_manual.tsv）を「変化あり」として認める。"
     "どちらも ★3 で打ち切る。判定の正本は data/build_stars.py。"
     "読みの出典は KANJIDIC2（EDRDG, CC BY-SA 4.0）"
 )
@@ -328,19 +330,23 @@ def attach_stars(questions: list, geo: dict, kd: dict, report: dict) -> None:
 def attach_town_stars(difficult: dict, kd: dict, report: dict) -> None:
     """difficult の各問に `stars`（1〜3）を**破壊的に**書き込む。
 
-    判定は build_stars.judge_towns に任せる（B5 ＝ 同表記異読みは渡した町名全体で
-    数えるので、**全国 107,681 件をまとめて渡す**こと。都道府県ごとに呼ぶと
-    「本町 ＝ 3 通り」が県内の通り数に縮んで ★ が変わる）。
+    判定は build_stars.judge_towns_with_rules に任せる（B5 ＝ 同表記異読みは渡した
+    町名全体で数えるので、**全国 107,681 件をまとめて渡す**こと。都道府県ごとに呼ぶと
+    「本町 ＝ 3 通り」が県内の通り数に縮んで ★ が変わる）。町名だけに当てる軸
+    （五段動詞の連用形 ＋ 人手の上書き表 data/stars_manual.tsv。Issue #54）も
+    その関数の中で効く ＝ `python3 data/build_stars.py --towns` の値と一致する。
     """
-    from build_stars import judge_towns  # noqa: PLC0415 — 循環 import を避けるため遅延
+    from build_stars import judge_towns_with_rules  # noqa: PLC0415 — 循環 import を避けるため遅延
 
     all_questions = [q for code in sorted(difficult) for q in difficult[code]]
-    rows = judge_towns(all_questions, kd)
+    rows = judge_towns_with_rules(all_questions, kd)
     stars_by_id = {r["id"]: r["stars"] for r in rows}
     for q in all_questions:
         q["stars"] = stars_by_id[q["id"]]
     report["town_stars"] = dict(sorted(Counter(q["stars"] for q in all_questions).items()))
     report["town_b5"] = sum(1 for r in rows if r["b5"])
+    report["town_verb_stem"] = sum(1 for r in rows if r["verbStem"])
+    report["town_manual"] = sum(1 for r in rows if r["manual"])
 
 
 def stars_triple(questions: list) -> list:
@@ -482,6 +488,9 @@ def main() -> int:
     ))
     print(f"  B5（同表記異読みで +1 が効いた町名）: {report['town_b5']} 件"
           f"（判定は data/build_stars.py の judge_towns）")
+    print(f"  町名だけの軸（Issue #54）: 五段動詞の連用形で読んだ {report['town_verb_stem']} 件"
+          f"／人手の上書き表（data/stars_manual.tsv）で読んだ {report['town_manual']} 件"
+          f"（内訳は python3 data/build_stars.py --towns）")
     print(f"ルール h で出題しない（skip: reading）: {report['skipped_readings']} 件"
           f"（町名 {report['skip_difficult']}／市区町村名 {report['skip_easy']}）")
     print(f"  JSON には残して meta の件数から除く（出題できる町名は "

@@ -22,6 +22,7 @@ from build_stars import (  # noqa: E402
     B4_LABELS,
     FAME_LABELS,
     STAR_TABLE,
+    STARS_MANUAL,
     TOWN_B2_BASE,
     TOWN_B5_BONUS,
     b4_rank,
@@ -31,11 +32,14 @@ from build_stars import (  # noqa: E402
     fame_band,
     format_segments,
     judge_towns,
+    judge_towns_with_rules,
     kanji_rank,
     kun_forms,
+    load_manual,
     nanori_candidates,
     plain_candidates,
     quantile,
+    renyokei_forms,
     strip_okurigana,
     town_reading_counts,
     variant_candidates,
@@ -117,6 +121,30 @@ READINGS = {
     "橋": (("きょう",), ("はし",), ("ばせ",)),
     "町": (("ちょう",), ("まち",), ()),
     "中": (("ちゅう",), ("なか", "うち", "あた.る"), ("あたる", "かなえ")),
+    # 連用形の規則と人手の上書き表（Issue #54）のアンカーで要る字
+    "住": (("じゅう", "ぢゅう", "ちゅう"), ("す.む", "す.まう", "-ず.まい"), ("し", "じゅ", "すみ")),
+    "吉": (("きち", "きつ"), ("よし",), ("え", "き", "きっ", "きる", "こし", "と", "よ")),
+    "伏": (("ふく",), ("ふ.せる", "ふ.す"), ("ふし", "ふせ")),
+    "見": (("けん",), ("み.る", "み.える", "み.せる"), ()),
+    "成": (("せい", "じょう"), ("な.る", "な.す", "-な.す"),
+          ("あき", "あきら", "しげ", "そん", "たえ", "なお", "なり", "なる", "のり", "ひら",
+           "まさ", "よし", "り")),
+    "有": (("ゆう", "う"), ("あ.る",), ("あ", "あら", "あり", "ある", "くに", "なお", "ゆ")),
+    "明": (("めい", "みょう", "みん"),
+          ("あ.かり", "あか.るい", "あか.るむ", "あか.らむ", "あき.らか", "あ.ける", "-あ.け",
+           "あ.く", "あ.くる", "あ.かす"),
+          ("あきら", "あけ", "あす", "きら", "け", "さや", "さやか", "とし", "はる", "み", "め")),
+    "清": (("せい", "しょう", "しん"), ("きよ.い", "きよ.まる", "きよ.める"),
+          ("あき", "さや", "し", "すが", "すみ", "せ", "ちん")),
+    "水": (("すい",), ("みず", "みず-"),
+          ("うず", "ずみ", "つ", "ど", "み", "みさ", "みつ", "みな", "みん")),
+    "春": (("しゅん",), ("はる",), ("あずま", "かす", "すの", "ひ", "わら")),
+    "日": (("にち", "じつ"), ("ひ", "-び", "-か"),
+          ("あ", "あき", "いる", "く", "くさ", "こう", "す", "たち", "に", "にっ", "につ", "へ")),
+    "常": (("じょう",), ("つね", "とこ-"), ("とき", "のぶ", "ひ", "ひた")),
+    "盤": (("ばん",), (), ("ち", "わ")),
+    "長": (("ちょう",), ("なが.い", "おさ"), ("お", "おしゃ", "たかし", "たけ", "な", "は", "ひさ")),
+    "雲": (("うん",), ("くも", "-ぐも"), ("き", "ずも", "のめ")),
 }
 
 
@@ -132,19 +160,24 @@ GRADES = {
     "和": 3,
     "放": 3, "出": 1, "舎": 5, "人": 1, "御": 8, "器": 4, "所": 3,
     "央": 3, "島": 3, "橋": 3, "町": 1, "中": 1,
+    "住": 3, "吉": 8, "伏": 8, "見": 1, "成": 4, "有": 3, "明": 2,
+    "清": 4, "水": 1, "春": 2, "日": 1, "常": 5, "盤": 8, "長": 2, "雲": 2,
 }
 
 
 def build_kd() -> dict:
-    """READINGS を load_kanjidic() と同じ形（訓は kun_forms で展開済み）に直す。"""
+    """READINGS を load_kanjidic() と同じ形（訓は kun_forms と renyokei_forms で
+    展開済み）に直す。"""
     kd = {}
     for ch, (on, kun, nanori) in READINGS.items():
-        forms = []
+        forms, stems = [], []
         for k in kun:
             forms.extend(kun_forms(k))
+            stems.extend(renyokei_forms(k))
         kd[ch] = {
             "on": list(on),
             "kun": forms,
+            "verb_stem": list(dict.fromkeys(stems)),
             "nanori": list(nanori),
             "grade": GRADES[ch],
         }
@@ -152,6 +185,8 @@ def build_kd() -> dict:
 
 
 KD = build_kd()
+# 実際に出荷する上書き表をそのまま読む（表の書式・中身もここで検査する。Issue #54）
+MANUAL = load_manual(STARS_MANUAL)
 
 
 class TestStripOkurigana(unittest.TestCase):
@@ -171,6 +206,73 @@ class TestKunForms(unittest.TestCase):
     def test_送り仮名が無ければ_1_つだけ(self):
         self.assertEqual(kun_forms("はら"), ["はら"])
         self.assertEqual(kun_forms("の-"), ["の"])
+
+
+class TestRenyokeiForms(unittest.TestCase):
+    """五段動詞の訓読み（送り仮名付き）→ 連用形（Issue #54 の規則）。"""
+
+    def test_送り仮名の末尾をウ段からイ段に変える(self):
+        self.assertEqual(renyokei_forms("す.む"), ["すみ"])    # 住吉
+        self.assertEqual(renyokei_forms("ふ.す"), ["ふし"])    # 伏見
+        self.assertEqual(renyokei_forms("な.る"), ["なり"])    # 成田
+        self.assertEqual(renyokei_forms("あ.る"), ["あり"])    # 有明
+        self.assertEqual(renyokei_forms("と.まる"), ["とまり"])  # 泊
+        self.assertEqual(renyokei_forms("のぼ.る"), ["のぼり"])  # 登
+
+    def test_下一段は作らない(self):
+        # 末尾が「る」で直前がエ段。接頭辞 あけ・こえ は kun_forms が既に出す
+        self.assertEqual(renyokei_forms("あ.ける"), [])
+        self.assertEqual(renyokei_forms("こ.える"), [])
+        self.assertEqual(renyokei_forms("た.てる"), [])
+        self.assertEqual(kun_forms("あ.ける"), ["あ", "あけ", "あける"])
+
+    def test_動詞でない訓からは作らない(self):
+        self.assertEqual(renyokei_forms("はら"), [])      # 送り仮名が無い
+        self.assertEqual(renyokei_forms("まつ"), [])      # 松＝まち を作らない
+        self.assertEqual(renyokei_forms("ちい.さい"), [])  # 送り仮名の末尾がウ段でない
+        self.assertEqual(renyokei_forms("たか.い"), [])
+        self.assertEqual(renyokei_forms("た.ち-"), [])
+
+    def test_辞書の表に連用形が入る(self):
+        self.assertIn("すみ", KD["住"]["verb_stem"])
+        self.assertIn("ふし", KD["伏"]["verb_stem"])
+        self.assertIn("なり", KD["成"]["verb_stem"])
+        self.assertIn("あり", KD["有"]["verb_stem"])
+        self.assertNotIn("あけり", KD["明"]["verb_stem"])
+
+
+class TestManualTable(unittest.TestCase):
+    """人手の上書き表（data/stars_manual.tsv）の読み込み（Issue #54）。"""
+
+    def test_表の書式(self):
+        self.assertTrue(MANUAL["rows"], "表が空（data/stars_manual.tsv）")
+        for row in MANUAL["rows"]:
+            with self.subTest(key=row["key"]):
+                self.assertIn(row["kind"], ("kanji", "word"))
+                self.assertTrue(row["note"], "根拠（note）が空")
+                self.assertTrue(all("ぁ" <= c <= "ん" for c in row["reading"]),
+                                "読みはひらがなだけ")
+                if row["kind"] == "kanji":
+                    self.assertEqual(len(row["key"]), 1)
+                else:
+                    self.assertGreater(len(row["key"]), 1)
+
+    def test_字の行は_kanji_語の行は_word_に入る(self):
+        self.assertIn(("とき", "定着"), MANUAL["kanji"]["常"])
+        self.assertIn(("わ", "定着"), MANUAL["kanji"]["盤"])
+        self.assertIn("長谷", MANUAL["word"])
+        self.assertNotIn("長谷", MANUAL["kanji"])
+
+    def test_音便のゆれも認める(self):
+        # 銀＝かね は 白銀町（しろがねちょう）で連濁する。行の readings に入る
+        row = next(r for r in MANUAL["rows"] if (r["key"], r["reading"]) == ("銀", "かね"))
+        self.assertEqual(row["readings"], {"かね", "がね"})
+
+    def test_採らなかった読みは入っていない(self):
+        # Issue #54 の「採らなかった候補」。難読として ★★★ に残す
+        keys = {(r["key"], r["reading"]) for r in MANUAL["rows"]}
+        for pair in (("東", "あずま"), ("東雲", "しののめ"), ("河内", "こうち"), ("菅生", "すごう")):
+            self.assertNotIn(pair, keys)
 
 
 class TestCandidates(unittest.TestCase):
@@ -199,6 +301,25 @@ class TestCandidates(unittest.TestCase):
     def test_カタカナはひらがなで読む(self):
         self.assertEqual(dict(plain_candidates("ノ", KD)), {"の": "字"})
         self.assertIn("あ", dict(plain_candidates("あ", KD)))
+
+    def test_連用形と上書き表は既定では入らない(self):
+        # judge_all（市区町村名）はこの既定で判定する（Issue #54 の「やらないこと」）
+        self.assertNotIn("すみ", dict(variant_candidates("住", KD)))
+        self.assertNotIn("とき", dict(variant_candidates("常", KD)))
+        self.assertNotIn("すみ", dict(plain_candidates("住", KD)))
+
+    def test_連用形を有効にすると_b_の候補に入る(self):
+        got = dict(variant_candidates("住", KD, verb_stem=True))
+        self.assertEqual(got["すみ"], "連用")
+        self.assertEqual(got["ずみ"], "連用→連濁")  # 福住＝ふくずみ
+        # (a) 素直 には入らない（連用形は「変化あり」として認める）
+        self.assertNotIn("すみ", dict(plain_candidates("住", KD)))
+
+    def test_上書き表を渡すと_b_の候補に入る(self):
+        got = dict(variant_candidates("常", KD, manual=MANUAL))
+        self.assertEqual(got["とき"], "定着")
+        got = dict(variant_candidates("銀", KD, manual=MANUAL))
+        self.assertEqual(got["がね"], "定着→連濁")  # 白銀町＝しろがねちょう
 
 
 class TestDecompose(unittest.TestCase):
@@ -283,6 +404,37 @@ class TestClassifyB2(unittest.TestCase):
         level, detail = classify_b2("南風原", "はえばる", KD, nanori_level="b")
         self.assertEqual(level, "b")
         self.assertEqual(detail, "南=は(名)＋風=え(名)＋原=ばる(名)")
+
+    def test_連用形を有効にすると名乗り扱いだったものが_b_になる(self):
+        # Issue #54 の規則。町名（judge_towns）だけで有効にする
+        for display, answer, detail in (
+            ("住吉", "すみよし", "住=すみ(連用)＋吉=よし(訓)"),
+            ("伏見", "ふしみ", "伏=ふし(連用)＋見=み(訓)"),
+            ("成田", "なりた", "成=なり(連用)＋田=た(訓)"),
+            ("有明", "ありあけ", "有=あり(連用)＋明=あけ(訓)"),
+        ):
+            with self.subTest(display=display):
+                self.assertEqual(classify_b2(display, answer, KD, verb_stem=True), ("b", detail))
+                # 既定（市区町村名）では名乗り扱いのまま ＝ (c)
+                self.assertEqual(classify_b2(display, answer, KD)[0], "c")
+
+    def test_上書き表を渡すと定着した名乗りが_b_になる(self):
+        for display, answer, detail in (
+            ("常盤", "ときわ", "常=とき(定着)＋盤=わ(定着)"),
+            ("清水", "しみず", "清=し(定着)＋水=みず(訓)"),
+            ("春日", "かすが", "春=かす(定着)＋日=が(訓→連濁)"),
+            ("長谷", "はせ", "長谷=はせ(定着)"),  # word 行は語ごと 1 セグメント
+        ):
+            with self.subTest(display=display):
+                self.assertEqual(
+                    classify_b2(display, answer, KD, manual=MANUAL, verb_stem=True), ("b", detail))
+                self.assertEqual(classify_b2(display, answer, KD)[0], "c")
+
+    def test_表に無い読みは_c_のまま(self):
+        # 東雲＝しののめ は「採らなかった候補」なので ★★★ に残す（Issue #54）
+        level, detail = classify_b2("東雲", "しののめ", KD, manual=MANUAL, verb_stem=True)
+        self.assertEqual(level, "c")
+        self.assertEqual(detail, "名乗り: 東=しの(名)＋雲=のめ(名)")
 
     def test_判定は呼ぶ順に依存しない(self):
         # DP のメモ化が呼び出しをまたいで漏れていないこと
@@ -475,6 +627,78 @@ class TestJudgeTowns(unittest.TestCase):
         # 人口を渡していないので、行に A1 の項目が無いこと（judge_all との違い）
         for key in ("a1", "population"):
             self.assertNotIn(key, self.rows[0])
+
+
+class TestJudgeTownsWithRules(unittest.TestCase):
+    """町名だけに当てる軸（連用形 ＋ 上書き表）を入れた判定（Issue #54）。
+
+    judge_towns_with_rules が **問題バンクの `stars` の正本**なので、ここで固定するのは
+    「誰でも読める名乗り由来の町名が ★★ に落ちる」「難読は ★★★ に残る」の 2 つ。
+    行は実データ（difficult/*.json）からの抜粋で、★ の期待値は build_stars.py の
+    TOWN_ANCHORS と同じ（Issue #54 の受け入れ条件）。
+    """
+
+    # (都道府県, lgCode, 市区町村, 町名, 読み, 期待する ★, 期待する B2 の内訳)
+    TOWNS = (
+        ("北海道", "011002", "札幌市中央区", "伏見", "ふしみ", 2, "伏=ふし(連用)＋見=み(訓)"),
+        ("北海道", "011002", "札幌市清田区", "有明", "ありあけ", 2, "有=あり(連用)＋明=あけ(訓)"),
+        ("北海道", "012025", "函館市", "住吉町", "すみよしちょう", 2,
+         "住=すみ(連用)＋吉=よし(訓)＋町=ちょう(音)"),
+        ("茨城県", "083097", "東茨城郡大洗町", "成田町", "なりたちょう", 2,
+         "成=なり(連用)＋田=た(訓)＋町=ちょう(音)"),
+        ("北海道", "012050", "室蘭市", "常盤町", "ときわちょう", 2,
+         "常=とき(定着)＋盤=わ(定着)＋町=ちょう(音)"),
+        ("北海道", "013633", "檜山郡厚沢部町", "清水", "しみず", 2, "清=し(定着)＋水=みず(訓)"),
+        ("北海道", "012319", "恵庭市", "春日", "かすが", 2, "春=かす(定着)＋日=が(訓→連濁)"),
+        ("茨城県", "082040", "古河市", "長谷", "はせ", 2, "長谷=はせ(定着)"),
+        # ★★★ に残るもの（規則でも表でも動かさない）
+        ("北海道", "012025", "函館市", "東雲町", "しののめちょう", 3,
+         "名乗り: 東=しの(名)＋雲=のめ(名)＋町=ちょう(音)"),
+        ("大阪府", "271004", "大阪市鶴見区", "放出東", "はなてんひがし", 3,
+         "名乗り: 放=はな(訓)＋出=てん(名)＋東=ひがし(訓)"),
+        ("東京都", "131211", "足立区", "舎人", "とねり", 3, "分解不能"),
+        ("愛知県", "231002", "名古屋市昭和区", "御器所", "ごきそ", 3, "分解不能"),
+    )
+
+    @classmethod
+    def setUpClass(cls):
+        questions = [
+            {
+                "id": f"o:{lg}:{display}",
+                "prefCode": lg[:2],
+                "pref": pref,
+                "lgCode": lg,
+                "city": city,
+                "display": display,
+                "answer": answer,
+            }
+            for pref, lg, city, display, answer, _stars, _detail in cls.TOWNS
+        ]
+        cls.rows = {r["display"]: r for r in judge_towns_with_rules(questions, KD, MANUAL)}
+        cls.base = {r["display"]: r for r in judge_towns(questions, KD)}
+
+    def test_アンカーの_と_B2_の内訳(self):
+        for _pref, _lg, _city, display, _answer, stars, detail in self.TOWNS:
+            with self.subTest(display=display):
+                r = self.rows[display]
+                self.assertEqual(r["b2detail"], detail)
+                self.assertEqual(r["stars"], stars)
+
+    def test_規則と上書き表を当てる前は_すべて名乗り扱いの_3(self):
+        # 直したいのはここ（誰でも読める町名が ★★★ に入っていた）
+        for _pref, _lg, _city, display, _answer, _stars, _detail in self.TOWNS:
+            with self.subTest(display=display):
+                self.assertEqual(self.base[display]["b2"], "c")
+                self.assertEqual(self.base[display]["stars"], 3)
+
+    def test_どちらが効いたかを行に残す(self):
+        self.assertTrue(self.rows["伏見"]["verbStem"])
+        self.assertEqual(self.rows["伏見"]["manual"], [])
+        self.assertFalse(self.rows["常盤町"]["verbStem"])
+        self.assertEqual(len(self.rows["常盤町"]["manual"]), 2)  # 常=とき と 盤=わ の 2 行
+        self.assertEqual(len(self.rows["長谷"]["manual"]), 1)
+        self.assertFalse(self.rows["東雲町"]["verbStem"])
+        self.assertEqual(self.rows["東雲町"]["manual"], [])
 
 
 if __name__ == "__main__":
