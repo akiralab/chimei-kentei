@@ -35,9 +35,13 @@ const EASY_TOTAL = 1700
  * **出題できる**町名 107,336 件の ★ の分布（judge_towns ＝ B2×B4×B5。Issue #46 の案 C）。
  * JSON の配列は 107,681 件だが、ルール h の `skip` 345 件は meta の件数から除く。
  * skip の 345 件はすべて ★★★（読みを音訓で分解できない）なので、
- * 減ったのは ★★★ だけ（27,887 → 27,542。Issue #50）
+ * 減ったのは ★★★ だけ（Issue #50）。
+ *
+ * Issue #54 で町名の B2 に「五段動詞の連用形」と「地名で定着した名乗りの表
+ * （data/stars_manual.tsv）」を入れ、名乗りでしか読めなかった 5,823 件が
+ * ★★★ → ★★ に落ちた（★★ 40,931 → 46,754 ／ ★★★ 27,542 → 21,719。★ は不変）
  */
-const TOWNS_NATIONWIDE: Record<Stars, number> = { 1: 38_863, 2: 40_931, 3: 27_542 }
+const TOWNS_NATIONWIDE: Record<Stars, number> = { 1: 38_863, 2: 46_754, 3: 21_719 }
 const TOWNS_TOTAL = 107_336
 
 /** 全町名の検算に使う市区町村（Issue #46 のセット ID 例 `-d-122351-1234-all`） */
