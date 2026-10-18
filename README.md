@@ -162,7 +162,7 @@ npm run build:og   # リンクプレビュー用の public/og.png を og/og.html
 npm run build:icons # アプリアイコン一式（public/icon-*.png・apple-touch-icon.png）を og/icon.html から撮り直す
 npm run build:fonts # 同梱フォント public/fonts/*.woff2 と src/styles/fonts.css を作り直す（uv か fontTools が要る）
 npm run measure    # 全画面 × 5 ビューポートの実測（タップ領域・文字・はみ出し・外部ホスト）
-npm run build -- --mode capacitor  # ネイティブの殻向けビルド（base を相対にする）
+npm run build:ios  # ネイティブの殻向けビルド（base を相対にする。下の「iOS アプリ」）
 ```
 
 - **フォントは同梱**（Google Fonts からは読まない）。5 書体の woff2 はこのアプリに出る字だけのサブセットで、
@@ -188,6 +188,28 @@ VITE_RANKING_API=https://xxxx.execute-api.ap-northeast-1.amazonaws.com npm run d
 - カタカナ・半角カタカナ・全角英数はひらがなへ畳み、漢字・記号・空白は取り除く（`src/components/hiragana.ts`）。
 - **IME で漢字に変換されても読みに戻す。** Web から IME は無効化できないので、macOS のライブ変換などで「匝瑳」と確定されても解答は「そうさ」になる。変換中の `keydown` の `code`（物理キー）から打鍵列 `sousa` を組み直すのが主経路で、貼り付けなど打鍵の痕跡が無い場合は `compositionupdate` が最後に「全部かな」だった文字列を使う。かなのまま確定したとき（フリック入力・かな入力）は確定文字列をそのまま使う。変換中の未確定文字列は書き換えない。
 
+## iOS アプリ（Capacitor の殻）
+
+同じ Web の中身を Capacitor 8 の殻（WKWebView）に入れて App Store へ出す（Issue #58・設計ノート §16）。
+殻の中では触覚・共有シート・ステータスバーだけをネイティブに寄せ、分岐は `src/native.ts` に閉じ込める
+（画面側は `@capacitor/*` を直接 import しない）。問題バンク・地図・書体は同梱なので、順位表以外はオフラインで動く。
+
+```bash
+npm run build:ios   # vite build --mode capacitor（base を './' にする）
+npm run sync:ios    # 上に続けて dist を ios/App/App/public へ写し、プラグインを Package.swift に反映
+```
+
+- **手元の Mac では Xcode を動かさない。** `ios/` の生成と `cap sync` は Xcode 無しでできる。アーカイブと
+  App Store Connect へのアップロードは GitHub Actions の `macos-26` ランナー（`.github/workflows/ios.yml`、
+  手動起動か `ios-v*` タグ）で行い、署名は App Store Connect API キーの自動署名に任せる。
+  必要な Secrets は workflow の冒頭に書いてある。
+- `ios/` はコミットする。`ios/App/App/public`（`cap sync` の出力）と `capacitor.config.json` は
+  `ios/.gitignore` が除外する。`ios/App/CapApp-SPM/Package.swift` は Capacitor CLI が管理するので手で直さない。
+- appId は `io.github.akiralab.chimeikentei`、iPhone のみ・縦固定、バージョンは `package.json` の `version`
+  （`MARKETING_VERSION`）とワークフローの実行番号（`CURRENT_PROJECT_VERSION`）。
+- 殻からの通信は `Origin: capacitor://localhost` で飛ぶので、API の CORS（`infra/template.yaml` と
+  `handler.ts` の既定）に入れてある。**この変更はマージ後に `npm run deploy:api` が要る。**
+
 ## 構成
 
 ```
@@ -197,6 +219,9 @@ data/stars_manual.tsv        町名の B2 だけに当てる人手の上書き�
 public/questions/{版}/       easy.json / difficult/{都道府県コード}.json / meta.json
 src/engine/                  セットID・決定論的抽出・採点の正規化・ランキング保存（UI 非依存）
 infra/                       共有ランキング API（Lambda / HTTP API / DynamoDB・CloudFormation）
+ios/App/                     Capacitor の殻（Xcode プロジェクト・Info.plist・アイコン。public/ は cap sync の出力で未追跡）
+capacitor.config.ts          殻の設定（appId・webDir・背景色）
+.github/workflows/ios.yml    iOS のアーカイブと TestFlight へのアップロード（手動起動）
 src/screens/                 表紙・範囲選択・出題・結果・ランキング・間違えた問題・地名帳・あそびかた
 src/components/TabBar.tsx    下タブバー（戻る導線。枚数と経路の対応は tabs.ts）
 src/styles/                  答案用紙テーマ（デザイントークン・部品）

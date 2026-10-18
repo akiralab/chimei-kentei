@@ -16,6 +16,7 @@ import { readQuizTimeLimit, readTimeLimit } from '../hooks/useTimeLimit.ts'
 import { connectionMessage } from '../hooks/connection.ts'
 import { BOARD_SCROLL, useBoardModifier } from '../hooks/useBoardModifier.ts'
 import { SELECT_PATH, absoluteUrl, navigate, quizPath } from '../router.ts'
+import { shareNative } from '../native.ts'
 import PaperSkeleton from '../components/PaperSkeleton.tsx'
 
 const KANJI_NUM = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十']
@@ -214,27 +215,21 @@ export default function Result({ setId }: { setId: string }) {
   /**
    * 共有（見出し行の右端の 1 ボタン。第 3 波 D5・決定 ⑤）。
    *
-   * `navigator.share` があれば OS の共有シートに題名・得点入りの文面・リンクを渡す。
+   * 殻なら OS の共有シート（@capacitor/share）、Web でも `navigator.share` があれば共有シートに
+   * 題名・得点入りの文面・リンクを渡す（分岐は `native.ts` の shareNative）。
    * 無ければ従来どおりリンクをクリップボードへ入れて「コピーしました」。
    * シートを取り消した（AbortError）場合も失敗した場合も、画面に何も出さずに黙って終える
    * （取り消しはユーザーの意思なので赤ペンの一言を出す理由がない）。
    */
   const share = async () => {
     const url = absoluteUrl(quizPath(setId))
-    if (typeof navigator.share === 'function') {
-      const payload = buildShare({
-        range: set ? rangeLabelOf(set) : '',
-        subject: set ? modeName(set.mode) : '',
-        score: records === null ? null : score,
-        url,
-      })
-      try {
-        await navigator.share(payload)
-      } catch {
-        // 取り消し・失敗のどちらでも黙って戻る
-      }
-      return
-    }
+    const payload = buildShare({
+      range: set ? rangeLabelOf(set) : '',
+      subject: set ? modeName(set.mode) : '',
+      score: records === null ? null : score,
+      url,
+    })
+    if (await shareNative(payload)) return
     try {
       await navigator.clipboard.writeText(url)
       setNotice('この問題の URL をコピーしました。')

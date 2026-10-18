@@ -12,6 +12,7 @@ import { useNickname } from '../hooks/useNickname.ts'
 import { writeAnswerSheet } from '../hooks/answerSheet.ts'
 import { readTimeLimit, writeQuizTimeLimit } from '../hooks/useTimeLimit.ts'
 import { SELECT_PATH, navigate, resultPath } from '../router.ts'
+import { haptic } from '../native.ts'
 import MunicipalityMap from '../components/MunicipalityMap.tsx'
 import MunicipalityInfo from '../components/MunicipalityInfo.tsx'
 import PaperSkeleton from '../components/PaperSkeleton.tsx'
@@ -113,6 +114,7 @@ export default function Quiz({ setId, direct = false }: { setId: string; direct?
       }
       clearInterval(timer)
       setRemainMs(0)
+      void haptic('error')
       setRecords((prev) => [
         ...prev,
         { questionId: question.id, input: '', correct: false, ms: timeLimitMs, passed: true },
@@ -161,6 +163,8 @@ export default function Quiz({ setId, direct = false }: { setId: string; direct?
       : Math.min(elapsed, UNLIMITED_MAX_MS)
     setRecords((prev) => [...prev, { questionId: question.id, input: input.trim(), correct, ms, passed }])
     setFeedback({ correct, answer: question.answer })
+    // 殻では正誤を指先にも返す（Web では何もしない）
+    void haptic(correct ? 'success' : 'error')
   }
 
   if (error) {
@@ -320,7 +324,16 @@ export default function Quiz({ setId, direct = false }: { setId: string; direct?
                 autoFocus で Enter / Space でも進める。最後の問なら結果へ */}
             {/* key を分けて別要素として差し替える。同じ <button> の更新扱いだと autoFocus が効かない */}
             {feedback && !feedback.correct ?
-              <button key="next" type="button" className="btn btn--primary" onClick={advance} autoFocus>
+              <button
+                key="next"
+                type="button"
+                className="btn btn--primary"
+                onClick={() => {
+                  void haptic('light')
+                  advance()
+                }}
+                autoFocus
+              >
                 {index + 1 >= set.questions.length ? '結果を見る' : '次へ'}
               </button>
             : <button

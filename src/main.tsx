@@ -6,6 +6,10 @@ import './styles/tokens.css'
 import './styles/theme.css'
 import './styles/map.css'
 import App from './App.tsx'
+import { setupStatusBar } from './native.ts'
+
+// 殻のときだけステータスバーを白文字に（Web では何もしない）
+void setupStatusBar()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

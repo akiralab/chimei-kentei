@@ -1,0 +1,128 @@
+# iOS の殻（Capacitor）をアーカイブして App Store Connect（TestFlight）へ上げる。Issue #58。
+#
+# 手元の Mac では Xcode を動かさない方針なので、ビルドと署名は GitHub の macos-26 ランナーで行う。
+# 署名は App Store Connect API キーによる自動署名（-allowProvisioningUpdates）。
+# 証明書とプロビジョニングプロファイルは Apple 側に作らせるので、リポジトリには置かない。
+#
+# 必要な Secrets（Settings → Secrets and variables → Actions）:
+#   ASC_KEY_ID      … App Store Connect API キーの Key ID
+#   ASC_ISSUER_ID   … 同 Issuer ID
+#   ASC_API_KEY_P8  … 同 .p8 の中身（役割 App Manager 以上）
+#   APPLE_TEAM_ID   … Membership details の Team ID
+# 既存の変数 VITE_RANKING_API（pages.yml と同じ）をそのまま使う。
+#
+# 起動は手動（workflow_dispatch）か `ios-v*` タグの push だけ。PR や main への push では走らない。
+name: iOS TestFlight
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['ios-v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios
+  cancel-in-progress: false
+
+env:
+  XCODE_APP: /Applications/Xcode_26.6.app
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm test -- --run
+      # Pages 用の `npm run build` と違い base が './' になる（vite.config.ts）
+      - run: npm run build:ios
+        env:
+          VITE_RANKING_API: ${{ vars.VITE_RANKING_API }}
+      # dist を ios/App/App/public へ写し、プラグインを Package.swift に反映する
+      - run: npx cap sync ios
+      - name: Xcode を固定する
+        run: |
+          sudo xcode-select -s "$XCODE_APP"
+          xcodebuild -version
+      - name: App Store Connect API キーを置く
+        env:
+          ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/keys"
+          printf '%s\n' "$ASC_API_KEY_P8" > "$RUNNER_TEMP/keys/AuthKey_$ASC_KEY_ID.p8"
+          chmod 600 "$RUNNER_TEMP/keys/AuthKey_$ASC_KEY_ID.p8"
+      - name: ExportOptions.plist を書く
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          mkdir -p build
+          cat > build/ExportOptions.plist <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>teamID</key><string>${APPLE_TEAM_ID}</string>
+            <key>uploadSymbols</key><true/>
+            <key>manageAppVersionAndBuildNumber</key><false/>
+          </dict>
+          </plist>
+          EOF
+      - name: アーカイブ
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          MARKETING_VERSION=$(node -p "require('./package.json').version")
+          set -o pipefail
+          xcodebuild \
+            -project ios/App/App.xcodeproj \
+            -scheme App \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/App.xcarchive \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey_$ASC_KEY_ID.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            CODE_SIGN_STYLE=Automatic \
+            MARKETING_VERSION="$MARKETING_VERSION" \
+            CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
+            archive 2>&1 | tee build/archive.log | grep -E '^(\*\*|error|warning: .*(sign|provision))|ARCHIVE' || true
+          test -d build/App.xcarchive
+      - name: App Store Connect へアップロード
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          set -o pipefail
+          xcodebuild -exportArchive \
+            -archivePath build/App.xcarchive \
+            -exportOptionsPlist build/ExportOptions.plist \
+            -exportPath build/export \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey_$ASC_KEY_ID.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            2>&1 | tee build/export.log | grep -E '^(\*\*|error)|Upload' || true
+          grep -q 'EXPORT SUCCEEDED' build/export.log
+      - name: ログを残す（失敗時の調査用）
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-logs
+          path: build/*.log
+          if-no-files-found: ignore
+          retention-days: 7
