@@ -53,11 +53,9 @@ Resources:
     Properties:
       # $default ステージ（URL にステージ名が付かない）
       StageName: $default
-      CorsConfiguration:
-        AllowOrigins: !Ref AllowedOrigins
-        AllowMethods: [GET, POST, OPTIONS]
-        AllowHeaders: [content-type]
-        MaxAge: 86400
+      # CORS は API Gateway に任せず Lambda が返す（OPTIONS も下のルートで Lambda へ通す）。
+      # CorsConfiguration は capacitor://localhost を「Invalid format for origin」で拒み、
+      # 設定があると Lambda の CORS ヘッダは無視される
       # アクセスログは既定で付けない（無料枠内に収めるため）
 
   ResultsFunction:

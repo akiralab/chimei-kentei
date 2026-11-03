@@ -56,12 +56,17 @@ aws cloudformation package \
   --region "$REGION" >/dev/null
 
 # 4. デプロイ（差分が無ければ何もしない）
-echo "==> cloudformation deploy"
+# cloudformation deploy は、渡さなかったパラメータにスタックの「前回の値」を使い回す。
+# template.yaml の Default を直しただけでは本番に届かないので、CORS の許可リストは毎回渡す
+ALLOWED_ORIGINS="$(awk '/^  AllowedOrigins:/{f=1} f&&/Default:/{print $2; exit}' "$HERE/template.yaml")"
+: "${ALLOWED_ORIGINS:?template.yaml から AllowedOrigins の Default を読めなかった}"
+echo "==> cloudformation deploy / AllowedOrigins = $ALLOWED_ORIGINS"
 set +e
 aws cloudformation deploy \
   --template-file "$PACKAGED" \
   --stack-name "$STACK_NAME" \
   --capabilities CAPABILITY_IAM \
+  --parameter-overrides "AllowedOrigins=$ALLOWED_ORIGINS" \
   --no-fail-on-empty-changeset \
   --region "$REGION"
 STATUS=$?

@@ -72,7 +72,8 @@ GitHub Pages は静的配信のため、ランキングは別ホストの API �
 - **都道府県インデックスは本体とは別のリクエストで書く。** player 印の条件失敗（＝同じ端末の 2 セット目）で本体の登録を巻き戻さないため。索引の書き込みが失敗しても POST は 201 のまま返し、ログだけ残す。
 
 ## CORS
-- 許可 Origin: `https://akiralab.github.io`、`http://localhost:5173`、`http://localhost:4173`
+- 許可 Origin: `https://akiralab.github.io`、`http://localhost:5173`、`http://localhost:4173`、`capacitor://localhost`（iOS の殻）
+- CORS ヘッダは Lambda が返す。API Gateway の `CorsConfiguration` は `capacitor://` の Origin を受け付けないので使わない
 
 ## クライアント側
 - `import.meta.env.VITE_RANKING_API`（例 `https://xxxx.execute-api.ap-northeast-1.amazonaws.com`）が設定されていれば `RemoteRankingStore`、無ければ `LocalRankingStore`。GitHub Actions では repository variable `VITE_RANKING_API` を build に渡す。
