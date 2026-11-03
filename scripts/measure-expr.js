@@ -12,6 +12,7 @@
 //   primaryCount … 可視の .btn--primary の数。表紙は 1 つ（#51 条件 4）
 //   atlasVisible … 地名帳の一覧の見える行数（atlas.visible の別名。375x667 で 8 以上。#51 条件 3）
 //   quizMap … 出題画面の地図パネルの高さと、情報カードに覆われずに見える高さ（#51 やること 6）
+//   feedbackSeen … 解答直後の ○×・正解・主ボタン・問題文が、用紙の内側スクロールなしで見えるか（#64 ㉛）
 //
 // 用紙ごと縦スクロールする 3 画面（.board--scroll ＝ 結果・間違えた問題・あそびかた。#44 条件 2）は
 // paper.overY が 0 でも「切れていない」とは言えないので、専用の 3 つで判定する。
@@ -161,6 +162,24 @@
     }
   })()
 
+  const feedbackSeen = (() => {
+    const mark = document.querySelector('.q-feedback .mark')
+    if (mark === null || paper === null) return null
+    const pb = paper.getBoundingClientRect()
+    const inside = (el) => {
+      if (el === null) return false
+      const b = el.getBoundingClientRect()
+      return b.top >= pb.top - 1 && b.bottom <= Math.min(pb.bottom, innerHeight) + 1
+    }
+    return {
+      mark: inside(mark),
+      answer: inside(document.querySelector('.q-feedback .marker')),
+      next: inside(document.querySelector('.layout__quiz .btn--primary')),
+      kanji: inside(document.querySelector('.q-kanji')),
+      scrollTop: Math.round(paper.scrollTop),
+    }
+  })()
+
   return JSON.stringify({
     vw: innerWidth, vh: innerHeight,
     boardScroll: !!document.querySelector('.board--scroll'),
@@ -183,6 +202,7 @@
     backInPaper,
     tabbar,
     quizMap,
+    feedbackSeen,
     atlas: rowsIn('.atlas', '.atlas__row'),
     ranking: rowsIn('.ranking', '.ranking__row'),
     review: rowsIn('.review', '.review__row'),

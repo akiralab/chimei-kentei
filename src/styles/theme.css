@@ -1413,6 +1413,21 @@ select.field__input {
   gap: var(--space-3);
 }
 
+/* 解答前は空。行を確保するのはキーボードが出ている高さだけ（下の @media） */
+.q-feedback:empty {
+  display: none;
+}
+
+/* 畳んだ地図を開く入口。行の右端に寄せ、「次へ」と同じ主ボタンには見せない。
+   ボタンを持つ行に付く用紙の余白（.paper > :is(p, div):has(> .btn)）は要らない */
+.paper > p.q-feedback {
+  padding-block: 0;
+}
+
+.q-feedback__map {
+  margin-left: auto;
+}
+
 /* 狭い画面（スマホ縦）では補助文を省き、解答ボタンまでスクロールなしで収める。
    2026-10-05: 高さの条件（max-height: 740px）を外した。帯が折り返すのも
    「タイトルへ戻る」が 1 行を食うのも **幅** が原因で、背の高いスマホ（390x844・
@@ -1821,4 +1836,74 @@ select.field__input {
   color: inherit;
   text-decoration: underline;
   text-underline-offset: 2px;
+}
+
+/* --------------------------------------------------------------------------
+   出題画面: ソフトキーボードが出ている高さ（Issue #64）
+   iPhone の日本語キーボードでは見える高さが 390x420 まで落ちる（844 − ステータスバー 59 −
+   キーボードと変換候補 365）。○× と正解と「次へ」を内側スクロールなしで見せるために、
+   答えるのに要らないものを外す。600px の根拠は hooks/useShortViewport.ts。
+   タブバーを消すのは縦を空けるためと、キーボードのすぐ上で押し間違えて答案を捨てないため
+   -------------------------------------------------------------------------- */
+@media (max-height: 600px) and (max-width: 899px) {
+  .board:has(.layout--quiz) {
+    padding-top: calc(var(--space-2) + env(safe-area-inset-top));
+    padding-bottom: calc(var(--space-2) + env(safe-area-inset-bottom));
+  }
+
+  .board:has(.layout--quiz) > .tabbar {
+    display: none;
+  }
+
+  .layout--quiz .paper {
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .layout--quiz .paper__header,
+  .layout--quiz .q-prompt {
+    display: none;
+  }
+
+  .layout--quiz .q-kanji {
+    margin-block: 0;
+  }
+
+  .layout--quiz .answer-input {
+    margin-top: var(--space-1);
+  }
+
+  /* 解答しても「次へ」の位置が動かないよう、空の間も 1 行ぶん確保する */
+  .q-feedback,
+  .q-feedback:empty {
+    display: flex;
+    min-height: var(--tap-min);
+    margin-top: var(--space-1);
+  }
+
+  /* × の箱（×1.45 × 1.4em）が 44px に収まる大きさ。正解の読みはここが見どころなので少し大きく */
+  .q-feedback .mark {
+    --mark-size: 1.35rem;
+  }
+
+  .q-feedback .marker {
+    font-size: var(--fs-lg);
+  }
+
+  .q-feedback__map {
+    min-height: var(--tap-min);
+    padding-block: 0;
+  }
+
+  .layout--quiz .q-note {
+    display: none;
+  }
+
+  /* 「のこり 12 秒」の行は棒と重複するので、棒だけ残す */
+  .layout--quiz .timer__label {
+    display: none;
+  }
+
+  .layout--quiz .paper > p:has(> .btn--primary) {
+    padding-block: var(--space-1);
+  }
 }
