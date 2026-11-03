@@ -1,4 +1,5 @@
 import type { CapacitorConfig } from '@capacitor/cli'
+import { KeyboardResize } from '@capacitor/keyboard'
 
 // ネイティブの殻（Issue #58・設計ノート §16）。
 //   appId  … GitHub Pages のドメインの逆順。後から変えると別アプリ扱いになるので固定
@@ -11,6 +12,14 @@ const config: CapacitorConfig = {
   backgroundColor: '#2e6b5e',
   ios: {
     contentInset: 'never',
+  },
+  plugins: {
+    // ソフトキーボードの高さぶん WebView そのものを縮める（Issue #61）。プラグインが無いと
+    // WKWebView はページをスクロールして入力欄を見せるので、出題中に画面が上下に動く。
+    // 縮んだ用紙は 390×508（設計ノート §13 のキーボード近似）で整えた形に収まる
+    Keyboard: {
+      resize: KeyboardResize.Native,
+    },
   },
 }
 

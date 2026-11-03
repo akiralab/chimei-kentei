@@ -66,6 +66,11 @@ export interface HiraganaInputProps {
   /** Enter（IME 変換の確定 Enter は除く） */
   onSubmit: () => void
   disabled?: boolean
+  /**
+   * 採点中。打鍵を捨て、Enter だけを onSubmit に流す。disabled と違ってフォーカスを保つので、
+   * iOS のソフトキーボードが閉じない（Issue #61。閉じて開くたびに画面が上下に動いていた）
+   */
+  locked?: boolean
   autoFocus?: boolean
   placeholder?: string
   className?: string
@@ -89,6 +94,7 @@ export default function HiraganaInput({
   onChange,
   onSubmit,
   disabled,
+  locked,
   autoFocus,
   placeholder = 'ひらがなで',
   className,
@@ -171,6 +177,8 @@ export default function HiraganaInput({
   }
 
   function handleChange(event: ChangeEvent<HTMLInputElement>) {
+    // 採点中は何も受け付けない（制御コンポーネントなので表示は元の値に戻る）
+    if (locked) return
     const raw = event.target.value
     if (composingRef.current) {
       // 未確定文字列はそのまま見せる。値はまだ動かさない
@@ -192,6 +200,7 @@ export default function HiraganaInput({
   }
 
   function handleCompositionStart() {
+    if (locked) return
     composingRef.current = true
     recoveredRef.current = null
     setNotice('')
@@ -203,6 +212,7 @@ export default function HiraganaInput({
   }
 
   function handleCompositionUpdate(event: CompositionEvent<HTMLInputElement>) {
+    if (locked) return
     const data = event.data ?? ''
     // ライブ変換で漢字になる前の「読み」を 1 つだけ覚えておく
     if (data !== '' && isKanaOnly(data)) kanaUpdateRef.current = data
@@ -210,6 +220,7 @@ export default function HiraganaInput({
 
   function handleCompositionEnd(event: CompositionEvent<HTMLInputElement>) {
     composingRef.current = false
+    if (locked) return
     const raw = event.currentTarget.value
     const data = event.data ?? ''
 
@@ -239,6 +250,13 @@ export default function HiraganaInput({
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (locked) {
+      // 採点中。Enter（ソフトキーボードの「完了」）だけを「次へ」として親に渡し、ほかの打鍵は捨てる
+      event.preventDefault()
+      const toIme = event.nativeEvent.isComposing || event.keyCode === 229 || event.key === 'Process'
+      if (event.key === 'Enter' && !toIme) onSubmit()
+      return
+    }
     // IME が食べた打鍵か。1 打鍵目は composition がまだ始まっていないので
     // isComposing では捕まらない。keyCode 229 / key 'Process' で見分ける
     const toIme =

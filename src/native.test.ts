@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { haptic, isNative, setupStatusBar, shareNative } from './native.ts'
+import { isNative, setupStatusBar, shareNative } from './native.ts'
 
 // Web（殻の外）での振る舞いだけを固定する。殻の中（Capacitor.isNativePlatform() が true）は
-// 実機で確かめる（Issue #58 の受け入れ条件 ⑱）。
+// 実機で確かめる（Issue #58 の受け入れ条件 ⑱＝共有シート）。
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -15,10 +15,7 @@ describe('native.ts（Web では殻の機能を呼ばない）', () => {
     expect(isNative()).toBe(false)
   })
 
-  it('haptic と setupStatusBar は Web では何もせずに解決する', async () => {
-    await expect(haptic('success')).resolves.toBeUndefined()
-    await expect(haptic('error')).resolves.toBeUndefined()
-    await expect(haptic('light')).resolves.toBeUndefined()
+  it('setupStatusBar は Web では何もせずに解決する', async () => {
     await expect(setupStatusBar()).resolves.toBeUndefined()
   })
 

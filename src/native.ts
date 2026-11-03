@@ -4,33 +4,13 @@
  * Web では何もしないか、従来の Web API に落とす。プラグインは動的 import にして、
  * GitHub Pages 向けのバンドルと jsdom のテストに殻のコードが混ざらないようにする。
  * 画面側はこのファイルの関数だけを呼び、`@capacitor/*` を直接 import しない。
+ * 触覚（@capacitor/haptics）は実機で鳴らず本人判断で外した（Issue #62）。
+ * キーボードの挙動は JS ではなく capacitor.config.ts の plugins.Keyboard で決める（Issue #61）。
  */
 import { Capacitor } from '@capacitor/core'
 
 export function isNative(): boolean {
   return Capacitor.isNativePlatform()
-}
-
-export type HapticKind = 'success' | 'error' | 'light'
-
-/**
- * 触覚。正解＝success、不正解・パス・時間切れ＝error、「次へ」＝light。
- * Web、触覚の無い端末、設定で切っている場合は黙って何もしない。
- */
-export async function haptic(kind: HapticKind): Promise<void> {
-  if (!isNative()) return
-  try {
-    const { Haptics, ImpactStyle, NotificationType } = await import('@capacitor/haptics')
-    if (kind === 'light') {
-      await Haptics.impact({ style: ImpactStyle.Light })
-      return
-    }
-    await Haptics.notification({
-      type: kind === 'success' ? NotificationType.Success : NotificationType.Error,
-    })
-  } catch {
-    // 触覚が使えない環境では黙る
-  }
 }
 
 export interface SharePayload {

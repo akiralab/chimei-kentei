@@ -718,6 +718,32 @@ describe('出題', () => {
     expect(answerInput()).toHaveFocus()
   })
 
+  it('採点中も解答欄のフォーカスは外れず、打鍵は捨てられ、Enter で次へ進む（iOS でキーボードを閉じない）', async () => {
+    await openQuiz(SET_ID)
+
+    const input = answerInput()
+    fireEvent.change(input, { target: { value: 'さん' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(all('.mark--wrong')).toHaveLength(1)
+
+    // disabled にしないのでフォーカスは残る。「次へ」はフォーカスを取らない
+    expect(input).not.toBeDisabled()
+    expect(input).toHaveFocus()
+    expect(nextButton()).not.toHaveFocus()
+
+    // 採点中の打鍵は捨てる（表示も値も動かない）
+    fireEvent.keyDown(input, { key: 'k' })
+    fireEvent.change(input, { target: { value: 'さんか' } })
+    expect(input).toHaveValue('さん')
+
+    // Enter（ソフトキーボードの「完了」）で次へ。フォーカスはそのまま
+    fireEvent.keyDown(input, { key: 'Enter' })
+    await settle()
+    expect(el('.q-number__text').textContent).toBe('問二 / 十')
+    expect(answerInput()).toHaveFocus()
+    expect(answerInput()).toHaveValue('')
+  })
+
   it('カタカナや前後の空白でも正解として採点される（engine の正規化が効いている）', async () => {
     await openQuiz(SET_ID)
 
@@ -767,10 +793,10 @@ describe('出題', () => {
     expect(all('.mark--wrong')).toHaveLength(1)
     expect(el('.marker--yellow').textContent).toBe(EXPECTED.questions[0].answer)
     // 「解答」の場所に「次へ」が出る（正しい読みを確かめてから自分のペースで進む）。
-    // フォーカスも移るので Enter / Space でそのまま進める
+    // フォーカスは解答欄に残す（ボタンに移すと iOS のキーボードが閉じる）。Enter でも進める
     expect(screen.queryByRole('button', { name: '解答' })).toBeNull()
     expect(nextButton()).toHaveTextContent('次へ')
-    expect(document.activeElement).toBe(nextButton())
+    expect(document.activeElement).toBe(input)
     // 間違えている間は「空欄のまま解答すると…」の注意書きを出さない（用紙の高さを抑える）
     expect(screen.queryByText(/空欄のまま解答すると/)).toBeNull()
 

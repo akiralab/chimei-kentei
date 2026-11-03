@@ -191,7 +191,7 @@ VITE_RANKING_API=https://xxxx.execute-api.ap-northeast-1.amazonaws.com npm run d
 ## iOS アプリ（Capacitor の殻）
 
 同じ Web の中身を Capacitor 8 の殻（WKWebView）に入れて App Store へ出す（Issue #58・設計ノート §16）。
-殻の中では触覚・共有シート・ステータスバーだけをネイティブに寄せ、分岐は `src/native.ts` に閉じ込める
+殻の中では共有シート・ステータスバー・キーボード（出ている間は WebView を縮める）だけをネイティブに寄せ、分岐は `src/native.ts` と `capacitor.config.ts` に閉じ込める
 （画面側は `@capacitor/*` を直接 import しない）。問題バンク・地図・書体は同梱なので、順位表以外はオフラインで動く。
 
 ```bash
@@ -209,6 +209,8 @@ npm run sync:ios    # 上に続けて dist を ios/App/App/public へ写し、�
   （`MARKETING_VERSION`）とワークフローの実行番号（`CURRENT_PROJECT_VERSION`）。
 - 殻からの通信は `Origin: capacitor://localhost` で飛ぶので、API の CORS（`infra/template.yaml` と
   `handler.ts` の既定）に入れてある。**この変更はマージ後に `npm run deploy:api` が要る。**
+- 出題中はソフトキーボードを閉じない（採点中も解答欄のフォーカスを保ち、Enter で次へ）。殻では
+  `@capacitor/keyboard` の `resize: native` でキーボードの高さぶん WebView を縮め、ページをスクロールさせない（Issue #61）。
 
 ## 構成
 
