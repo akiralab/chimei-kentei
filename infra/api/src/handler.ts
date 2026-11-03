@@ -139,6 +139,8 @@ export const DEFAULT_ALLOWED_ORIGINS = [
   'https://akiralab.github.io',
   'http://localhost:5173',
   'http://localhost:4173',
+  // iOS の殻（Capacitor の WKWebView）。Issue #58
+  'capacitor://localhost',
 ]
 
 export const DEFAULT_LIMIT = 20

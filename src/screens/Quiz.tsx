@@ -19,6 +19,14 @@ import HiraganaInput from '../components/HiraganaInput.tsx'
 import Challenge from './Challenge.tsx'
 
 const KANJI_NUM = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十']
+
+/**
+ * ボタンを押しても解答欄からフォーカスを奪わない。フォーカスが動くと iOS はソフトキーボードを
+ * 閉じ、次の問で開き直すときに画面が上下に動く（Issue #61）。10 問のあいだ開いたままにする
+ */
+function keepFocus(event: { preventDefault(): void }) {
+  event.preventDefault()
+}
 const FEEDBACK_MS = 1000
 const URGENT_MS = 5000
 
@@ -278,13 +286,15 @@ export default function Quiz({ setId, direct = false }: { setId: string; direct?
           </p>
           {note && <div className="q-pref">{note}</div>}
 
-          {/* 入るのはひらがなだけ。ローマ字で打っても IME の変換は不要（HiraganaInput が正規化する） */}
+          {/* 入るのはひらがなだけ。ローマ字で打っても IME の変換は不要（HiraganaInput が正規化する）。
+              採点中は disabled にせず locked（打鍵を捨てる）。フォーカスを保ってキーボードを閉じないため。
+              採点中の Enter は「次へ」（○ は 1 秒待たずに進める） */}
           <HiraganaInput
             ref={inputRef}
             value={input}
             onChange={setInput}
-            onSubmit={answerNow}
-            disabled={feedback !== null}
+            onSubmit={feedback ? advance : answerNow}
+            locked={feedback !== null}
             autoFocus
             placeholder="ひらがなで"
             ariaLabel="読みをひらがなで入力"
@@ -317,17 +327,17 @@ export default function Quiz({ setId, direct = false }: { setId: string; direct?
 
           <p>
             {/* 間違えたあとは「解答」の場所に「次へ」を出す（高さを変えず、指の位置も同じ）。
-                autoFocus で Enter / Space でも進める。最後の問なら結果へ */}
-            {/* key を分けて別要素として差し替える。同じ <button> の更新扱いだと autoFocus が効かない */}
+                フォーカスは解答欄に置いたまま（Enter でも進める）。ボタンに移すと iOS のキーボードが閉じる。
+                最後の問なら結果へ */}
             {feedback && !feedback.correct ?
-              <button key="next" type="button" className="btn btn--primary" onClick={advance} autoFocus>
+              <button type="button" className="btn btn--primary" onClick={advance} onMouseDown={keepFocus}>
                 {index + 1 >= set.questions.length ? '結果を見る' : '次へ'}
               </button>
             : <button
-                key="answer"
                 type="button"
                 className="btn btn--primary"
                 onClick={answerNow}
+                onMouseDown={keepFocus}
                 disabled={feedback !== null}
               >
                 解答

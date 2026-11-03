@@ -397,7 +397,12 @@ describe('GET /results', () => {
 describe('CORS', () => {
   it('許可 Origin には Access-Control-Allow-Origin を返す', async () => {
     const handler = makeHandler(memoryDdb())
-    for (const origin of ['https://akiralab.github.io', 'http://localhost:5173', 'http://localhost:4173']) {
+    for (const origin of [
+      'https://akiralab.github.io',
+      'http://localhost:5173',
+      'http://localhost:4173',
+      'capacitor://localhost',
+    ]) {
       const res = await handler(getEvent({ setId: SET_ID }, origin))
       expect(res.headers['access-control-allow-origin']).toBe(origin)
       expect(res.headers.vary).toBe('Origin')

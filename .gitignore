@@ -34,3 +34,6 @@ scripts/.font-cache/
 measure*.json
 network*.json
 shots*/
+
+# iOS のアーカイブ出力（ios.yml がランナー上で作る。手元で xcodebuild を回しても残さない）
+build/
