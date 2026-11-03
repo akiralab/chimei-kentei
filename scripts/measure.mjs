@@ -393,6 +393,8 @@ try {
       ['quiz-wrong-kbd', SET_ID],
       ['quiz-wrong-d-kbd', SET_ID_TOWNS],
     ]) {
+      // 同じ setId へのハッシュ移動では画面が作り直されず、制限も読み直されないので表紙を経由する
+      await s.go('#/', 800)
       await s.go(`#/q/${setId}`, 3200)
       await s.ev(CLICK('はじめる'))
       await sleep(1400)
