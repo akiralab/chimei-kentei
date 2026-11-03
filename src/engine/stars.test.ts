@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   STARS_ALL,
+  starsFallback,
   STARS_CHOICES,
   isStars,
   starsAria,
@@ -33,5 +34,13 @@ describe('難易度の表示名', () => {
     expect(STARS_ALL).toBe(0)
     expect([0, 4, -1, 1.5].some(isStars)).toBe(false)
     expect(STARS_CHOICES.every(isStars)).toBe(true)
+  })
+})
+
+describe('starsFallback', () => {
+  it('選んだ ★ を先頭に、近い ★ から試す。同じ近さなら難しい方から', () => {
+    expect(starsFallback(3)).toEqual([3, 2, 1])
+    expect(starsFallback(2)).toEqual([2, 3, 1])
+    expect(starsFallback(1)).toEqual([1, 2, 3])
   })
 })

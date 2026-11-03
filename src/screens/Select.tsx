@@ -2,18 +2,27 @@ import { useEffect, useMemo, useState } from 'react'
 import type { BankMeta, Mode, Stars } from '../engine/types.ts'
 import { ALL_TOWNS_MAX, ALL_TOWNS_MIN, QUESTIONS_PER_SET } from '../engine/types.ts'
 import { DATA_VERSION, loadEasy, loadMeta } from '../engine/bank.ts'
-import { MODES, MODE_LABELS, modeName } from '../engine/modes.ts'
+import { MODES, MODE_LABELS } from '../engine/modes.ts'
 import { allSetLabel, allSetName } from '../engine/score.ts'
-import { STARS_ALL, STARS_CHOICES, starsHeaderNote, starsMark, starsSwitchLabel } from '../engine/stars.ts'
+import {
+  STARS_ALL,
+  STARS_CHOICES,
+  STARS_EXAMPLES,
+  STARS_NAMES,
+  starsFallback,
+  starsMark,
+  starsSwitchLabel,
+} from '../engine/stars.ts'
 import { scopeLabel } from '../engine/scope.ts'
-import { SCOPE_NATIONWIDE, buildSetId, canBeAll, canHaveStars, randomSeed } from '../engine/setId.ts'
+import { SCOPE_NATIONWIDE, buildSetId, canBeAll, randomSeed } from '../engine/setId.ts'
 import { HOWTO_PATH, navigate, quizPath } from '../router.ts'
 import { TIME_LIMIT_CHOICES, useTimeLimit } from '../hooks/useTimeLimit.ts'
-import type { PrefectureCollection } from '../geo/load.ts'
-import { defaultGeoSource } from '../geo/load.ts'
+import { REGIONS } from '../geo/regions.ts'
 import { subregionById, subregionOf, subregionsOf, wholePrefLabel } from '../geo/subregions.ts'
-import RegionPicker from '../components/RegionPicker.tsx'
 import PaperSkeleton from '../components/PaperSkeleton.tsx'
+
+/** 都道府県の一覧に並べる順。地方の並びを北から南へ（REGIONS は地図の配置順なので先頭のコードで並べ直す） */
+const REGIONS_NORTH_TO_SOUTH = [...REGIONS].sort((a, b) => a.prefCodes[0].localeCompare(b.prefCodes[0]))
 
 /**
  * その範囲の **市区町村の数**（「東京都・島しょは 9 市町村」）。政令市の区は市にまとめてあるので、
@@ -97,13 +106,15 @@ export default function Select() {
    * （市区町村名ならその範囲の全市区町村名、町名なら選んだ市区町村の全町名）
    */
   const [all, setAll] = useState(false)
-  /** 難易度。0 ＝ 全部。両科目で選べる（Issue #46 で町名にも ★ が付いた） */
-  const [stars, setStars] = useState<StarsChoice>(STARS_ALL)
+  /**
+   * 難易度。既定は ★★★（「難しい問題が見てみたい」人が何も触らずに始めて肩透かしにならないように）。
+   * 「全部」は選べない（Issue #63 の決定）。両科目で選べる（Issue #46 で町名にも ★ が付いた）
+   */
+  const [stars, setStars] = useState<Stars>(3)
   // 時間制限は端末の設定（既定は「制限なし」）。Quiz は出題開始時に readTimeLimit() で読み直す
   const [timeLimitMs, setTimeLimitMs] = useTimeLimit()
-  // 地図（地方 → 都道府県の 2 段階）。読めなくても RegionPicker がボタングリッドで成立させる
-  const [japan, setJapan] = useState<PrefectureCollection | null>(null)
-  const [mapLoading, setMapLoading] = useState(true)
+  /** 「こまかい設定」（科目・問題数・時間制限）を開いているか。既定は畳む */
+  const [moreOpen, setMoreOpen] = useState(false)
   /**
    * easy.json の件数表。`countKey(範囲, 難易度)` → 件数（難易度 0 ＝ その範囲の全部）。
    * 範囲は全国 '00'・都道府県コード・地域 ID。
@@ -156,24 +167,6 @@ export default function Select() {
     }
   }, [])
 
-  // 地図データ（public/geo/japan.json）。無くても範囲選択は一覧で成立する
-  useEffect(() => {
-    let alive = true
-    defaultGeoSource()
-      .japan()
-      .then((fc) => {
-        if (!alive) return
-        setJapan(fc)
-        setMapLoading(false)
-      })
-      .catch(() => {
-        if (alive) setMapLoading(false)
-      })
-    return () => {
-      alive = false
-    }
-  }, [])
-
   const nationwide = scope === SCOPE_NATIONWIDE
   /** 選んでいる都道府県コード。地域（3 文字）を選んでいても親の都道府県を指す */
   const prefCode = nationwide ? undefined : scope.slice(0, 2)
@@ -199,9 +192,6 @@ export default function Select() {
   )
   /** 町名の件数表（meta だけで数える）。全国・都道府県・地域・市区町村の 4 つの範囲を引ける */
   const townCount = useMemo(() => (meta ? townCounts(meta) : null), [meta])
-  /** 難易度を選べる条件。いまは両科目 true（判定は engine/setId.ts に置く） */
-  const starsAvailable = canHaveStars(mode)
-
   /**
    * いまの範囲（またはいまの市区町村）× 難易度の件数。読めていなければ null。
    *  - 市区町村名（'e'）… easy.json を走査した件数
@@ -238,23 +228,22 @@ export default function Select() {
     return mode === 'd' && n < QUESTIONS_PER_SET
   }
   /**
-   * 実際に使う難易度。選んだ ★ が **いまの範囲で選べない**なら「全部」に落とす
-   * （範囲を変えた拍子に始められない組み合わせが残らないように）
+   * 実際に使う難易度。選んだ ★ が **いまの範囲で選べない**なら近い ★ へ移す
+   * （範囲を変えた拍子に始められない組み合わせが残らないように）。
+   * どの ★ も選べない（町名が少ない市区町村の全町名など）ときだけ undefined ＝ ★ で絞らない
    */
-  const starsSelected: StarsChoice =
-    !starsAvailable || (stars !== STARS_ALL && starsBlocked(stars)) ? STARS_ALL : stars
-  /** 出題に渡す難易度。0（全部）は渡さない */
-  const starsParam = starsSelected === STARS_ALL ? undefined : starsSelected
-
+  const starsSelected = starsFallback(stars).find((s) => !starsBlocked(s))
+  /** 件数表を引くときの難易度。絞らないなら「全部」の行 */
+  const starsCounted = starsSelected ?? STARS_ALL
   /**
-   * 「全部」ボタンに添える問題数。読めていなければ null（＝件数を出さない）。
+   * 全問のボタンに添える問題数。読めていなければ null（＝件数を出さない）。
    *  - 市区町村名 … その範囲 × 難易度の easy の件数
    *  - 町名 … **選んだ市区町村** × 難易度の町名の件数（市区町村を選ぶまでは出せない）
    */
   const allCount =
-    mode === 'e' ? (nationwide ? null : countAt(starsSelected))
+    mode === 'e' ? (nationwide ? null : countAt(starsCounted))
     : townsScope === undefined ? null
-    : countOfRange(townsScope, starsSelected)
+    : countOfRange(townsScope, starsCounted)
   /** 全部を選べる条件。市区町村名は都道府県／地域、町名は市区町村（下の `<select>` で選ぶ） */
   const allAvailable = mode === 'e' ? canBeAll(mode, scope) : !nationwide
   /**
@@ -276,53 +265,36 @@ export default function Select() {
   /** 出題に渡す範囲。全町名なら市区町村（6 桁）、それ以外は選んでいる範囲 */
   const startScope = townsScope ?? scope
 
-  /** 地図で光らせる県。地域・市区町村を選んでいても親の都道府県を光らせる */
-  const mapSelected = prefCode
-
   const prefNameOf = (code: string) => meta?.prefectures.find((p) => p.code === code)?.name
   const cityNameOf = (lgCode: string) => meta?.cities.find((c) => c.lgCode === lgCode)?.name
-  /** 見出しに出す範囲名。全町名で市区町村まで決まっていれば「匝瑳市」 */
+  /** 要約に出す範囲名。全町名で市区町村まで決まっていれば「匝瑳市」 */
   const rangeName = scopeLabel(startScope, prefNameOf, cityNameOf)
-  /** 「制限なし」→「なし」。見出しや切替で「制限: 制限なし」と重ならないように頭を落とす */
-  const shortLimit = (label: string) => label.replace(/^制限/, '')
-  const timeLimitLabel = shortLimit(
-    TIME_LIMIT_CHOICES.find((c) => c.value === timeLimitMs)?.label ?? TIME_LIMIT_CHOICES[0].label,
-  )
+  const timeLimitLabel = (TIME_LIMIT_CHOICES.find((c) => c.value === timeLimitMs) ?? TIME_LIMIT_CHOICES[0]).label
   const countLabel = allSelected && allCount !== null ? `全 ${allCount} 問` : `${QUESTIONS_PER_SET} 問`
   /**
    * 10 問が組めない理由の「何が足りないか」の部分。組めるなら null。
-   *  - 絞っていない … 「東京都・島しょは 9 市町村」（範囲が狭い）
-   *  - 難易度で絞った … 「鳥取県の★★★は 5 問」（★ が少ない）
+   *  - 絞らないとき … 「東京都・島しょは 9 市町村」（範囲が狭い）
+   *  - 難易度で絞ったとき … 「鳥取県の★★★は 5 問」（★ が少ない）
    */
   const tooFewLack =
     !tooFewForSet ? null
-    : starsParam !== undefined ? `${rangeName}の${starsMark(starsParam)}は ${allCount ?? 0} 問`
+    : starsSelected !== undefined ? `${rangeName}の${starsMark(starsSelected)}は ${allCount ?? 0} 問`
     : count ? `${rangeName}は ${count.n} ${count.unit}`
     : null
-
   /**
-   * 地図の見出し行に出す添え書き。「いまの範囲 × いまの難易度」の **問題数**（「67問」「★★★ 26問」）。
-   * 市区町村の数（meta.cities）ではなく問題バンクの件数なので、難易度の切替と一緒に動く。
-   * 町名（'d'）でも出す（地域の件数が meta の townStars で取れるようになったため。Issue #46）。
-   * 数えるのは **地図が指している範囲**（都道府県／地域）で、全町名で市区町村を選んでも動かさない
+   * 「始める」の上に出す 1 行。**何が始まるのか**を言う。ツールチップは iOS で見えないので、
+   * 10 問に足りないときの理由もここに書く（★★★ は 47 都道府県のうち 27 で 10 問に足りない）
    */
-  const noteCount = nationwide ? null : countOfRange(scope, starsSelected)
-  const selectedNote =
-    noteCount === null ? undefined
-    : starsParam === undefined ? `${noteCount}問`
-    : `${starsMark(starsParam)} ${noteCount}問`
-  /** 上の添え書きの読み上げ・ツールチップ用。記号だけでは何の数か分からないので言い換える */
-  const selectedNoteLabel =
-    noteCount === null ? undefined
-    : starsParam === undefined ? `問題数 ${noteCount} 問`
-    : `${starsMark(starsParam)} の問題数 ${noteCount} 問`
+  const summary =
+    blocked ? null
+    : tooFewLack !== null ? `${tooFewLack}なので、${countLabel}で解きます`
+    : `${starsSelected === undefined ? rangeName : `${rangeName}の${starsMark(starsSelected)}`}から ${countLabel}`
 
   /** 範囲（都道府県・地域）を選び直す。選んでいた市区町村は範囲の外になり得るので捨てる */
   const chooseScope = (next: string) => {
     setScope(next)
     setCity('')
   }
-  const choosePref = (prefCode: string) => chooseScope(prefCode)
   const chooseNationwide = () => {
     chooseScope(SCOPE_NATIONWIDE)
     setAll(false)
@@ -340,13 +312,13 @@ export default function Select() {
 
   const start = () => {
     if (blocked) return
-    navigate(quizPath(buildSetId(DATA_VERSION, mode, startScope, randomSeed(), allSelected, starsParam)))
+    navigate(quizPath(buildSetId(DATA_VERSION, mode, startScope, randomSeed(), allSelected, starsSelected)))
   }
 
   if (error) {
     return (
       <div className="paper">
-        <h1 className="paper__title">範囲・科目</h1>
+        <h1 className="paper__title">どのくらい難しい？</h1>
         <p>問題バンクを読み込めませんでした。</p>
         <p>{error}</p>
       </div>
@@ -356,38 +328,83 @@ export default function Select() {
   if (!meta) {
     return (
       <div className="paper">
-        <h1 className="paper__title">範囲・科目</h1>
+        <h1 className="paper__title">どのくらい難しい？</h1>
         <PaperSkeleton lines={5} />
       </div>
     )
   }
 
   return (
-    <div className="paper">
+    <div className="paper select">
       <div className="paper__header">
-        <h1 className="paper__title">範囲・科目</h1>
-        <p className="paper__subtitle">
-          いまの範囲: {rangeName} ／ 科目: {modeName(mode)}
-          {/* 難易度は絞ったときだけ出す（「全部」は既定なので書かない） */}
-          {starsParam !== undefined && ` ／ ${starsHeaderNote(starsParam)}`} ／ 問題数: {countLabel} ／ 制限:{' '}
-          {timeLimitLabel}
-        </p>
+        <h1 className="paper__title">どのくらい難しい？</h1>
         <a className="btn btn--ghost paper__help" href={HOWTO_PATH} aria-label="どうやって遊ぶの？">
           ？
         </a>
       </div>
 
-      <RegionPicker
-        collection={japan}
-        prefectures={meta.prefectures.map((p) => ({ code: p.code, name: p.name }))}
-        selected={mapSelected}
-        selectedNote={selectedNote}
-        selectedNoteLabel={selectedNoteLabel}
-        loading={mapLoading}
-        nationwide={nationwide}
-        onNationwide={chooseNationwide}
-        onSelect={choosePref}
-      />
+      {/* 難易度 ＝ 1 問ごとに付いた ★1〜3（data/build_stars.py）。**両科目に出す**（Issue #46）。
+          ★ の数だけでは何を選ぶのか分からないので、呼び名と例の地名を添える */}
+      <div className="level-list" role="group" aria-label="難易度">
+        {STARS_CHOICES.map((s) => (
+          <button
+            key={s}
+            type="button"
+            className={starsSelected === s ? 'level-choice is-selected' : 'level-choice'}
+            aria-pressed={starsSelected === s}
+            aria-label={starsSwitchLabel(s)}
+            disabled={starsBlocked(s)}
+            onClick={() => setStars(s)}
+          >
+            <span className="level-choice__name">
+              <span className="stars" aria-hidden="true">
+                {starsMark(s)}
+              </span>{' '}
+              {STARS_NAMES[s]}
+            </span>
+            {/* 押せない段は理由を出す（ツールチップは iOS で見えない） */}
+            <span className="level-choice__example">
+              {starsBlocked(s) ? `${rangeName}は ${countAt(s)} 問` : `例: ${STARS_EXAMPLES[s].join('・')}`}
+            </span>
+            {/* 色だけに頼らない（選んでいる段は印でも分かる） */}
+            <span className="level-choice__mark" aria-hidden="true">
+              {starsSelected === s ? '●' : '○'}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      <h2 className="paper__section select__heading">どこの地名？</h2>
+      <div className="place-row">
+        <button
+          type="button"
+          className={nationwide ? 'place-row__item is-selected' : 'place-row__item'}
+          aria-pressed={nationwide}
+          onClick={chooseNationwide}
+        >
+          全国
+        </button>
+        {/* ネイティブの <select>（iOS は OS のピッカーが出る）。地方ごとに分けて北から南へ並べる */}
+        <select
+          className={nationwide ? 'place-row__item' : 'place-row__item is-selected'}
+          aria-label="都道府県"
+          value={prefCode ?? ''}
+          onChange={(e) => (e.target.value === '' ? chooseNationwide() : chooseScope(e.target.value))}
+        >
+          <option value="">都道府県をえらぶ</option>
+          {REGIONS_NORTH_TO_SOUTH.map((region) => (
+            <optgroup key={region.id} label={region.name}>
+              {region.prefCodes
+                .filter((code) => prefNameOf(code) !== undefined)
+                .map((code) => (
+                  <option key={code} value={code}>
+                    {prefNameOf(code)}
+                  </option>
+                ))}
+            </optgroup>
+          ))}
+        </select>
+      </div>
 
       {/* 地域（北海道 4・東京都 3）。該当する都道府県を選んだときだけ出す。
           1 つ目は都道府県まるごと（「全道」「全域」）で、押すと scope が 2 桁に戻る */}
@@ -417,176 +434,137 @@ export default function Select() {
         </div>
       )}
 
-      {/* 科目 ＝ 出題する地名の種類。「難易度」とは別の軸なので、同じ行に並べても意味は混ざらない。
-          1 行に 2 つ置くのは縦を節約するため（地域の行が出る北海道・東京都でも 1 画面に収める） */}
-      <div className="switch-row">
-        <div className="mode-switch">
-          {MODES.map((m) => (
-            <button
-              key={m}
-              type="button"
-              className={mode === m ? 'mode-switch__item is-selected' : 'mode-switch__item'}
-              aria-pressed={mode === m}
-              aria-label={MODE_LABELS[m].name}
-              onClick={() => chooseMode(m)}
-            >
-              <span className="mode-switch__full" aria-hidden="true">
-                {MODE_LABELS[m].name}
-              </span>
-              <span className="mode-switch__abbr" aria-hidden="true">
-                {MODE_LABELS[m].short}
-              </span>
-            </button>
-          ))}
-        </div>
+      {/* 科目・問題数・時間制限は既定のままで遊べるので畳む。全町名で市区町村を選ぶまでは始められないので、
+          そのあいだは閉じさせない（<select> が隠れると何を選べばいいのか分からなくなる） */}
+      <button
+        type="button"
+        className="select-more"
+        aria-expanded={moreOpen || needCity}
+        onClick={() => setMoreOpen(!moreOpen)}
+      >
+        <span className="select-more__label">こまかい設定</span>
+        <span className="select-more__value">
+          {MODE_LABELS[mode].short}・{countLabel}・{timeLimitLabel}
+        </span>
+        <span className="select-more__chevron" aria-hidden="true">
+          {moreOpen || needCity ? '▾' : '›'}
+        </span>
+      </button>
 
-        {/* 難易度 ＝ 1 問ごとに付いた ★1〜3（data/build_stars.py）。**両科目に出す**
-            （Issue #46 で町名にも ★ が付いた）。
-            選択肢が 4 つなので地域の行と同じ --compact で 375px に収める */}
-        {starsAvailable && (
-          <div className="mode-switch mode-switch--compact mode-switch--fit" role="group" aria-label="難易度">
-            <button
-              type="button"
-              className={starsSelected === STARS_ALL ? 'mode-switch__item is-selected' : 'mode-switch__item'}
-              aria-pressed={starsSelected === STARS_ALL}
-              aria-label={starsSwitchLabel(STARS_ALL)}
-              onClick={() => setStars(STARS_ALL)}
-            >
-              <span className="mode-switch__full" aria-hidden="true">
-                全部
-              </span>
-              {/* 狭い画面では ★ 3 つ分の幅を確保するため 1 文字に落とす */}
-              <span className="mode-switch__abbr" aria-hidden="true">
-                全
-              </span>
-            </button>
-            {STARS_CHOICES.map((s) => {
-              const n = countAt(s)
-              return (
+      {(moreOpen || needCity) && (
+        <div className="select-more__body">
+          <div className="select-row">
+            <span className="select-row__label">科目</span>
+            {/* 科目 ＝ 出題する地名の種類。「難易度」とは別の軸 */}
+            <div className="mode-switch" role="group" aria-label="科目">
+              {MODES.map((m) => (
                 <button
-                  key={s}
+                  key={m}
                   type="button"
-                  className={starsSelected === s ? 'mode-switch__item is-selected' : 'mode-switch__item'}
-                  aria-pressed={starsSelected === s}
-                  aria-label={starsSwitchLabel(s)}
-                  // 件数は幅を食うのでラベルには出さず、ツールチップに回す（地域の行と同じ考え）
-                  title={n === null ? undefined : `${rangeName}の${starsMark(s)}は ${n} 問`}
-                  disabled={starsBlocked(s)}
-                  onClick={() => setStars(s)}
+                  className={mode === m ? 'mode-switch__item is-selected' : 'mode-switch__item'}
+                  aria-pressed={mode === m}
+                  aria-label={MODE_LABELS[m].name}
+                  onClick={() => chooseMode(m)}
                 >
-                  <span className="stars" aria-hidden="true">
-                    {starsMark(s)}
+                  <span className="mode-switch__full" aria-hidden="true">
+                    {MODE_LABELS[m].name}
+                  </span>
+                  <span className="mode-switch__abbr" aria-hidden="true">
+                    {MODE_LABELS[m].short}
                   </span>
                 </button>
-              )
-            })}
+              ))}
+            </div>
           </div>
-        )}
-      </div>
 
-      {/* 問題数と時間制限。1 行に 2 つ並べて縦を節約する（1 画面に収めるため） */}
-      <div className="switch-row">
-        <div className="mode-switch">
-          {/* 母集団が足りない理由。行を足すと 1 画面に収まらないので読み上げ専用にし、
-              見える説明は 10 問ボタンの title（ツールチップ）に出す。
-              難易度で絞ったときは市区町村の数ではなく **その ★ の問題数** が理由なのでそちらを言う */}
-          {tooFewLack !== null && (
-            <span className="sr-only">
-              {tooFewLack}なので、{QUESTIONS_PER_SET} 問ではなく全市区町村名で解きます
-            </span>
+          <div className="select-row">
+            <span className="select-row__label">問題数</span>
+            <div className="mode-switch" role="group" aria-label="問題数">
+              <button
+                type="button"
+                className={allSelected ? 'mode-switch__item' : 'mode-switch__item is-selected'}
+                aria-pressed={!allSelected}
+                aria-label={`問題数: ${QUESTIONS_PER_SET} 問`}
+                disabled={tooFewForSet}
+                onClick={chooseTenQuestions}
+              >
+                {QUESTIONS_PER_SET}問
+              </button>
+              <button
+                type="button"
+                className={allSelected ? 'mode-switch__item is-selected' : 'mode-switch__item'}
+                aria-pressed={allSelected}
+                // 名前は科目で違う（全市区町村名／全町名）。組み立ては engine/score.ts の 1 か所
+                aria-label={`問題数: ${allSetLabel(mode, allCount ?? undefined)}`}
+                disabled={!allAvailable}
+                onClick={() => setAll(true)}
+              >
+                <span className="mode-switch__full" aria-hidden="true">
+                  {allSetName(mode)}
+                  {allCount !== null && `（${allCount}問）`}
+                </span>
+                <span className="mode-switch__abbr" aria-hidden="true">
+                  全問{allCount !== null && `（${allCount}）`}
+                </span>
+              </button>
+            </div>
+          </div>
+
+          <div className="select-row">
+            <span className="select-row__label">時間制限</span>
+            <div className="mode-switch" role="group" aria-label="時間制限">
+              {TIME_LIMIT_CHOICES.map((choice) => (
+                <button
+                  key={choice.value}
+                  type="button"
+                  className={timeLimitMs === choice.value ? 'mode-switch__item is-selected' : 'mode-switch__item'}
+                  aria-pressed={timeLimitMs === choice.value}
+                  aria-label={`時間制限: ${choice.label.replace(/^制限/, '')}`}
+                  onClick={() => setTimeLimitMs(choice.value)}
+                >
+                  {choice.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 全町名の単位は市区町村（Issue #46 の決定 1）。**全町名を選んだときだけ**出す
+              （PR #28 で外した「市区町村で絞る」は戻さない）。
+              0 件と上限超えは押せない選択肢として並べ、理由をラベルに書く */}
+          {mode === 'd' && allSelected && (
+            <label className="field">
+              <span className="field__label">市区町村</span>
+              <select
+                className="field__input field__input--wide"
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+              >
+                <option value="">市区町村を選ぶ</option>
+                {cityOptions.map((c) => (
+                  <option key={c.lgCode} value={c.lgCode} disabled={!canPlayAllTowns(c)}>
+                    {cityOptionLabel(c)}
+                  </option>
+                ))}
+              </select>
+            </label>
           )}
-          <button
-            type="button"
-            className={allSelected ? 'mode-switch__item' : 'mode-switch__item is-selected'}
-            aria-pressed={!allSelected}
-            aria-label={`問題数: ${QUESTIONS_PER_SET} 問`}
-            title={tooFewLack === null ? undefined : `${tooFewLack}なので全市区町村名で解きます`}
-            disabled={tooFewForSet}
-            onClick={chooseTenQuestions}
-          >
-            <span className="mode-switch__full" aria-hidden="true">
-              {QUESTIONS_PER_SET}問
-            </span>
-            <span className="mode-switch__abbr" aria-hidden="true">
-              {QUESTIONS_PER_SET}問
-            </span>
-          </button>
-          <button
-            type="button"
-            className={allSelected ? 'mode-switch__item is-selected' : 'mode-switch__item'}
-            aria-pressed={allSelected}
-            // 名前は科目で違う（全市区町村名／全町名）。組み立ては engine/score.ts の 1 か所
-            aria-label={`問題数: ${allSetLabel(mode, allCount ?? undefined)}`}
-            title={
-              allAvailable ? undefined
-              : mode === 'e' ? '市区町村名で都道府県か地域を選ぶと選べます'
-              : '町名で都道府県か地域を選ぶと選べます'
-            }
-            disabled={!allAvailable}
-            onClick={() => setAll(true)}
-          >
-            <span className="mode-switch__full" aria-hidden="true">
-              {allSetName(mode)}
-              {allCount !== null && `（${allCount}問）`}
-            </span>
-            <span className="mode-switch__abbr" aria-hidden="true">
-              全部{allCount !== null && `（${allCount}）`}
-            </span>
-          </button>
         </div>
-
-        <div className="mode-switch">
-          {TIME_LIMIT_CHOICES.map((choice) => (
-            <button
-              key={choice.value}
-              type="button"
-              className={timeLimitMs === choice.value ? 'mode-switch__item is-selected' : 'mode-switch__item'}
-              aria-pressed={timeLimitMs === choice.value}
-              aria-label={`時間制限: ${shortLimit(choice.label)}`}
-              onClick={() => setTimeLimitMs(choice.value)}
-            >
-              <span className="mode-switch__full" aria-hidden="true">
-                時間制限: {shortLimit(choice.label)}
-              </span>
-              {/* 狭い画面でも「なし」単独だと何の設定か分からないので、短縮版は元のラベルを使う */}
-              <span className="mode-switch__abbr" aria-hidden="true">
-                {choice.label}
-              </span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* 全町名の単位は市区町村（Issue #46 の決定 1）。**全町名を選んだときだけ** 1 行増やして
-          ネイティブの `<select>` で選ばせる（PR #28 で外した「市区町村で絞る」は戻さない）。
-          0 件と上限超えは押せない選択肢として並べ、理由をラベルに書く */}
-      {mode === 'd' && allSelected && (
-        <label className="field">
-          <span className="field__label">市区町村</span>
-          <select
-            className="field__input field__input--wide"
-            value={city}
-            onChange={(e) => setCity(e.target.value)}
-          >
-            <option value="">市区町村を選ぶ</option>
-            {cityOptions.map((c) => (
-              <option key={c.lgCode} value={c.lgCode} disabled={!canPlayAllTowns(c)}>
-                {cityOptionLabel(c)}
-              </option>
-            ))}
-          </select>
-        </label>
       )}
 
-      <p>
+      <div className="select__start">
+        {summary !== null && (
+          <p className="select__summary" role="status">
+            {summary}
+          </p>
+        )}
         {/* 全国のまま町名（都道府県ごとの出題）を選んでいる間、全町名で市区町村を選んでいない間は
-            始められない。行を足すと 1 画面に収まらなくなるので、案内はボタンのラベルに出す */}
+            始められない。案内はボタンのラベルに出す */}
         <button type="button" className="btn btn--primary" onClick={start} disabled={blocked}>
           {!blocked ? '始める'
           : needCity ? '市区町村を選ぶと始められます'
           : '都道府県を選ぶと始められます'}
         </button>
-      </p>
+      </div>
     </div>
   )
 }

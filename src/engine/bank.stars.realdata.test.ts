@@ -15,7 +15,7 @@ import type { BankMeta, Question, Stars } from './types.ts'
 import { QUESTIONS_PER_SET } from './types.ts'
 import type { BankSource } from './bank.ts'
 import { DATA_VERSION, allQuestions, buildQuestionSet } from './bank.ts'
-import { STARS_CHOICES } from './stars.ts'
+import { STARS_CHOICES, STARS_EXAMPLES } from './stars.ts'
 
 const EASY_FILES = import.meta.glob<Question[]>('../../public/questions/*/easy.json', { import: 'default' })
 const META_FILES = import.meta.glob<BankMeta>('../../public/questions/*/meta.json', { import: 'default' })
@@ -71,6 +71,17 @@ beforeAll(async () => {
 function countIn(prefCode: string | null, stars: Stars): number {
   return easy.filter((q) => (prefCode === null || q.prefCode === prefCode) && q.stars === stars).length
 }
+
+describe('選択画面に添える例の地名', () => {
+  it('どの例も問題バンクにあり、その ★ が付いている', () => {
+    for (const stars of STARS_CHOICES) {
+      for (const name of STARS_EXAMPLES[stars]) {
+        const hits = easy.filter((q) => `${q.display}${q.suffix ?? ''}` === name)
+        expect(hits.map((q) => q.stars), name).toEqual([stars])
+      }
+    }
+  })
+})
 
 describe('難易度 ★ の実データ', () => {
   it('easy の全問が ★1〜3 を持つ', () => {

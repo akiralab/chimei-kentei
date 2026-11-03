@@ -2,7 +2,7 @@
  * 地名帳（`#/atlas`）。クイズとは別の「正解の一覧と位置がわかる資料集」（Issue #35・段階 1）。
  *
  * 3 つの状態を 1 つの画面で出し分ける（設計 §12.4）:
- *   入口   `#/atlas`                … 地方 → 都道府県（範囲選択と同じ RegionPicker）
+ *   入口   `#/atlas`                … 地方 → 都道府県（RegionPicker）
  *   一覧   `#/atlas/13k`            … 「市区町村 ｜ よみ」の表（団体コード順）
  *   行     `#/atlas/13k/131199`     … その市区町村を地図で塗り、人口・面積のカードを出す
  *
@@ -255,7 +255,7 @@ export default function Atlas({ scope, lgCode }: Props) {
           <p className="paper__subtitle">都道府県を選ぶと市区町村の一覧が出ます</p>
         </div>
 
-        {/* 範囲選択と同じ 2 段階。全国は出さない（1,741 行を 1 枚に並べる画面ではない） */}
+        {/* 地方 → 都道府県の 2 段階。全国は出さない（1,741 行を 1 枚に並べる画面ではない） */}
         <RegionPicker
           collection={japan}
           prefectures={meta.prefectures.map((p) => ({ code: p.code, name: p.name }))}

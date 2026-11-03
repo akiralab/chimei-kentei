@@ -3,7 +3,6 @@
  * 画面への組み込み（配線）の確認。App.flow.test.tsx は geo を 404 にしたまま通る設計なので、
  * 「地図データが実際に読める」経路はこちらで押さえる。
  *
- * - 範囲・科目: 地方 → 都道府県 の 2 段階で scope が変わる
  * - 出題: 左パネルに県内地図が出て、解答後に情報カードの中身が出る
  */
 import '@testing-library/jest-dom/vitest'
@@ -16,7 +15,7 @@ import { JAPAN_FIXTURE, PREF_GEO_FIXTURE, STATS_FIXTURE } from '../geo/__fixture
 import { resetGeoSource } from '../geo/load.ts'
 import { WIDE_QUERY } from '../hooks/useMediaQuery.ts'
 import { NICKNAME_KEY } from '../hooks/useNickname.ts'
-import { quizPath } from '../router.ts'
+import { navigate, quizPath } from '../router.ts'
 import App from '../App.tsx'
 
 /** 問題バンクと地図データの両方を返す fetch */
@@ -47,8 +46,9 @@ async function settle(): Promise<void> {
   })
 }
 
+/** アプリ内の遷移として開く（共有リンクの着地にすると挑戦状が先に出る） */
 function renderAt(hash: string): void {
-  window.location.hash = hash
+  navigate(hash)
   render(
     <StrictMode>
       <App />
@@ -68,46 +68,6 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
-})
-
-describe('範囲・科目 への組み込み', () => {
-  it('地方 → 都道府県 の 2 段階で範囲が変わる', async () => {
-    renderAt('#/select')
-    await waitFor(() => {
-      expect(document.querySelector('.jp-map__svg')).not.toBeNull()
-    })
-
-    // 段階 1。フィクスチャの 12・13 はどちらも関東なので、出る地方は関東だけ
-    expect(screen.getByText('地方をえらぶ')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '千葉県' })).toBeNull()
-    expect(screen.getByRole('button', { name: '全国' })).toBeInTheDocument()
-
-    // 段階 2 へ
-    fireEvent.click(screen.getByRole('button', { name: '関東地方' }))
-    expect(screen.getByText('関東の都道府県をえらぶ')).toBeInTheDocument()
-
-    // 地図のチップでもボタングリッドでも選べる。ここはグリッド側を押す
-    fireEvent.click([...document.querySelectorAll('.jp-map__cell')].find((b) => b.textContent === '千葉県')!)
-    expect(screen.getByText(/いまの範囲: 千葉県/)).toBeInTheDocument()
-    expect(document.querySelector('.jp-map__path--selected[data-pref-code="12"]')).not.toBeNull()
-
-    fireEvent.click(screen.getByRole('button', { name: '始める' }))
-    await settle()
-    expect(window.location.hash).toMatch(new RegExp(`^#/q/${DATA_VERSION}-e-12-\\d{4}$`))
-  })
-
-  it('「地方を選び直す」で段階 1 に戻る', async () => {
-    renderAt('#/select')
-    await waitFor(() => {
-      expect(document.querySelector('.jp-map__svg')).not.toBeNull()
-    })
-
-    fireEvent.click(screen.getByRole('button', { name: '関東地方' }))
-    fireEvent.click(screen.getByRole('button', { name: '地方を選び直す' }))
-
-    expect(screen.getByText('地方をえらぶ')).toBeInTheDocument()
-    expect(document.querySelector('.jp-map__grid')).toBeNull()
-  })
 })
 
 describe('出題 への組み込み', () => {

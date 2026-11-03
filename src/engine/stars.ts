@@ -14,8 +14,26 @@ import type { Stars } from './types.ts'
 /** 切替に並べる難易度。0 ＝ 絞らない（全部）は画面側が別に持つ */
 export const STARS_CHOICES: Stars[] = [1, 2, 3]
 
-/** 絞っていない状態。選択画面の state と「全部」の表示に使う */
+/**
+ * 絞っていない状態。地名帳の「全部」と、選択画面の件数表の「全部」の行に使う。
+ * 選択画面の難易度としては選べない（Issue #63）
+ */
 export const STARS_ALL = 0
+
+/** 選択画面の呼び名。★ の数だけでは何を選ぶのか分からないので言葉を添える */
+export const STARS_NAMES: Record<Stars, string> = { 1: 'やさしい', 2: 'ふつう', 3: 'むずかしい' }
+
+/** 選択画面に添える例の地名。問題バンクの ★ から 2 つ（bank.stars.realdata.test.ts が実データと突き合わせる） */
+export const STARS_EXAMPLES: Record<Stars, [string, string]> = {
+  1: ['横浜市', '仙台市'],
+  2: ['札幌市', '海老名市'],
+  3: ['匝瑳市', '宿毛市'],
+}
+
+/** 選んだ ★ が使えないときに試す順。近い ★ から、同じ近さなら難しい方から（先頭は選んだ ★ そのもの） */
+export function starsFallback(stars: Stars): Stars[] {
+  return [...STARS_CHOICES].sort((a, b) => Math.abs(a - stars) - Math.abs(b - stars) || b - a)
+}
 
 export function isStars(v: number): v is Stars {
   return v === 1 || v === 2 || v === 3
