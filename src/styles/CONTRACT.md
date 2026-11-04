@@ -35,7 +35,8 @@
 | `.paper__share` | 見出し行（`.paper__header`）の右端に置く「共有」。`.paper__help`（丸い「？」）と同じ格・同じ位置で、2 文字ぶんだけ広い |
 | `.board--scroll` | `.board` の修飾子。結果・間違えた問題・あそびかたの 3 画面だけ、用紙ごと縦スクロールする（下の「1 画面運用」の例外） |
 | `.skeleton` / `.skeleton__line` | 読み込み中の答案（`PaperSkeleton`）。罫線の上に薄い長方形を数行 |
-| `.layout__map--folded` / `.layout__map-label`（**map.css**） | 出題画面の地図を解答前に 1 行へ畳む修飾子と、その中の範囲名 |
+| `.layout__map--folded` / `.layout__map-label`（**map.css**） | 899px 以下の出題画面で地図を 1 行へ畳む修飾子と、その中の範囲名 |
+| `.map-sheet` / `.map-sheet__bar` / `.map-sheet__back` / `.map-sheet__title` / `.map-sheet__next`（**map.css**） | 解答後の地図と情報カードの全画面シート（899px 以下）。`.is-closing` で閉じる動き |
 | `.select` | `.paper` に併記する修飾子。範囲・科目の画面。文字は 15px 以上、押す場所は 44px 以上（Issue #63） |
 | `.level-list` / `.level-choice`（`__name` `__example` `__mark`）/ `.is-selected` | 難易度の 3 択。★ の呼び名と例の地名を添える。選択中は蛍光マーカーと ● |
 | `.place-row` / `.place-row__item` / `.is-selected` | 「全国」のボタンと都道府県のネイティブ `<select>` を 1 行に並べる |
@@ -174,7 +175,7 @@ Dela Gothic One は字幅を詰めた極太デザインで、1.4rem 前後の漢
 | `.atlas__kana` | よみ（手書き風・`--font-hand`） |
 | `.atlas__stars` | 行の難易度 ★（`.stars` の入れ物）。★ を持たない行でも**列だけ残す**ので、よみの右端が行ごとにずれない |
 | `.atlas-nav` / `.atlas-nav__back` / `.atlas-nav__step` / `.atlas-nav__name` / `.atlas-nav__count` | 「← 一覧へ」「◀ 前 {名前}」「次 {名前} ▶」「3 / 23」。端の行では `.atlas-nav__step--end` で押せない見た目にする |
-| `.atlas-detail`（**map.css**） | 899px 以下の詳細（地図＋カード）。`.info-card` を地図に重ねるのをやめて通常フローに戻す上書きなので、`.map-*` / `.info-card*` の所有者である `map.css` に置く |
+| `.atlas-detail`（**map.css**） | 899px 以下の詳細（地図＋カード）。残りの高さを地図へ渡す |
 
 実装上の約束:
 
@@ -225,16 +226,16 @@ Dela Gothic One は字幅を詰めた極太デザインで、1.4rem 前後の漢
 **`--fs-xs` より小さいトークンを足さない。** 計測（`npm run measure` の `fontUnder16`）に除外は作らず、
 下タブバーの文字（`--fs-sm`）も含めて 13px 未満が 0 件であることを見る。
 
-### 出題画面の地図は解答前に畳む（899px 以下）
+### 出題画面の地図は全画面シートで開く（899px 以下）
 
-`.layout__map` は `899px` 以下で、**解答前だけ** `.layout__map--folded` が付いて高さ `--tap-min`（44px）の
-1 行になる。中身は範囲名（`.layout__map-label`。「東京都」だけ。「どこ？」のヒントは出さない）で、
-`MunicipalityMap` と `MunicipalityInfo` は**描かない**。解答すると 24dvh（狭い画面は 20dvh）で開く。
+`.layout__map` は `899px` 以下で常に `.layout__map--folded` が付いて高さ `--tap-min`（44px）の 1 行になる。
+中身は範囲名（`.layout__map-label`。「東京都」だけ。「どこ？」のヒントは出さない）で、
+`MunicipalityMap` と `MunicipalityInfo` は描かない。解答後に ○× の行の「地図と情報」（`.q-feedback__map`）で
+全画面シート（`.map-sheet`。`MunicipalitySheet`）を開き、そこに地図とカードを重ねずに積む（Issue #68）。
 
-- 判定は `useMediaQuery(WIDE_QUERY)`（`900px` 以上なら従来どおり常時表示）＋ `feedback === null`
-- 開くときの高さは 150ms で伸ばす。`prefers-reduced-motion` では `theme.css` §18 の一括指定で止まる
+- 判定は `useMediaQuery(WIDE_QUERY)`（`900px` 以上なら従来どおり左カラムに常駐）
+- シートは右から 200ms で滑り込む。`prefers-reduced-motion` では `theme.css` §18 の一括指定で止まる
 - キーボード近似の高さ（`max-height: 560px`）では畳んだ 1 行も消す。同じ内容が用紙の帯の「範囲: 東京都」に出ているため
-- `MunicipalityInfo` の「カードは常に置く」約束は、**畳んでいない間だけ**の約束に読み替える（出題画面のスマホ幅は畳んだ 1 行 → 地図＋カード で高さが動く。これは「答え合わせで開く」演出として意図したもの）
 
 ### 読み込み中と失敗（`.skeleton` / 再試行）
 

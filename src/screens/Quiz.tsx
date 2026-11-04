@@ -9,12 +9,12 @@ import { rangeLabelOf } from '../engine/scope.ts'
 import { SCOPE_NATIONWIDE, parseSetId } from '../engine/setId.ts'
 import { useMediaQuery, WIDE_QUERY } from '../hooks/useMediaQuery.ts'
 import { useNickname } from '../hooks/useNickname.ts'
-import { useShortViewport } from '../hooks/useShortViewport.ts'
 import { writeAnswerSheet } from '../hooks/answerSheet.ts'
 import { readTimeLimit, writeQuizTimeLimit } from '../hooks/useTimeLimit.ts'
 import { SELECT_PATH, navigate, resultPath } from '../router.ts'
 import MunicipalityMap from '../components/MunicipalityMap.tsx'
 import MunicipalityInfo from '../components/MunicipalityInfo.tsx'
+import MunicipalitySheet from '../components/MunicipalitySheet.tsx'
 import PaperSkeleton from '../components/PaperSkeleton.tsx'
 import HiraganaInput from '../components/HiraganaInput.tsx'
 import Challenge from './Challenge.tsx'
@@ -83,14 +83,9 @@ export default function Quiz({ setId, direct = false }: { setId: string; direct?
   const [nickname, setNickname] = useNickname()
   /** 900px 以上は 2 カラム。地図は左に常駐するので畳まない */
   const wide = useMediaQuery(WIDE_QUERY)
-  /**
-   * 解答前に地図を畳むか（899px 以下だけ）。畳むのは「県内のどこか」のヒントより、
-   * ソフトキーボードが出たときに「解答」が画面内に残ることを採ったため（設計ノート §13.6 決定 4）。
-   * 解答した瞬間に地図と情報カードが開く＝答え合わせの演出も兼ねる。
-   * ただしキーボードが出ている間は解答後も開かない。縮んだ用紙から ○× と正解が押し出される（Issue #64）
-   */
-  const short = useShortViewport()
-  const folded = !wide && (feedback === null || short)
+  /** 地図と情報のシート（899px 以下）。解答後に「地図と情報」で開く */
+  const [sheetOpen, setSheetOpen] = useState(false)
+  const closeSheet = useCallback(() => setSheetOpen(false), [])
 
   const error =
     parsed === null ? `セットIDが読めません: ${setId}`
@@ -147,6 +142,7 @@ export default function Quiz({ setId, direct = false }: { setId: string; direct?
   const advance = useCallback(() => {
     if (Date.now() - switchedAt.current < DOUBLE_PRESS_MS) return
     switchedAt.current = Date.now()
+    setSheetOpen(false)
     setFeedback(null)
     setInput('')
     setRemainMs(timeLimitMs)
@@ -242,15 +238,16 @@ export default function Quiz({ setId, direct = false }: { setId: string; direct?
   const note = prefNote(set, question)
   const remainPct = limited ? Math.max(0, Math.min(100, (remainMs / timeLimitMs) * 100)) : 100
   const urgent = limited && remainMs <= URGENT_MS
+  const nextLabel = index + 1 >= set.questions.length ? '結果を見る' : '次へ'
 
   return (
     <div className="layout layout--quiz">
-      {/* 左（スマホでは上）: 県内のどこか ＋ 解答後の自治体情報。
-          スマホの解答前は 1 行に畳み、地図とカードは描かない（開いた瞬間に答え合わせになる） */}
-      <aside className={folded ? 'layout__map layout__map--folded' : 'layout__map'}>
-        {folded ?
-          <p className="layout__map-label">{question.pref}</p>
-        : <>
+      {/* 900px 以上は左に常駐: 県内のどこか ＋ 解答後の自治体情報。
+          899px 以下は範囲名の 1 行だけにする。「県内のどこか」のヒントより、ソフトキーボードが出ても
+          「解答」が画面内に残ることを採った（設計ノート §13.6 決定 4）。地図とカードは解答後にシートで開く */}
+      <aside className={wide ? 'layout__map' : 'layout__map layout__map--folded'}>
+        {wide ?
+          <>
             <MunicipalityMap prefCode={question.prefCode} lgCode={question.lgCode} prefName={question.pref} />
             {/* 開いている間はカードも置く。中身は解答後だけ（地名帳と同じ部品） */}
             <MunicipalityInfo
@@ -260,7 +257,7 @@ export default function Quiz({ setId, direct = false }: { setId: string; direct?
               prefName={set.scope === SCOPE_NATIONWIDE ? question.pref : undefined}
             />
           </>
-        }
+        : <p className="layout__map-label">{question.pref}</p>}
       </aside>
 
       <div className="layout__quiz">
@@ -324,15 +321,17 @@ export default function Quiz({ setId, direct = false }: { setId: string; direct?
                 </span>
                 <span className="sr-only">{feedback.correct ? '正解' : '誤り'}</span>{' '}
                 <span className="marker marker--yellow">{feedback.answer}</span>
-                {/* 畳んだままの地図を見たい人の入口。キーボードを閉じれば高さが戻って地図が開く。
-                    次の問で解答欄にフォーカスが戻るので、キーボードも戻る */}
-                {folded && (
+                {/* シートを開くときはキーボードを閉じる。戻るときと次へ進むときにまた開く */}
+                {!wide && (
                   <button
                     type="button"
                     className="btn btn--ghost q-feedback__map"
-                    onClick={() => inputRef.current?.blur()}
+                    onClick={() => {
+                      inputRef.current?.blur()
+                      setSheetOpen(true)
+                    }}
                   >
-                    地図
+                    地図と情報
                   </button>
                 )}
               </>
@@ -359,7 +358,7 @@ export default function Quiz({ setId, direct = false }: { setId: string; direct?
                 最後の問なら結果へ */}
             {feedback ?
               <button type="button" className="btn btn--primary" onClick={advance} onMouseDown={keepFocus}>
-                {index + 1 >= set.questions.length ? '結果を見る' : '次へ'}
+                {nextLabel}
               </button>
             : <button
                 type="button"
@@ -376,6 +375,23 @@ export default function Quiz({ setId, direct = false }: { setId: string; direct?
 
         </div>
       </div>
+
+      {feedback && sheetOpen && !wide && (
+        <MunicipalitySheet
+          title={question.display}
+          prefCode={question.prefCode}
+          lgCode={question.lgCode}
+          prefName={question.pref}
+          reading={set.mode === 'e' ? question.answer : undefined}
+          nextLabel={nextLabel}
+          onBack={() => inputRef.current?.focus()}
+          onClosed={closeSheet}
+          onNext={() => {
+            inputRef.current?.focus()
+            advance()
+          }}
+        />
+      )}
     </div>
   )
 }

@@ -13,6 +13,7 @@
 //   atlasVisible … 地名帳の一覧の見える行数（atlas.visible の別名。375x667 で 8 以上。#51 条件 3）
 //   quizMap … 出題画面の地図パネルの高さと、情報カードに覆われずに見える高さ（#51 やること 6）
 //   feedbackSeen … 解答直後の ○×・正解・主ボタン・問題文が、用紙の内側スクロールなしで見えるか（#64 ㉛）
+//   mapSheet … 地図と情報のシートが全画面を覆い、地図とカードと「次へ」が重ならず切れずに見えるか（#68 ㉞）
 //
 // 用紙ごと縦スクロールする 3 画面（.board--scroll ＝ 結果・間違えた問題・あそびかた。#44 条件 2）は
 // paper.overY が 0 でも「切れていない」とは言えないので、専用の 3 つで判定する。
@@ -180,6 +181,27 @@
     }
   })()
 
+  const mapSheet = (() => {
+    const sheet = document.querySelector('.map-sheet')
+    if (sheet === null) return null
+    const sb = sheet.getBoundingClientRect()
+    const svg = sheet.querySelector('.map-muni__svg')?.getBoundingClientRect()
+    const panel = sheet.querySelector('.map-muni')?.getBoundingClientRect()
+    const card = sheet.querySelector('.info-card')?.getBoundingClientRect()
+    const next = sheet.querySelector('.map-sheet__next')?.getBoundingClientRect()
+    if (!svg || !panel || !card || !next) return { missing: true }
+    return {
+      covers: Math.round(sb.left) === 0 && Math.round(sb.top) === 0 && Math.round(sb.width) === innerWidth && Math.round(sb.height) === innerHeight,
+      onTop: sheet.contains(document.elementFromPoint(innerWidth / 2, innerHeight - 4)),
+      mapH: Math.round(svg.height),
+      cardH: Math.round(card.height),
+      mapCardGap: Math.round(card.top - panel.bottom),
+      cardNextGap: Math.round(next.top - card.bottom),
+      nextBottom: Math.round(next.bottom),
+      overY: sheet.scrollHeight - sheet.clientHeight,
+    }
+  })()
+
   return JSON.stringify({
     vw: innerWidth, vh: innerHeight,
     boardScroll: !!document.querySelector('.board--scroll'),
@@ -203,6 +225,7 @@
     tabbar,
     quizMap,
     feedbackSeen,
+    mapSheet,
     atlas: rowsIn('.atlas', '.atlas__row'),
     ranking: rowsIn('.ranking', '.ranking__row'),
     review: rowsIn('.review', '.review__row'),

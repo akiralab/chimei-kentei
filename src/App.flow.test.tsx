@@ -10,7 +10,7 @@
 import '@testing-library/jest-dom/vitest'
 import { StrictMode } from 'react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { BankMeta, Question, QuestionSet } from './engine/types.ts'
 import { QUESTIONS_PER_SET, TIME_LIMIT_MS } from './engine/types.ts'
@@ -893,77 +893,116 @@ describe('出題', () => {
     expect(answerInput()).toHaveFocus()
   })
 
-  describe('キーボードが出ている高さ（Issue #64）', () => {
-    const tall = window.innerHeight
+  describe('地図と情報のシート（Issue #68）', () => {
+    const SHEET_MS = 200
 
-    function setViewportHeight(h: number): void {
-      Object.defineProperty(window, 'innerHeight', { value: h, configurable: true, writable: true })
-      fireEvent(window, new Event('resize'))
-    }
-
-    afterEach(() => {
-      setViewportHeight(tall)
-    })
-
-    it('解答しても地図を開かず、○× と正解を入力欄の直下に出す', async () => {
-      setViewportHeight(420)
-      await openQuiz(SET_ID)
-
+    /** 不正解で解答する（○× の行に「地図と情報」が出る状態）*/
+    function answerWrong(): HTMLInputElement {
       const input = answerInput()
       fireEvent.change(input, { target: { value: 'さん' } })
       fireEvent.keyDown(input, { key: 'Enter' })
+      return input
+    }
+
+    function mapButton(): HTMLElement {
+      return screen.getByRole('button', { name: '地図と情報' })
+    }
+
+    function dialog(): HTMLElement | null {
+      return screen.queryByRole('dialog', { name: '地図と情報' })
+    }
+
+    it('解答しても地図は開かず、1 行のまま ○× と正解を出す', async () => {
+      await openQuiz(SET_ID)
+      answerWrong()
 
       expect(all('.mark--wrong')).toHaveLength(1)
       expect(el('.q-feedback .marker').textContent).toBe(EXPECTED.questions[0].answer)
       expect(all('.layout__map--folded')).toHaveLength(1)
+      expect(dialog()).toBeNull()
     })
 
-    it('「地図」でキーボードを閉じると地図が開き、次の問で解答欄にフォーカスが戻る', async () => {
-      setViewportHeight(420)
+    it('解答前は入口を出さない。○ にも × にも出す', async () => {
       await openQuiz(SET_ID)
+      expect(screen.queryByRole('button', { name: '地図と情報' })).toBeNull()
 
-      const input = answerInput()
-      fireEvent.change(input, { target: { value: 'さん' } })
-      fireEvent.keyDown(input, { key: 'Enter' })
-      expect(input).toHaveFocus()
-
-      fireEvent.click(screen.getByRole('button', { name: '地図' }))
-      expect(input).not.toHaveFocus()
-
-      // キーボードが閉じると見える高さが戻る
-      setViewportHeight(844)
-      expect(all('.layout__map--folded')).toHaveLength(0)
-      expect(screen.queryByRole('button', { name: '地図' })).toBeNull()
+      answerWrong()
+      expect(mapButton()).toBeInTheDocument()
 
       await settle(DOUBLE_PRESS_MS)
       fireEvent.click(nextButton()!)
+      await settle(DOUBLE_PRESS_MS)
+
+      const input = answerInput()
+      fireEvent.change(input, { target: { value: EXPECTED.questions[1].answer } })
+      fireEvent.keyDown(input, { key: 'Enter' })
+      expect(all('.mark--correct')).toHaveLength(1)
+      expect(mapButton()).toBeInTheDocument()
+    })
+
+    it('開くとキーボードを閉じ、「問題へ」で解答欄にフォーカスが戻り、問はそのまま', async () => {
+      await openQuiz(SET_ID)
+      const input = answerWrong()
+      expect(input).toHaveFocus()
+
+      fireEvent.click(mapButton())
       await settle()
+      expect(input).not.toHaveFocus()
+      expect(dialog()).toBeInTheDocument()
+      const back = screen.getByRole('button', { name: /問題へ/ })
+      expect(back).toHaveFocus()
+
+      // 押した処理の中でフォーカスを戻す（iOS はユーザー操作の中でないとキーボードを出さない）
+      fireEvent.click(back)
+      expect(input).toHaveFocus()
+      expect(el('.map-sheet')).toHaveClass('is-closing')
+
+      await settle(SHEET_MS)
+      expect(dialog()).toBeNull()
+      expect(el('.q-number__text').textContent).toBe('問一 / 十')
+      expect(all('.mark--wrong')).toHaveLength(1)
+      expect(nextButton()).toHaveTextContent('次へ')
+    })
+
+    it('Esc で閉じる', async () => {
+      await openQuiz(SET_ID)
+      const input = answerWrong()
+      fireEvent.click(mapButton())
+      await settle()
+
+      fireEvent.keyDown(screen.getByRole('button', { name: /問題へ/ }), { key: 'Escape' })
+      expect(input).toHaveFocus()
+      await settle(SHEET_MS)
+      expect(dialog()).toBeNull()
+    })
+
+    it('シートの「次へ」で次の問へ進み、解答欄にフォーカスが戻る', async () => {
+      await openQuiz(SET_ID)
+      answerWrong()
+      await settle(DOUBLE_PRESS_MS)
+      fireEvent.click(mapButton())
+      await settle()
+
+      fireEvent.click(within(dialog()!).getByRole('button', { name: '次へ' }))
+      await settle()
+      expect(dialog()).toBeNull()
       expect(el('.q-number__text').textContent).toBe('問二 / 十')
       expect(answerInput()).toHaveFocus()
+      expect(answerInput()).toHaveValue('')
     })
 
-    it('○ にも「地図」を出す（正解でも市区町村の情報を見られる）', async () => {
-      setViewportHeight(420)
+    it('最後の問のシートは「結果を見る」で結果へ進む', async () => {
       await openQuiz(SET_ID)
+      for (let i = 0; i < EXPECTED.questions.length - 1; i++) await answerOne(EXPECTED.questions[i].answer)
+      answerWrong()
+      await settle(DOUBLE_PRESS_MS)
+      fireEvent.click(mapButton())
+      await settle()
 
-      const input = answerInput()
-      fireEvent.change(input, { target: { value: EXPECTED.questions[0].answer } })
-      fireEvent.keyDown(input, { key: 'Enter' })
-
-      expect(all('.mark--correct')).toHaveLength(1)
-      expect(screen.getByRole('button', { name: '地図' })).toBeInTheDocument()
-    })
-
-    it('背が高ければ今までどおり解答で地図が開く', async () => {
-      await openQuiz(SET_ID)
-      expect(all('.layout__map--folded')).toHaveLength(1)
-
-      const input = answerInput()
-      fireEvent.change(input, { target: { value: 'さん' } })
-      fireEvent.keyDown(input, { key: 'Enter' })
-
-      expect(all('.layout__map--folded')).toHaveLength(0)
-      expect(screen.queryByRole('button', { name: '地図' })).toBeNull()
+      fireEvent.click(within(dialog()!).getByRole('button', { name: '結果を見る' }))
+      await settle()
+      expect(hash()).toBe(resultPath(SET_ID))
+      expect(dialog()).toBeNull()
     })
   })
 
