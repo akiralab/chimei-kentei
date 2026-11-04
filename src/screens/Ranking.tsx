@@ -11,6 +11,9 @@
  * 地図は置かない（範囲選択の主役なので、ここでは一覧だけにする）。
  * 区分は localStorage（useRankingMode）でトップと詳細を引き継ぐ。
  * 絞り込みはストア側（Remote なら API の `?mode=`）で行うので、画面は受け取った順に並べるだけ。
+ *
+ * 開いた瞬間に前回の順位を出し、古ければ裏で取り直す（engine/ranking-cache.ts）。
+ * スケルトンを出すのは手元に何も無いときだけで、更新に失敗しても順位は消さない。
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { BankMeta, PrefectureStat, RankingMode, RankingRow } from '../engine/types.ts'
@@ -21,17 +24,12 @@ import { starsRowNote } from '../engine/stars.ts'
 import { loadMeta } from '../engine/bank.ts'
 import { scopeLabel } from '../engine/scope.ts'
 import { SCOPE_NATIONWIDE } from '../engine/setId.ts'
-import { defaultRankingStore } from '../engine/ranking-factory.ts'
+import { PREF_LIMIT, STATS_KEY, listKey, loadList, loadStats } from '../engine/ranking-cache.ts'
 import { connectionMessage } from '../hooks/connection.ts'
+import { useRankingCache } from '../hooks/useRankingCache.ts'
 import { useRankingMode } from '../hooks/useRankingMode.ts'
 import PaperSkeleton from '../components/PaperSkeleton.tsx'
 import { RANKING_PATH, SELECT_PATH, navigate, quizPath, rankingPrefPath } from '../router.ts'
-
-/** 都道府県の詳細で一度に見せる件数 */
-const PREF_LIMIT = 30
-
-
-const store = defaultRankingStore()
 
 function formatDuration(ms: number): string {
   const total = Math.round(ms / 1000)
@@ -46,6 +44,13 @@ function formatDate(iso: string): string {
   return `${d.getFullYear()}-${m}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+/** 最終更新の時刻。今日なら '9:17'、前の日なら '11/3 9:17' */
+function formatUpdatedAt(at: number): string {
+  const d = new Date(at)
+  const time = `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`
+  return d.toDateString() === new Date().toDateString() ? time : `${d.getMonth() + 1}/${d.getDate()} ${time}`
+}
+
 /**
  * その区分の件数・人数。byMode が無い古いデータは合計で代用するが、
  * 全問（全市区町村名・全町名）は登録できるようになる前のデータに存在しないので 0 件とする。
@@ -58,59 +63,49 @@ function countOf(stat: PrefectureStat | undefined, mode: RankingMode): { entries
   return { entries: stat.entries, players: stat.players }
 }
 
+/**
+ * 読めた meta。順位はキャッシュからすぐ出るので、開き直すたびに読み込みを待つと
+ * 「都道府県 12」のような仮の名前が一瞬見える
+ */
+let knownMeta: BankMeta | null = null
+
 export default function Ranking({ prefCode }: { prefCode?: string } = {}) {
   const [mode, setMode] = useRankingMode()
-  const [meta, setMeta] = useState<BankMeta | null>(null)
-  const [stats, setStats] = useState<PrefectureStat[] | null>(null)
-  const [rows, setRows] = useState<RankingRow[] | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  /** 「もう一度ためす」を押した回数。増やすと下の useEffect が取り直す */
-  const [attempt, setAttempt] = useState(0)
+  const [meta, setMeta] = useState<BankMeta | null>(knownMeta)
+  /** meta の読み込みが終わったか（読めなくても終わり。順位表は数字だけで成立する） */
+  const [metaSettled, setMetaSettled] = useState(knownMeta !== null)
+  // 詳細は科目が変わるたびに別のキーになる（絞り込みはストア側の仕事）
+  const load = useCallback(
+    (): Promise<PrefectureStat[] | RankingRow[]> => (prefCode === undefined ? loadStats() : loadList(prefCode, mode)),
+    [prefCode, mode],
+  )
+  const { data, at, refreshing, failed, refresh } = useRankingCache(
+    prefCode === undefined ? STATS_KEY : listKey(prefCode, mode),
+    load,
+  )
+  const stats = prefCode === undefined ? (data as PrefectureStat[] | null) : null
+  const rows = prefCode === undefined ? null : (data as RankingRow[] | null)
+  /** 名前の引き当てを待っているか、手元に何も無くまだ結果が出ていない間 */
+  const loading = !metaSettled || (data === null && !failed)
+  const error = data === null && failed ? connectionMessage() : null
 
   // 都道府県名・市区町村名の引き当てに使う
   useEffect(() => {
     let alive = true
     loadMeta()
       .then((m) => {
+        knownMeta = m
         if (alive) setMeta(m)
       })
       .catch(() => {
         // 問題バンクが読めなくてもランキングは数字だけで成立する
       })
-    return () => {
-      alive = false
-    }
-  }, [])
-
-  // ランキング本体。詳細は科目が変わるたびに取り直す（絞り込みはストア側の仕事）。
-  // attempt が増えると「もう一度ためす」としてもう一度同じ取得を走らせる
-  useEffect(() => {
-    let alive = true
-    const load =
-      prefCode === undefined ? store.prefectureStats() : store.listByPrefecture(prefCode, PREF_LIMIT, mode)
-    load
-      .then((result) => {
-        if (!alive) return
-        if (prefCode === undefined) setStats(result as PrefectureStat[])
-        else setRows(result as RankingRow[])
-        setError(null)
-        setLoading(false)
-      })
-      .catch(() => {
-        if (!alive) return
-        setError(connectionMessage())
-        setLoading(false)
+      .finally(() => {
+        if (alive) setMetaSettled(true)
       })
     return () => {
       alive = false
     }
-  }, [prefCode, mode, attempt])
-
-  const retry = useCallback(() => {
-    setLoading(true)
-    setError(null)
-    setAttempt((n) => n + 1)
   }, [])
 
   /** 失敗の表示。原因の 1 行と「もう一度ためす」をひと組で出す */
@@ -118,7 +113,7 @@ export default function Ranking({ prefCode }: { prefCode?: string } = {}) {
     <>
       <p className="pen-comment">{error}</p>
       <p>
-        <button type="button" className="btn" onClick={retry}>
+        <button type="button" className="btn" onClick={refresh}>
           もう一度ためす
         </button>
       </p>
@@ -168,6 +163,33 @@ export default function Ranking({ prefCode }: { prefCode?: string } = {}) {
     </div>
   )
 
+  /**
+   * 最終更新と更新ボタン。手元に順位があるときだけ出す（無いときはスケルトンか「もう一度ためす」）。
+   * 動きを減らす設定では theme.css の一括指定で回転が止まるので、文言でも更新中だと分かるようにする
+   */
+  const syncRow = data !== null && (
+    <div className="ranking-sync">
+      <span className="ranking-sync__status" role="status">
+        {failed && <span className="ranking-sync__failed">更新できませんでした</span>}{' '}
+        {at !== null && `最終更新 ${formatUpdatedAt(at)}`}
+      </span>
+      <button
+        type="button"
+        className="btn btn--ghost ranking-sync__button"
+        disabled={refreshing}
+        aria-busy={refreshing}
+        onClick={refresh}
+      >
+        {refreshing ?
+          <>
+            <span className="spinner" aria-hidden="true" />
+            更新中…
+          </>
+        : '更新'}
+      </button>
+    </div>
+  )
+
   /** 用紙の底。同じ画面の中の移動（都道府県の一覧へ）と次の行動だけを残す（第 3 波 D1）*/
   const footer = (
     <p>
@@ -196,13 +218,14 @@ export default function Ranking({ prefCode }: { prefCode?: string } = {}) {
         </div>
 
         {modeSwitch}
+        {syncRow}
 
         {loading && <PaperSkeleton lines={5} />}
         {errorBlock}
 
-        {!loading && !error && shown.length === 0 && <p>まだ登録がありません。</p>}
+        {!loading && rows !== null && shown.length === 0 && <p>まだ登録がありません。</p>}
 
-        {shown.length > 0 && (
+        {!loading && shown.length > 0 && (
           <ol className="ranking">
             {shown.map((r, i) => {
               const rowStars = starsOfRow(r)
@@ -291,11 +314,12 @@ export default function Ranking({ prefCode }: { prefCode?: string } = {}) {
       </div>
 
       {modeSwitch}
+      {syncRow}
 
       {loading && <PaperSkeleton lines={5} />}
       {errorBlock}
 
-      {!loading && !error && (
+      {!loading && stats !== null && (
         <ol className="pref-grid">
           <li>
             <button

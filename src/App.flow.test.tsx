@@ -23,6 +23,7 @@ import { NO_TIME_LIMIT, TIME_LIMIT_KEY } from './hooks/useTimeLimit.ts'
 import { readWrongList } from './engine/wrongList.ts'
 import { quizPath, resetNavigated, resultPath } from './router.ts'
 import App from './App.tsx'
+import { resetRankingCacheForTest } from './engine/ranking-cache.ts'
 
 /** Quiz.tsx の ○× を見せる時間。同値を保つ */
 const FEEDBACK_MS = 1000
@@ -249,6 +250,7 @@ beforeEach(() => {
   writeText.mockClear()
   localStorage.clear()
   sessionStorage.clear()
+  resetRankingCacheForTest()
   // 既定は「制限なし」だが、この通しテストの多くは 20 秒制限の挙動を見ている。
   // 制限なしの経路は「時間制限」describe で個別に確かめる
   localStorage.setItem(TIME_LIMIT_KEY, String(TIME_LIMIT_MS))
@@ -1338,6 +1340,29 @@ describe('ランキングへの導線', () => {
 
     expect(screen.getByRole('heading', { name: '千葉県のランキング' })).toBeInTheDocument()
     expect(screen.getByText('まだ登録がありません。')).toBeInTheDocument()
+  })
+
+  it('登録したあとに開くと、5 分経っていなくても自分の行が入っている（Issue #70）', async () => {
+    // 登録の前に開いて、空の順位をキャッシュさせる
+    goto('#/ranking/12')
+    renderApp()
+    await settle()
+    expect(screen.getByText('まだ登録がありません。')).toBeInTheDocument()
+    cleanup()
+
+    localStorage.setItem(NICKNAME_KEY, 'たろう')
+    await openQuiz(SET_ID)
+    for (const q of EXPECTED.questions) await answerOne(q.answer)
+    await settle()
+    fireEvent.click(screen.getByRole('button', { name: 'ランキングに登録' }))
+    await settle()
+    cleanup()
+
+    goto('#/ranking/12')
+    renderApp()
+    await settle()
+    expect(all('.ranking__row')).toHaveLength(1)
+    expect(all('.ranking__row')[0].textContent).toContain('たろう')
   })
 })
 

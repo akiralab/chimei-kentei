@@ -9,6 +9,7 @@ import { defaultStorage, getClientToken, isValidNickname, provisionalRank } from
 import { allRowNote, scoreOf, starsOfRow } from '../engine/score.ts'
 import { starsAria, starsHeaderNote, starsMark, starsRowNote } from '../engine/stars.ts'
 import { defaultRankingStore, isRemoteRanking } from '../engine/ranking-factory.ts'
+import { STATS_KEY, clearRankingCache, loadStats, refresh } from '../engine/ranking-cache.ts'
 import { appendWrongFromEntry } from '../engine/wrongList.ts'
 import { readNickname } from '../hooks/useNickname.ts'
 import { readAnswerSheet } from '../hooks/answerSheet.ts'
@@ -195,6 +196,9 @@ export default function Result({ setId }: { setId: string }) {
       // 「間違えた問題」は登録した答案だけ記録する（登録しなかった回は残さない）
       if (set) appendWrongFromEntry(set, { ...entry, entryId: res.entryId })
       setNotice(`${res.rank} 位で登録しました。`)
+      // 順位タブのキャッシュには自分の行が無いので捨てる。一覧だけ取り直しておく
+      clearRankingCache()
+      void refresh(STATS_KEY, loadStats)
       await loadRanking(res.entryId)
       return
     }
