@@ -140,6 +140,8 @@ try {
   await shot('quiz')
 
   // ② 解答後の ○× と正解 ③ 地図と情報のシート
+  await type('あばしり')
+  await sleep(200)
   await click('解答')
   await sleep(800)
   await shot('answer')
