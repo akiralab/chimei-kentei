@@ -13,6 +13,16 @@
  *  - 依存（DynamoDB・問題バンク・時刻・ID 生成）は createHandler() に注入する。
  *    default export の handler は本番依存で組み立てたもの。
  */
+// SDK は esbuild で同梱する（package.json の build:api）。ランタイム同梱の一式を読むと、
+// 256MB のコールドスタートに 2.4 秒かかっていた（同梱で 0.9 秒。Issue #71）
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
+import {
+  DynamoDBDocumentClient,
+  PutCommand,
+  QueryCommand,
+  TransactWriteCommand,
+  UpdateCommand,
+} from '@aws-sdk/lib-dynamodb'
 import type { BankSource } from '../../../src/engine/bank.ts'
 import { DATA_VERSION, buildQuestionSet, createFetchSource } from '../../../src/engine/bank.ts'
 import { grade } from '../../../src/engine/grading.ts'
@@ -742,11 +752,6 @@ let lazy: ((event: HttpApiEvent) => Promise<HttpApiResult>) | undefined
 /** Lambda のエントリポイント。依存は初回呼び出し時に 1 度だけ組み立て、以降は再利用する */
 export const handler = async (event: HttpApiEvent): Promise<HttpApiResult> => {
   if (!lazy) {
-    const [{ DynamoDBClient }, { DynamoDBDocumentClient, PutCommand, QueryCommand, TransactWriteCommand, UpdateCommand }] =
-      await Promise.all([
-      import('@aws-sdk/client-dynamodb'),
-      import('@aws-sdk/lib-dynamodb'),
-    ])
     const doc = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
       marshallOptions: { removeUndefinedValues: true },
     })
