@@ -718,6 +718,79 @@ describe('出題', () => {
     expect(answerInput()).toHaveFocus()
   })
 
+  describe('キーボードが出ている高さ（Issue #64）', () => {
+    const tall = window.innerHeight
+
+    function setViewportHeight(h: number): void {
+      Object.defineProperty(window, 'innerHeight', { value: h, configurable: true, writable: true })
+      fireEvent(window, new Event('resize'))
+    }
+
+    afterEach(() => {
+      setViewportHeight(tall)
+    })
+
+    it('解答しても地図を開かず、○× と正解を入力欄の直下に出す', async () => {
+      setViewportHeight(420)
+      await openQuiz(SET_ID)
+
+      const input = answerInput()
+      fireEvent.change(input, { target: { value: 'さん' } })
+      fireEvent.keyDown(input, { key: 'Enter' })
+
+      expect(all('.mark--wrong')).toHaveLength(1)
+      expect(el('.q-feedback .marker').textContent).toBe(EXPECTED.questions[0].answer)
+      expect(all('.layout__map--folded')).toHaveLength(1)
+    })
+
+    it('「地図」でキーボードを閉じると地図が開き、次の問で解答欄にフォーカスが戻る', async () => {
+      setViewportHeight(420)
+      await openQuiz(SET_ID)
+
+      const input = answerInput()
+      fireEvent.change(input, { target: { value: 'さん' } })
+      fireEvent.keyDown(input, { key: 'Enter' })
+      expect(input).toHaveFocus()
+
+      fireEvent.click(screen.getByRole('button', { name: '地図' }))
+      expect(input).not.toHaveFocus()
+
+      // キーボードが閉じると見える高さが戻る
+      setViewportHeight(844)
+      expect(all('.layout__map--folded')).toHaveLength(0)
+      expect(screen.queryByRole('button', { name: '地図' })).toBeNull()
+
+      fireEvent.click(nextButton()!)
+      await settle()
+      expect(el('.q-number__text').textContent).toBe('問二 / 十')
+      expect(answerInput()).toHaveFocus()
+    })
+
+    it('○ には「地図」を出さない（1 秒で次へ進む）', async () => {
+      setViewportHeight(420)
+      await openQuiz(SET_ID)
+
+      const input = answerInput()
+      fireEvent.change(input, { target: { value: EXPECTED.questions[0].answer } })
+      fireEvent.keyDown(input, { key: 'Enter' })
+
+      expect(all('.mark--correct')).toHaveLength(1)
+      expect(screen.queryByRole('button', { name: '地図' })).toBeNull()
+    })
+
+    it('背が高ければ今までどおり解答で地図が開く', async () => {
+      await openQuiz(SET_ID)
+      expect(all('.layout__map--folded')).toHaveLength(1)
+
+      const input = answerInput()
+      fireEvent.change(input, { target: { value: 'さん' } })
+      fireEvent.keyDown(input, { key: 'Enter' })
+
+      expect(all('.layout__map--folded')).toHaveLength(0)
+      expect(screen.queryByRole('button', { name: '地図' })).toBeNull()
+    })
+  })
+
   it('採点中も解答欄のフォーカスは外れず、打鍵は捨てられ、Enter で次へ進む（iOS でキーボードを閉じない）', async () => {
     await openQuiz(SET_ID)
 

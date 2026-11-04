@@ -211,6 +211,7 @@ npm run sync:ios    # 上に続けて dist を ios/App/App/public へ写し、�
   `handler.ts` の既定）に入れてある。**この変更はマージ後に `npm run deploy:api` が要る。**
 - 出題中はソフトキーボードを閉じない（採点中も解答欄のフォーカスを保ち、Enter で次へ）。殻では
   `@capacitor/keyboard` の `resize: native` でキーボードの高さぶん WebView を縮め、ページをスクロールさせない（Issue #61）。
+- **キーボードが出ている間は、解答後も地図を開かない。** 見える高さは 390×420 まで落ちるので、地図と自治体カードが開くと ○× と正解が用紙の外へ押し出される（Issue #64）。見える高さが 600px 未満の間（`useShortViewport`。Web の iOS Safari も visualViewport で拾う）は畳んだままにし、帯・問いの文・タブバーも外す。地図を見たいときは × の行の「地図」を押す（キーボードが閉じて高さが戻り、地図が開く）。`npm run measure` の `quiz-wrong-*-kbd-390x420` / `-375x360` の `feedbackSeen` で確かめる。
 
 ## 構成
 

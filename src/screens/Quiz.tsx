@@ -9,6 +9,7 @@ import { rangeLabelOf } from '../engine/scope.ts'
 import { SCOPE_NATIONWIDE, parseSetId } from '../engine/setId.ts'
 import { useMediaQuery, WIDE_QUERY } from '../hooks/useMediaQuery.ts'
 import { useNickname } from '../hooks/useNickname.ts'
+import { useShortViewport } from '../hooks/useShortViewport.ts'
 import { writeAnswerSheet } from '../hooks/answerSheet.ts'
 import { readTimeLimit, writeQuizTimeLimit } from '../hooks/useTimeLimit.ts'
 import { SELECT_PATH, navigate, resultPath } from '../router.ts'
@@ -79,9 +80,11 @@ export default function Quiz({ setId, direct = false }: { setId: string; direct?
   /**
    * 解答前に地図を畳むか（899px 以下だけ）。畳むのは「県内のどこか」のヒントより、
    * ソフトキーボードが出たときに「解答」が画面内に残ることを採ったため（設計ノート §13.6 決定 4）。
-   * 解答した瞬間に地図と情報カードが開く＝答え合わせの演出も兼ねる
+   * 解答した瞬間に地図と情報カードが開く＝答え合わせの演出も兼ねる。
+   * ただしキーボードが出ている間は解答後も開かない。縮んだ用紙から ○× と正解が押し出される（Issue #64）
    */
-  const folded = !wide && feedback === null
+  const short = useShortViewport()
+  const folded = !wide && (feedback === null || short)
 
   const error =
     parsed === null ? `セットIDが読めません: ${setId}`
@@ -230,7 +233,7 @@ export default function Quiz({ setId, direct = false }: { setId: string; direct?
   const urgent = limited && remainMs <= URGENT_MS
 
   return (
-    <div className="layout">
+    <div className="layout layout--quiz">
       {/* 左（スマホでは上）: 県内のどこか ＋ 解答後の自治体情報。
           スマホの解答前は 1 行に畳み、地図とカードは描かない（開いた瞬間に答え合わせになる） */}
       <aside className={folded ? 'layout__map layout__map--folded' : 'layout__map'}>
@@ -300,16 +303,30 @@ export default function Quiz({ setId, direct = false }: { setId: string; direct?
             ariaLabel="読みをひらがなで入力"
           />
 
-          {/* 丸バツと正解は入力欄の直下に出す（用紙の底に置くと欠ける） */}
-          {feedback && (
-            <p className="q-feedback">
-              <span className={feedback.correct ? 'mark mark--correct' : 'mark mark--wrong'} aria-hidden="true">
-                {feedback.correct ? '○' : '×'}
-              </span>
-              <span className="sr-only">{feedback.correct ? '正解' : '誤り'}</span>{' '}
-              <span className="marker marker--yellow">{feedback.answer}</span>
-            </p>
-          )}
+          {/* 丸バツと正解は入力欄の直下に出す（用紙の底に置くと欠ける）。解答前は空のまま置いておき、
+              キーボードが出ている高さでは CSS が行を確保する（解答で「次へ」の位置が動かないように） */}
+          <p className="q-feedback">
+            {feedback && (
+              <>
+                <span className={feedback.correct ? 'mark mark--correct' : 'mark mark--wrong'} aria-hidden="true">
+                  {feedback.correct ? '○' : '×'}
+                </span>
+                <span className="sr-only">{feedback.correct ? '正解' : '誤り'}</span>{' '}
+                <span className="marker marker--yellow">{feedback.answer}</span>
+                {/* 畳んだままの地図を見たい人の入口。キーボードを閉じれば高さが戻って地図が開く。
+                    次の問で解答欄にフォーカスが戻るので、キーボードも戻る */}
+                {folded && !feedback.correct && (
+                  <button
+                    type="button"
+                    className="btn btn--ghost q-feedback__map"
+                    onClick={() => inputRef.current?.blur()}
+                  >
+                    地図
+                  </button>
+                )}
+              </>
+            )}
+          </p>
 
           {limited ? (
             <>

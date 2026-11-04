@@ -15,7 +15,8 @@
 //   <out>/*.png      … スクリーンショット（前後で差分を取る）
 //
 // ビューポートは 375×667（SE3）・390×844（15/16）・430×932（Pro Max）・1280×800（PC）と、
-// ソフトキーボード出現時の近似 390×508（844 − 日本語キーボード 336）。
+// ソフトキーボード出現時の近似 390×508（844 − 日本語キーボード 336）。実機の見える高さはもっと低いので
+// 390×420（844 − ステータスバー 59 − キーボードと変換候補 365）と 375×360（SE）も測る（#64）。
 //
 // Chrome は macOS の既定パス。別の場所にあるときは CHROME=/path/to/chrome で上書きする。
 import { spawn } from 'node:child_process'
@@ -45,6 +46,7 @@ const SKIP_NETWORK = has('no-network')
 const SKIP_SHOTS = has('no-shots')
 
 const SET_ID = 'abr20260925r2-e-13-1234' // 東京都・市区町村名・seed 1234（決定論）
+const SET_ID_TOWNS = 'abr20260925r2-d-13-1234' // 同じ条件の町名。問題文の下に所属自治体の行が増える
 const NICK = 'けんてい太郎'
 const CHROME = process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
 const MEASURE = fs.readFileSync(path.join(here, 'measure-expr.js'), 'utf8')
@@ -207,11 +209,18 @@ async function record(s, name, w, h) {
   // 第 3 波（Issue #51）の受け入れ条件。用紙の中の戻るボタンは 0、タブバーは全状態で見える
   if (m.backInPaper?.length) flag.push(`backInPaper=${m.backInPaper.map((b) => b.text).join('|')}`)
   if (!m.tabbar?.present) flag.push('tabbar=MISSING')
-  else if (!m.tabbar.visible) flag.push('tabbar=HIDDEN')
+  // キーボードが出ている高さの出題画面だけは消す（#64）
+  else if (!m.tabbar.visible) {
+    if (!(h <= 600 && m.layout)) flag.push('tabbar=HIDDEN')
+  }
   else if (m.tabbar.inPaper) flag.push('tabbar=INSIDE-PAPER')
   else if (m.tabbar.current !== 1) flag.push(`tabbarCurrent=${m.tabbar.current}`)
-  if (m.paper && m.tabbar?.paperClear !== null && m.tabbar?.paperClear < 0) flag.push(`paperUnderTabbar=${-m.tabbar.paperClear}`)
+  if (m.paper && m.tabbar?.visible && m.tabbar?.paperClear !== null && m.tabbar?.paperClear < 0) flag.push(`paperUnderTabbar=${-m.tabbar.paperClear}`)
   if (m.answerBtnVisible === false) flag.push('answerBtn=HIDDEN')
+  if (m.feedbackSeen) {
+    const cut = ['mark', 'answer', 'next', 'kanji'].filter((k) => !m.feedbackSeen[k])
+    if (cut.length) flag.push(`feedbackCut=${cut.join('|')}`)
+  }
   console.log(
     `  ${name}-${w}x${h}  tap<44=${m.tapUnder44.length} font<16=${m.fontUnder16.length} primary=${m.primaryCount} ${flag.join(' ')}`,
   )
@@ -348,23 +357,47 @@ try {
   }
 
   // -------------------------------------------------------------- キーボード出現時
-  // iOS の日本語キーボード高さ（336px）を引いた 390x508 で入力中を撮る。
-  // 時間制限 20 秒も入れて砂時計つきの状態を押さえる。
-  {
-    console.log(`\n=== 390x508 (keyboard) ===`)
-    const s = await session(390, 508)
+  // 入力中と解答直後を撮る。時間制限 20 秒も入れて砂時計つきの状態を押さえる。
+  // 解答直後は制限なしと町名（添え書きの行が増える）も撮り、○× が用紙の中に残ることを見る（#64）。
+  for (const [w, h] of [
+    [390, 508],
+    [390, 420],
+    [375, 360],
+  ]) {
+    console.log(`\n=== ${w}x${h} (keyboard) ===`)
+    const s = await session(w, h)
     await s.go('#/', 2600)
     await s.ev(
       `(() => { localStorage.clear(); localStorage.setItem('nickname', ${JSON.stringify(NICK)}); localStorage.setItem('timeLimitMs', '20000'); return 'ok' })()`,
     )
     await s.go(`#/q/${SET_ID}`, 3200)
-    await record(s, 'challenge-kbd', 390, 508)
+    await record(s, 'challenge-kbd', w, h)
     await s.ev(CLICK('はじめる'))
     await sleep(1400)
-    await record(s, 'quiz-empty-kbd', 390, 508)
+    await record(s, 'quiz-empty-kbd', w, h)
     await s.ev(TYPE('あいうえ'))
     await sleep(500)
-    await record(s, 'quiz-typing-kbd', 390, 508)
+    await record(s, 'quiz-typing-kbd', w, h)
+    await s.ev(CLICK('解答'))
+    await sleep(700)
+    await record(s, 'quiz-wrong-limit-kbd', w, h)
+
+    await s.ev(`(() => { localStorage.setItem('timeLimitMs', '0'); return 'ok' })()`)
+    for (const [name, setId] of [
+      ['quiz-wrong-kbd', SET_ID],
+      ['quiz-wrong-d-kbd', SET_ID_TOWNS],
+    ]) {
+      // 同じ setId へのハッシュ移動では画面が作り直されず、制限も読み直されないので表紙を経由する
+      await s.go('#/', 800)
+      await s.go(`#/q/${setId}`, 3200)
+      await s.ev(CLICK('はじめる'))
+      await sleep(1400)
+      await s.ev(TYPE('あいうえ'))
+      await sleep(300)
+      await s.ev(CLICK('解答'))
+      await sleep(700)
+      await record(s, name, w, h)
+    }
     s.close()
   }
 
