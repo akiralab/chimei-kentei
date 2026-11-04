@@ -34,6 +34,7 @@ GitHub Pages は静的配信のため、ランキングは別ホストの API �
 - 201: `{ "ok": true, "rank": 3, "entry": RankingRow }`
 - 409: `{ "ok": false, "reason": "already_submitted" }`
 - 400: `{ "ok": false, "reason": "invalid", "detail": "..." }`
+- **名前のフィルタ**（App Store Guideline 1.2・`infra/api/src/ngwords.ts`）: NG 語と連絡先に見える文字列（URL・メールアドレス・7 桁以上の数字）は 400。`detail` をそのまま画面に出す。判定は NFKC・カタカナ→ひらがな・記号除去のあとで行い、保存する名前は `trim` のみ。登録済みの行は変えないので、消すときは下の「通報への対応」。
 
 ### GET /results?setId=...&limit=20
 - 200: `{ "entries": RankingRow[] }`（得点降順 → 所要時間昇順 → 登録順。limit 既定 20・最大 100）
@@ -70,6 +71,18 @@ GitHub Pages は静的配信のため、ランキングは別ホストの API �
 - `set#` / `pref#` の `entry#` アイテムは `score` のほかに `correct`・`total`・`all`（全問か）も持つ。いずれも後から足した項目で、無い古いアイテムは 10 問の科目として扱う。
 - 予約と本体は TransactWrite で一括（片方だけ残らない）。
 - **都道府県インデックスは本体とは別のリクエストで書く。** player 印の条件失敗（＝同じ端末の 2 セット目）で本体の登録を巻き戻さないため。索引の書き込みが失敗しても POST は 201 のまま返し、ログだけ残す。
+
+## 通報への対応
+
+通報はアプリの各行の「…」からメールで届く（本文に setId と entryId が入る）。公開ポリシーで「原則 24 時間以内に対応」と約束している。
+
+```
+node infra/scripts/delete-entry.ts --find 名前            # 探す
+node infra/scripts/delete-entry.ts <setId> <entryId>      # 消すものを確認
+node infra/scripts/delete-entry.ts <setId> <entryId> --yes
+```
+
+本体・都道府県の写し・予約・人数の印を消し、カウンタを減らす。予約も消えるので、同じ端末は別の名前で登録し直せる。
 
 ## CORS
 - 許可 Origin: `https://akiralab.github.io`、`http://localhost:5173`、`http://localhost:4173`、`capacitor://localhost`（iOS の殻）

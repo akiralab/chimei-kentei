@@ -338,6 +338,27 @@ describe('POST /results', () => {
   })
 })
 
+describe('POST /results の名前フィルタ（Issue #56）', () => {
+  it.each(['死ね', 'ＡＤＭＩＮ', 'バ カ', '09012345678'])('%s は 400 で理由を返し、何も書かない', async (nickname) => {
+    const ddb = memoryDdb()
+    const res = await makeHandler(ddb)(
+      postEvent({ setId: SET_ID, nickname, clientToken: 'tok-a', answers: answersFor(7) }),
+    )
+    expect(res.statusCode).toBe(400)
+    const out = parse(res)
+    expect(out.reason).toBe('invalid')
+    expect(out.detail).toContain('この名前')
+    expect(ddb.items.size).toBe(0)
+  })
+
+  it('登録済みの行は検証の対象外なので一覧に出続ける（削除は delete-entry.ts で）', async () => {
+    const handler = makeHandler(memoryDdb([entryItem({ entryId: 'old-1', nickname: 'バカ', score: 100, timeMs: 10_000 })]))
+    const res = await handler(getEvent({ setId: SET_ID }))
+    const entries = parse(res).entries as { nickname: string }[]
+    expect(entries.map((e) => e.nickname)).toEqual(['バカ'])
+  })
+})
+
 describe('GET /results', () => {
   const seedRows = [
     entryItem({ entryId: 'a', nickname: 'A', score: 80, timeMs: 40_000, createdAt: '2026-10-02T00:00:03.000Z' }),
