@@ -49,7 +49,7 @@ export default function Cover() {
         </a>
       </div>
 
-      <p className="cover__bubble">目指せ！全国の自治体マスター！</p>
+      <p className="cover__bubble">読めたら、あなたも地名通！</p>
 
       <label className="field cover__field">
         <span className="field__label">氏名</span>
