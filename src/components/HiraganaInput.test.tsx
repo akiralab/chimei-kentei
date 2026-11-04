@@ -375,6 +375,23 @@ describe('Enter', () => {
     expect(seen.at(-1)).toBe('もんぜん')
     expect(onSubmit).toHaveBeenCalledTimes(1)
   })
+
+  it('押しっぱなしの連続入力では送信しない（採点中も同じ）', () => {
+    const onSubmit = vi.fn()
+    const { input } = setup({ onSubmit })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    fireEvent.keyDown(input, { key: 'Enter', repeat: true })
+    expect(onSubmit).toHaveBeenCalledTimes(1)
+
+    cleanup()
+    const onNext = vi.fn()
+    render(<HiraganaInput value="" onChange={() => {}} onSubmit={onNext} locked ariaLabel="読み" />)
+    const locked = screen.getByLabelText('読み')
+    fireEvent.keyDown(locked, { key: 'Enter', repeat: true })
+    expect(onNext).not.toHaveBeenCalled()
+    fireEvent.keyDown(locked, { key: 'Enter' })
+    expect(onNext).toHaveBeenCalledTimes(1)
+  })
 })
 
 describe('その他', () => {
