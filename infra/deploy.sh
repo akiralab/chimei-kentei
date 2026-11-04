@@ -5,7 +5,7 @@
 #   AWS_PROFILE=myprofile npm run deploy:api # プロファイル指定
 #   AWS_REGION=us-east-1  npm run deploy:api # リージョン指定
 #
-# 事前条件: aws CLI v2 がログイン済み。npm ci 済み（esbuild が必要）。
+# 事前条件: aws CLI v2 がログイン済み。npm ci 済み（esbuild と、バンドルに入れる AWS SDK が必要）。
 set -euo pipefail
 
 REGION="${AWS_REGION:-ap-northeast-1}"
