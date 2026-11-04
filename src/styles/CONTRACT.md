@@ -105,7 +105,7 @@ Dela Gothic One は字幅を詰めた極太デザインで、1.4rem 前後の漢
 | `.answer-hint` | 解答欄の下の案内文。`HiraganaInput` が必ず出す（`aria-describedby` で入力欄と結ぶ） |
 | `.cover` | 表紙の `.paper` に併記する修飾子 |
 | `.cover__title` / `.cover__subtitle` | 表紙の大見出し（`--fs-cover`）と副題。`.paper__title` / `.paper__subtitle` に足す |
-| `.cover__bubble` | 赤ペンの吹き出し（「目指せ！…」）。尻尾は `::before` / `::after` |
+| `.cover__bubble` | 赤ペンの吹き出し（「読めたら、…」）。尻尾は `::before` / `::after` |
 | `.cover__field` | 表紙のニックネーム欄。`.field` に足して中央寄せ・拡大 |
 | `.cover__note` | 氏名欄の下の注記 |
 | `.cover__actions` | 主ボタン「はじめる」の置き場。**表紙の主ボタンは 1 つだけ**（第 3 波 決定 ④） |
