@@ -221,6 +221,17 @@ async function record(s, name, w, h) {
     const cut = ['mark', 'answer', 'next', 'kanji'].filter((k) => !m.feedbackSeen[k])
     if (cut.length) flag.push(`feedbackCut=${cut.join('|')}`)
   }
+  if (m.mapSheet) {
+    const b = m.mapSheet
+    if (b.missing) flag.push('mapSheet=MISSING')
+    else {
+      if (!b.covers || !b.onTop) flag.push('mapSheet=NOT-COVERING')
+      if (b.mapCardGap < 0 || b.cardNextGap < 0) flag.push(`mapSheetOverlap=${b.mapCardGap}/${b.cardNextGap}`)
+      // キーボードを閉じて開くので、低い窓（Web の横持ちなど）だけはシートの中をスクロールして「次へ」へ届かせる
+      if (h > 600 && b.overY > 0) flag.push(`mapSheetOverY=${b.overY}`)
+      if (h > 600 && b.nextBottom > h) flag.push(`mapSheetNextCut=${b.nextBottom}`)
+    }
+  }
   console.log(
     `  ${name}-${w}x${h}  tap<44=${m.tapUnder44.length} font<16=${m.fontUnder16.length} primary=${m.primaryCount} ${flag.join(' ')}`,
   )
@@ -402,6 +413,37 @@ try {
       await sleep(300)
       await s.ev(CLICK('解答'))
       await sleep(700)
+      await record(s, name, w, h)
+    }
+    s.close()
+  }
+
+  // -------------------------------------------------------------- 地図と情報のシート（#68）
+  // iPhone の実機の高さは 390x751 がいちばん近い。市区町村名と町名を撮る。375x360 は低い窓でも開くこと
+  for (const [w, h] of [
+    [375, 667],
+    [390, 751],
+    [430, 932],
+    [375, 360],
+  ]) {
+    console.log(`\n=== ${w}x${h} (map sheet) ===`)
+    const s = await session(w, h)
+    await s.go('#/', 2600)
+    await s.ev(`(() => { localStorage.clear(); localStorage.setItem('nickname', ${JSON.stringify(NICK)}); return 'ok' })()`)
+    for (const [name, setId] of [
+      ['quiz-map-sheet', SET_ID],
+      ['quiz-map-sheet-d', SET_ID_TOWNS],
+    ]) {
+      await s.go('#/', 800)
+      await s.go(`#/q/${setId}`, 3200)
+      await s.ev(CLICK('はじめる'))
+      await sleep(1400)
+      await s.ev(TYPE('あいうえ'))
+      await sleep(350)
+      await s.ev(CLICK('解答'))
+      await sleep(500)
+      await s.ev(CLICK('地図と情報'))
+      await sleep(1000)
       await record(s, name, w, h)
     }
     s.close()

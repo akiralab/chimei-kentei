@@ -71,7 +71,7 @@ afterEach(() => {
 })
 
 describe('出題 への組み込み', () => {
-  it('スマホ幅の解答前は地図を畳み、解答すると県内地図が開く', async () => {
+  it('スマホ幅は地図を畳み、解答後に「地図と情報」で県内地図のシートが開く', async () => {
     // jsdom は matchMedia を持たないので useMediaQuery は false ＝ 899px 以下の扱い
     renderAt(quizPath(`${DATA_VERSION}-e-12-1234`))
 
@@ -87,11 +87,15 @@ describe('出題 への組み込み', () => {
     expect(document.querySelector('.layout__quiz > .paper')).not.toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: '解答' }))
+    expect(document.querySelector('.layout__map')).toHaveClass('layout__map--folded')
+    expect(document.querySelector('.map-muni')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: '地図と情報' }))
     await waitFor(() => {
-      expect(document.querySelectorAll('.map-muni__path')).toHaveLength(3)
+      expect(document.querySelectorAll('.map-sheet .map-muni__path')).toHaveLength(3)
     })
-    expect(document.querySelector('.layout__map')).not.toHaveClass('layout__map--folded')
-    expect(document.querySelector('.layout__map-label')).toBeNull()
+    // カードも同じシートに置く（統計が届くまでは枠だけ。隠して高さを取る）
+    expect(document.querySelector('.map-sheet .info-card')).not.toBeNull()
   })
 
   it('900px 以上は解答前から地図が出る（畳まない）', async () => {
@@ -113,6 +117,10 @@ describe('出題 への組み込み', () => {
     expect(document.querySelector('.layout__map')).not.toHaveClass('layout__map--folded')
     // 解答前でもカードの枠は置く（2 カラムの高さを動かさないため）
     expect(document.querySelector('.info-card')).toHaveClass('info-card--placeholder')
+
+    // 左に常駐しているのでシートの入口は出さない
+    fireEvent.click(screen.getByRole('button', { name: '解答' }))
+    expect(screen.queryByRole('button', { name: '地図と情報' })).toBeNull()
   })
 
   it('出題中も下タブバーを出し、「検定」で答案を捨てて表紙へ（確認ダイアログなし）', async () => {
@@ -141,7 +149,7 @@ describe('出題 への組み込み', () => {
     expect(sessionStorage.getItem(`result:${setId}`)).toBeNull()
   })
 
-  it('difficult の大字でも所属市区町村が強調され、解答後だけ情報カードが出る', async () => {
+  it('difficult の大字でも所属市区町村が強調され、解答後のシートに情報カードが出る', async () => {
     // 大字 30 件はすべて 120001 所属なので、どの問でも強調先は 120001
     renderAt(quizPath(`${DATA_VERSION}-d-120001-1234`))
 
@@ -154,10 +162,13 @@ describe('出題 への組み込み', () => {
     expect(screen.queryByText('1,234,567')).toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: '解答' }))
+    fireEvent.click(screen.getByRole('button', { name: '地図と情報' }))
     await waitFor(() => {
       expect(document.querySelector('.info-card')).not.toHaveClass('info-card--placeholder')
     })
-    expect(document.querySelector('.map-muni__path--target')).toHaveAttribute('data-lg-code', '120001')
+    await waitFor(() => {
+      expect(document.querySelector('.map-muni__path--target')).toHaveAttribute('data-lg-code', '120001')
+    })
     expect(screen.getByText('1,234,567')).toBeInTheDocument()
     expect(screen.getByText('出典: 2020 年国勢調査（e-Stat 境界データ）')).toBeInTheDocument()
     // difficult は市区町村の読みが分からないので読みは空

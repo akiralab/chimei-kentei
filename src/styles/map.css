@@ -36,20 +36,12 @@
   gap: var(--space-2);
   min-width: 0;
   min-height: 0;
-  /* スマホは地図を上に積む。情報カードは地図に重ねるので、ここは地図ぶんだけ。
-     高さを **確定値** にするのが要点。auto のままだと中の flex:1 1 0 な SVG が 0 に潰れる。
-     出題画面の解答前は .layout__map--folded で 1 行（--tap-min）に畳む */
   flex: 0 0 auto;
-  height: 24dvh;
-  /* スマホで .info-card を地図の下端に重ねるための基準 */
-  position: relative;
 }
 
-/* 解答前（899px 以下）は 1 行に畳む。24dvh ぶんが空くので、ソフトキーボードが
-   出ても「解答」が画面内に残る（設計ノート §13.6 決定 4）。
-   .board を前置するのは theme.css の `.board .layout__map { height: 20dvh }`
-   （狭くて低い画面の詰め）に勝つため。畳んでいる間は中身も描かない（Quiz.tsx）*/
-.board .layout__map--folded {
+/* 899px 以下の出題画面は 1 行に畳む。ソフトキーボードが出ても「解答」が画面内に残る
+   （設計ノート §13.6 決定 4）。地図とカードは解答後のシート（.map-sheet）で開く */
+.layout__map--folded {
   height: var(--tap-min);
   flex: 0 0 auto;
   justify-content: center;
@@ -69,29 +61,8 @@
   color: var(--color-pencil);
 }
 
-/* 解答後に開いた地図の高さ（899px 以下＝地図を用紙の上に積む幅だけ）。
-   解答前に畳むようにしたぶん「開く」が答え合わせの見せ場になったので、
-   用紙に余っていた罫線 5 行ぶんを地図へ回す。情報カードを重ねても輪郭と
-   赤い強調が見える高さが要る（24dvh では 375px でカードが地図を覆っていた）*/
-@media (max-width: 899px) {
-  .layout__map {
-    height: min(34dvh, 320px);
-  }
-}
-
-/* 低い画面（375x667 など）は用紙の余りが少ないので控えめに。
-   28dvh では解答後（○× と正解の行が増えたとき）に用紙が 29px あふれた。
-   ここは情報カード（105px）だけでパネルをほぼ使い切るので、地図が覗く高さを
-   作るために見出しとカードの余白も削る（「東京都のどこ？」は用紙の帯の
-   「範囲: 東京都」と同じことしか言わないので落とす）*/
+/* 低い画面（375x667 など）。下タブバー（56px）が入ったぶん用紙の余白を詰める */
 @media (max-width: 899px) and (max-height: 740px) {
-  /* 第 3 波: 下タブバー（56px）が入ったぶん用紙は縮むが、**地図はむしろ広げる**。
-     下の 3 つ（用紙の底の余白・2 カラムの隙間・問いの下の余白）で 14px を回収し、
-     そのうち 4px を第 2 波から残っていた 4px のはみ出しに充て、残りを地図に回す */
-  .layout__map {
-    height: min(25dvh, 190px);
-  }
-
   .layout {
     gap: var(--space-2);
   }
@@ -107,42 +78,13 @@
   .layout__quiz .answer-input {
     margin-top: var(--space-2);
   }
-
-  .layout__map .map-muni__caption {
-    display: none;
-  }
-
-  .layout__map .info-card {
-    padding: var(--space-1) var(--space-2);
-    /* パネルの下端いっぱいに敷く。浮かせる 8px はそのまま地図の見える高さになる */
-    inset-inline: 0;
-    bottom: 0;
-    border-radius: 0 0 var(--radius-paper) var(--radius-paper);
-  }
-
-  .layout__map .info-card__stats {
-    margin-top: 0;
-  }
-
-  /* 出典の正本はあそびかたの節 7（第 3 波 D3・決定 ②）。地図に重ねる帯では省き、
-     そのぶんを地図の見える高さに回す */
-  .layout__map .info-card__source {
-    display: none;
-  }
 }
 
 /* ソフトキーボードが出ている高さ（390x508 近似）。畳んだ 1 行は範囲名しか言わないので、
-   ここでは消して「解答」を画面内に残す。解答後も畳んだまま（Issue #64。Quiz.tsx の folded） */
+   ここでは消して「解答」を画面内に残す */
 @media (max-height: 560px) {
-  .board .layout__map--folded {
+  .layout__map--folded {
     display: none;
-  }
-}
-
-/* 開くときだけ軽く伸ばす。動きを止める設定では theme.css の一括指定で 0 になる */
-@media (max-width: 899px) {
-  .layout__map {
-    transition: height 150ms ease-out;
   }
 }
 
@@ -171,10 +113,6 @@
 
   .layout__map {
     flex: 0 0 38%;
-    /* row 方向では .layout の高さに合わせて伸ばす。
-       スマホ用の height: 24dvh を残すと地図が潰れる（align-items: stretch が効かない） */
-    height: auto;
-    max-height: none;
   }
 
   .layout__quiz {
@@ -626,13 +564,9 @@
    4. .info-card — 自治体情報カード
    数字は大きく（--font-pen）、ラベルは明朝で小さく（--font-body）。
    --------------------------------------------------------------------------
-   高さの扱いが画面幅で変わる:
-   - スマホ: 地図の下端に **重ねる**（半透明の帯）。積んだときに縦を食わないため。
-     未解答のプレースホルダーは出さない（重ねているので高さは動かない）。
-     出題画面は解答前にパネルごと畳む（.layout__map--folded）ので、そもそもカードを描かない。
-     地名帳の詳細（.atlas-detail）は畳まないのでプレースホルダーの出番が残る
-   - PC(>=900px): 地図の下に通常フローで置き、未解答でも枠を確保する
-     （解答した瞬間に 2 カラムの高さが動かないように）
+   どの幅でも地図の下に通常フローで置く（重ねると地図が隠れる。Issue #68）。
+   - スマホ: 解答後のシート（.map-sheet）と地名帳の詳細（.atlas-detail）で使う
+   - PC(>=900px): 未解答でも枠を確保する（解答した瞬間に 2 カラムの高さが動かないように）
    -------------------------------------------------------------------------- */
 
 .info-card {
@@ -725,49 +659,22 @@
   color: var(--color-pencil);
 }
 
-/* ---- スマホ: 地図に重ねる帯 ---- */
+/* ---- スマホ ---- */
 @media (max-width: 899px) {
-  .info-card {
-    position: absolute;
-    inset-inline: var(--space-2);
-    bottom: var(--space-2);
-    padding: var(--space-2);
-    /* 用紙色の半透明。地図の輪郭がうっすら透ける */
-    background-color: color-mix(in srgb, var(--color-paper) 92%, transparent);
-    backdrop-filter: blur(2px);
-  }
-
-  /* 重ねているので高さは動かない → 未解答の枠は出さない */
+  /* 地名帳の詳細で行を選ぶ前は枠を出さない（地図に場所を譲る） */
   .info-card--placeholder {
     display: none;
   }
 
-  /* 帯は地図に重なるので、できるだけ低くする。
-     都道府県名は用紙側の .q-pref と重複するので省き、数値はラベルと同じ行に流し込む */
+  /* 都道府県名は地図の見出しと重複するので省く */
   .info-card__pref {
     display: none;
   }
 
-  .info-card__head {
-    padding-bottom: 0;
-    border-bottom: 0;
-  }
-
+  /* 4 項目を 2 列 × 2 行。1 行に流すと桁の多い自治体で折り返して読みにくい */
   .info-card__stats {
-    margin-top: var(--space-1);
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0 var(--space-3);
-  }
-
-  .info-card__row {
-    display: flex;
-    align-items: baseline;
-    gap: 0.3em;
-  }
-
-  .info-card__label {
-    display: inline;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-2) var(--space-3);
   }
 
   .info-card__value {
@@ -808,13 +715,7 @@
    6. .atlas-detail — 地名帳の詳細（899px 以下）
    --------------------------------------------------------------------------
    900px 以上の地名帳は出題画面と同じ .layout / .layout__map をそのまま使うので
-   ここには何も要らない。899px 以下だけが違う:
-
-   出題画面は用紙（問題文・解答欄）に場所を譲るため .layout__map を 24dvh に固定し、
-   .info-card を地図の下端に **重ねて** 縦を節約している。地名帳の詳細は用紙 1 枚を
-   地図とカードだけに使えるので、カードを通常フローへ戻して全項目を見せる。
-
-   .map-* / .info-card* の上書きなので、所有者であるこのファイルに置く（CONTRACT.md）。
+   ここには何も要らない。899px 以下は用紙 1 枚を地図とカードだけに使う。
    -------------------------------------------------------------------------- */
 
 .atlas-detail {
@@ -838,34 +739,92 @@
   .atlas-detail .map-muni {
     min-height: 8rem;
   }
+}
 
-  .atlas-detail .info-card {
-    /* 重ねるのをやめる（.layout__map の position: relative も要らない） */
-    position: static;
-    inset: auto;
-    padding: var(--space-3);
-    background-color: var(--color-paper);
-    backdrop-filter: none;
-  }
+/* --------------------------------------------------------------------------
+   7. .map-sheet — 解答後の地図と情報カード（899px 以下の全画面シート）
+   --------------------------------------------------------------------------
+   タブバーも問題も覆う。地図は残りの高さをすべて使い、カードは地図に重ねない（Issue #68）。
+   ノッチとホームバーのぶんも空ける。動きは MunicipalitySheet.tsx の SLIDE_MS と揃える。
+   動きを止める設定では theme.css の一括指定で 0 になる。
+   -------------------------------------------------------------------------- */
 
-  .atlas-detail .info-card__head {
-    padding-bottom: var(--space-1);
-    border-bottom: 2px solid var(--color-rule-strong);
-  }
+.map-sheet {
+  position: fixed;
+  inset: 0;
+  /* .tabbar（10）より前 */
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: calc(var(--space-2) + env(safe-area-inset-top)) calc(var(--space-3) + env(safe-area-inset-right))
+    calc(var(--space-3) + env(safe-area-inset-bottom)) calc(var(--space-3) + env(safe-area-inset-left));
+  /* 極端に低い窓でも「次へ」に届く */
+  overflow-y: auto;
+  background-color: var(--color-board);
+  animation: map-sheet-in 200ms ease-out;
+}
 
-  /* 4 項目を 2 列 × 2 行。1 行に流すと桁の多い自治体で折り返して読みにくい */
-  .atlas-detail .info-card__stats {
-    margin-top: var(--space-2);
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--space-2) var(--space-3);
-  }
+.map-sheet.is-closing {
+  animation: map-sheet-out 200ms ease-in forwards;
+}
 
-  .atlas-detail .info-card__row {
-    display: block;
+@keyframes map-sheet-in {
+  from {
+    transform: translateX(100%);
   }
+}
 
-  .atlas-detail .info-card__label {
-    display: block;
+@keyframes map-sheet-out {
+  to {
+    transform: translateX(100%);
   }
+}
+
+.map-sheet__bar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.map-sheet__back {
+  flex: 0 0 auto;
+  padding-inline: var(--space-4);
+  background-color: var(--color-paper);
+}
+
+.map-sheet__title {
+  flex: 1 1 0;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-size: var(--fs-lg);
+  color: var(--color-paper);
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 縦に余裕のない端末でも地図が線 1 本にならない下限 */
+.map-sheet .map-muni {
+  flex: 1 0 8rem;
+}
+
+/* 統計が届く前も高さを取っておく（届いた瞬間に地図が縮まないように） */
+.map-sheet .info-card {
+  flex: 0 0 auto;
+}
+
+.map-sheet .info-card--placeholder {
+  display: block;
+  visibility: hidden;
+}
+
+/* 主ボタンの影（下 3px）がシートの下余白に隠れないように */
+.map-sheet__next {
+  flex: 0 0 auto;
+  width: 100%;
+  margin-bottom: 3px;
 }
