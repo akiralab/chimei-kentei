@@ -306,6 +306,21 @@ body {
   background: var(--color-board);
 }
 
+/* 殻の中だけ、長押しの選択メニューとタップのハイライトを消す（src/native.ts の setupNativeFeel）。
+   入力欄と、読むための文章（あそびかた・利用条件）は選べるままにする */
+.is-native {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.is-native :is(input, .howto) {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 /* 読み上げ専用テキスト（「正解」「誤り」などを記号と併記するため）*/
 .sr-only {
   position: absolute;
@@ -1320,7 +1335,7 @@ select.field__input {
 
 .ranking__row {
   display: grid;
-  grid-template-columns: 2.5rem minmax(0, 1fr) auto auto;
+  grid-template-columns: 2.5rem minmax(0, 1fr) auto auto var(--tap-min);
   align-items: center;
   gap: var(--space-2) var(--space-3);
   padding: var(--space-2) var(--space-2);
@@ -1363,12 +1378,102 @@ select.field__input {
 
 @media (max-width: 420px) {
   .ranking__row {
-    grid-template-columns: 2.25rem minmax(0, 1fr) auto;
+    grid-template-columns: 2.25rem minmax(0, 1fr) auto var(--tap-min);
   }
 
   .ranking__time {
     grid-column: 2 / -1;
     text-align: right;
+  }
+}
+
+/* 行の右端の「…」。行の高さを増やさないように上下へはみ出してタップ領域を取る */
+.ranking__more {
+  grid-row: 1;
+  grid-column: -2;
+  min-width: var(--tap-min);
+  min-height: var(--tap-min);
+  margin-block: calc(var(--space-2) * -1);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-pencil);
+  font-size: var(--fs-lg);
+  line-height: 1;
+  cursor: pointer;
+}
+
+/* 一覧の下の 1 行（非表示の件数と戻す手段・利用条件） */
+.ranking__foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0 var(--space-3);
+  margin: 0;
+}
+
+.ranking__foot:empty {
+  display: none;
+}
+
+.ranking__restore {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+
+/* 「…」から開く下からの選択肢（components/RankingRowMenu.tsx）。.tabbar（10）と .map-sheet（20）より前 */
+.row-menu {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.row-menu__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgb(0 0 0 / 45%);
+}
+
+.row-menu__sheet {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-4) calc(var(--space-4) + env(safe-area-inset-bottom));
+  background: var(--color-paper);
+  border-radius: 12px 12px 0 0;
+  animation: row-menu-in 160ms ease-out;
+}
+
+.row-menu__sheet .btn {
+  width: 100%;
+  margin: 0;
+  text-align: center;
+}
+
+.row-menu__title {
+  margin: 0;
+  font-family: var(--font-hand);
+  font-size: var(--fs-lg);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.row-menu__note {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--color-pencil);
+}
+
+@keyframes row-menu-in {
+  from {
+    transform: translateY(100%);
   }
 }
 
@@ -2137,10 +2242,14 @@ select.field__input {
 }
 
 /* --------------------------------------------------------------------------
-   25. .howto__link — あそびかたの節 7 の外部リンク（CC BY 4.0）
-   アプリ内で外部へ出るのはここ 1 か所だけ（第 3 波 D3・決定 ②）。
+   25. .howto__link — あそびかたの節 7・節 8 と順位表まわりの小さなリンク。
+   .legal はプライバシーと利用条件（本文は public/privacy.html）。見出しは <wbr> の位置で折る。
    タップ領域 44px を、行の高さを増やさずに確保する（旧 .footer-credit a と同じ手）。
    -------------------------------------------------------------------------- */
+
+.legal .paper__title {
+  word-break: keep-all;
+}
 
 .howto__link {
   display: inline-block;

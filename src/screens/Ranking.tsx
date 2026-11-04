@@ -29,7 +29,11 @@ import { connectionMessage } from '../hooks/connection.ts'
 import { useRankingCache } from '../hooks/useRankingCache.ts'
 import { useRankingMode } from '../hooks/useRankingMode.ts'
 import PaperSkeleton from '../components/PaperSkeleton.tsx'
-import { RANKING_PATH, SELECT_PATH, navigate, quizPath, rankingPrefPath } from '../router.ts'
+import RankingRowMenu, { HiddenNote } from '../components/RankingRowMenu.tsx'
+import { isRemoteRanking } from '../engine/ranking-factory.ts'
+import { readNickname } from '../hooks/useNickname.ts'
+import { useHiddenNames } from '../hooks/useHiddenNames.ts'
+import { PRIVACY_PATH, RANKING_PATH, SELECT_PATH, navigate, quizPath, rankingPrefPath } from '../router.ts'
 
 function formatDuration(ms: number): string {
   const total = Math.round(ms / 1000)
@@ -74,6 +78,7 @@ export default function Ranking({ prefCode }: { prefCode?: string } = {}) {
   const [meta, setMeta] = useState<BankMeta | null>(knownMeta)
   /** meta の読み込みが終わったか（読めなくても終わり。順位表は数字だけで成立する） */
   const [metaSettled, setMetaSettled] = useState(knownMeta !== null)
+  const { isHidden, hide, restoreAll } = useHiddenNames()
   // 詳細は科目が変わるたびに別のキーになる（絞り込みはストア側の仕事）
   const load = useCallback(
     (): Promise<PrefectureStat[] | RankingRow[]> => (prefCode === undefined ? loadStats() : loadList(prefCode, mode)),
@@ -208,6 +213,7 @@ export default function Ranking({ prefCode }: { prefCode?: string } = {}) {
 
   if (prefCode !== undefined) {
     const shown = rows ?? []
+    const myName = readNickname().trim()
     return (
       <div className="paper">
         <div className="paper__header">
@@ -228,6 +234,8 @@ export default function Ranking({ prefCode }: { prefCode?: string } = {}) {
         {!loading && shown.length > 0 && (
           <ol className="ranking">
             {shown.map((r, i) => {
+              // 隠しても順位の数字は詰めない（i はそのまま）
+              if (isHidden(r.nickname)) return null
               const rowStars = starsOfRow(r)
               return (
                 <li className="ranking__row" key={r.entryId}>
@@ -251,6 +259,8 @@ export default function Ranking({ prefCode }: { prefCode?: string } = {}) {
                       </>
                     )}
                   </span>
+                  {/* 自分の行には出さない（この画面に entryId は無いので名前で見分ける） */}
+                  {isRemoteRanking() && r.nickname !== myName && <RankingRowMenu row={r} onHide={hide} />}
                   {/* 4 列グリッドの 2 行目として全幅に置く（科目・範囲・登録日・挑戦リンク）。
                       区分「全問」は全市区町村名と全町名が同居するので、ここでは
                       どちらなのかが分かる名前を出す（engine/score.ts の allSetName） */}
@@ -267,6 +277,13 @@ export default function Ranking({ prefCode }: { prefCode?: string } = {}) {
             })}
           </ol>
         )}
+        {/* 名前が並ぶ画面なので、利用条件はここからも開ける */}
+        <p className="cover__note ranking__foot">
+          <HiddenNote count={shown.filter((r) => isHidden(r.nickname)).length} onRestore={restoreAll} />
+          <a className="howto__link" href={PRIVACY_PATH}>
+            順位表の利用条件
+          </a>
+        </p>
 
         {footer}
       </div>

@@ -81,7 +81,7 @@ describe('RemoteRankingStore.submit', () => {
     const store400 = new RemoteRankingStore('https://api.example.test', () =>
       Promise.resolve(response(400, { ok: false, reason: 'invalid', detail: 'だめ' })),
     )
-    expect(await store400.submit(entry())).toEqual({ ok: false, reason: 'invalid' })
+    expect(await store400.submit(entry())).toEqual({ ok: false, reason: 'invalid', detail: 'だめ' })
   })
 
   it('5xx・通信失敗・壊れた応答は network', async () => {

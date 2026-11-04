@@ -45,6 +45,14 @@ jobs:
       - run: npm run build:ios
         env:
           VITE_RANKING_API: ${{ vars.VITE_RANKING_API }}
+      # 提出用のタグ（-rc の付かない ios-v*）は、仮の問い合わせ先のままでは作らせない
+      - name: 問い合わせ先を確かめる
+        if: ${{ startsWith(github.ref, 'refs/tags/ios-v') && !contains(github.ref, '-rc') }}
+        run: |
+          if grep -l 'example\.com' src/contact.ts dist/privacy.html dist/support.html; then
+            echo '::error::問い合わせ先が仮のままです（src/contact.ts ほか）'
+            exit 1
+          fi
       # dist を ios/App/App/public へ写し、プラグインを Package.swift に反映する
       - run: npx cap sync ios
       - name: Xcode を固定する

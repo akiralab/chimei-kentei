@@ -118,7 +118,7 @@
 
 **遊ぶ人向けの出典表記の置き場所は あそびかた（`#/howto`）の節 7 の 1 か所だけ。**（以前は全画面の用紙の外に
 `.footer-credit` を常駐させていた。2026-10-05 に集約。）節 7 に CC BY 4.0 のリンクと「加工して利用」を書いてあり、
-**アプリ内で外部リンクを開くのもここだけ**。この README の出典節は開発者向けで、`index.html` の OGP も別物。
+この README の出典節は開発者向けで、`index.html` の OGP も別物。
 
 ## 時間制限（既定は「なし」）
 
@@ -140,6 +140,13 @@
 遊ぶ人向けの説明ページ（7 節）。表紙と範囲・科目の見出し行の「？」から入り、下タブバーの「検定」で戻る。読み込みは無く、`.board--scroll` で用紙ごと縦スクロールする。**節 7 が出典表記の正本**（上の「出典」節）。
 
 **遊ぶ人向けの原稿の正本は `src/screens/HowTo.tsx`**（この README は開発者向けのまま）。仕様を変えたら両方を読み合わせる。
+
+## プライバシーと App Store
+
+- `public/privacy.html`・`public/support.html` は JavaScript を使わない静的なページで、App Store Connect の URL にそのまま書く。アプリの `#/privacy` は同じファイルを読んで出す（正本は 1 つ）。
+- 問い合わせ先は `src/contact.ts` と上の 2 ページの 3 か所。提出用のタグ（`ios-v1.0.0` のように `-rc` が付かないもの）は `example.com` が残っていると CI で止まる。
+- 順位表の名前は 1.2 の対象なので、フィルタ（`infra/api/src/ngwords.ts`）・行ごとの報告と非表示（`components/RankingRowMenu.tsx`）・通報への対応（`infra/API.md`「通報への対応」）を持つ。
+- App Store Connect の原稿・年齢区分・プライバシーの回答・審査メモは [`docs/appstore.md`](docs/appstore.md)、スクリーンショットは `npm run screenshots`。
 
 ## 共有ランキング
 

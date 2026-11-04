@@ -95,6 +95,31 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
+describe('登録のなまえ', () => {
+  it('サーバーに名前を断られたら理由を出し、その場で直して登録し直せる（Issue #56）', async () => {
+    const detail = 'この名前は順位表に載せられません。別の名前にしてください。'
+    const submit = vi.spyOn(LocalRankingStore.prototype, 'submit').mockResolvedValueOnce({ ok: false, reason: 'invalid', detail })
+    render(<Result setId={SET} />)
+    await waitFor(() => {
+      expect(screen.getByText('まだ登録がありません。')).toBeInTheDocument()
+    })
+    // 名前があるうちは欄を出さない
+    expect(screen.queryByRole('textbox')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'ランキングに登録' }))
+    await waitFor(() => {
+      expect(penComments()).toContain(detail)
+    })
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'はなこ' } })
+    fireEvent.click(screen.getByRole('button', { name: 'ランキングに登録' }))
+    await waitFor(() => {
+      expect(rows()[0]?.querySelector('.ranking__name')?.textContent).toContain('はなこ')
+    })
+    expect(submit.mock.calls[1]?.[0].nickname).toBe('はなこ')
+  })
+})
+
 describe('登録する前の順位表', () => {
   it('未登録でも上位が見え、「登録すると N 位」が出る', async () => {
     putThree()

@@ -141,7 +141,10 @@ export interface ResultEntry {
 
 export type SubmitResult =
   | { ok: true; rank: number; entryId: string }
-  | { ok: false; reason: 'already_submitted' | 'invalid' | 'network' }
+  | { ok: false; reason: 'already_submitted' }
+  | { ok: false; reason: 'network' }
+  /** detail はサーバーの理由（名前のフィルタなど）。そのまま画面に出す */
+  | { ok: false; reason: 'invalid'; detail?: string }
 
 /** ランキングの保存先。Local（localStorage）と Remote（infra/API.md）が同じ契約を実装する */
 export interface RankingStore {

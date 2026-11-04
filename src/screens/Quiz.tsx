@@ -269,7 +269,7 @@ export default function Quiz({ setId, direct = false }: { setId: string; direct?
             <span>科目: {modeName(set.mode)}</span>
             <span>制限: {limited ? `${Math.round(timeLimitMs / 1000)}秒` : 'なし'}</span>
             <span className="field">
-              <span className="field__label">氏名</span>
+              <span className="field__label">なまえ</span>
               <span className="field__input">{nickname || '名無し'}</span>
             </span>
           </div>

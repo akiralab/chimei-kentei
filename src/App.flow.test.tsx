@@ -265,7 +265,7 @@ afterEach(() => {
 
 describe('表紙', () => {
   // 実キー入力を通したいので、この 1 本だけ本物のタイマーで動かす（user-event は fake timers と相性が悪い）
-  it('氏名を入れて「はじめる」で #/select へ進み、氏名が localStorage に残る', async () => {
+  it('なまえを入れて「はじめる」で #/select へ進み、なまえが localStorage に残る', async () => {
     vi.useRealTimers()
     const user = userEvent.setup()
     renderApp()
@@ -291,22 +291,11 @@ describe('表紙', () => {
     expect(screen.getByRole('button', { name: 'はじめる' })).toBeEnabled()
   })
 
-  it('空欄では進めない', async () => {
+  it('なまえは任意。空欄でも進める（App Store Guideline 5.1.1(v)）', async () => {
     renderApp()
-    const start = screen.getByRole('button', { name: 'はじめる' })
-    expect(start).toBeDisabled()
-
-    fireEvent.click(start)
+    fireEvent.click(screen.getByRole('button', { name: 'はじめる' }))
     await settle()
-    expect(hash()).toBe('#/')
-  })
-
-  it('13 文字では進めない', async () => {
-    renderApp()
-    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'あいうえおかきくけこさしす' } })
-    await settle()
-
-    expect(screen.getByRole('button', { name: 'はじめる' })).toBeDisabled()
+    expect(hash()).toBe('#/select')
   })
 })
 
@@ -1310,7 +1299,7 @@ describe('結果', () => {
     expect(screen.getByText('この問題にはすでに登録済みです。')).toBeInTheDocument()
   })
 
-  it('氏名が未記入なら登録できない', async () => {
+  it('なまえが未記入でも、結果画面で入れれば登録できる', async () => {
     await openResult()
     localStorage.removeItem(NICKNAME_KEY)
     cleanup()
@@ -1318,11 +1307,22 @@ describe('結果', () => {
     renderApp()
     await settle()
 
+    // 未記入のまま押しても送らず、入れるよう促す
+    fireEvent.click(screen.getByRole('button', { name: 'ランキングに登録' }))
+    await settle()
+    expect(screen.getByText('順位表に載せる名前を入れてください。')).toBeInTheDocument()
+    expect(all('.ranking__row')).toHaveLength(0)
+
+    // 1 文字入れても欄は消えない
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'は' } })
+    expect(screen.getByRole('textbox')).toHaveValue('は')
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'はなこ' } })
     fireEvent.click(screen.getByRole('button', { name: 'ランキングに登録' }))
     await settle()
 
-    expect(screen.getByText(/氏名（ニックネーム）が未記入です/)).toBeInTheDocument()
-    expect(all('.ranking__row')).toHaveLength(0)
+    expect(all('.ranking__row')[0].textContent).toContain('はなこ')
+    expect(localStorage.getItem(NICKNAME_KEY)).toBe('はなこ')
+    expect(screen.queryByRole('textbox')).toBeNull()
   })
 })
 
@@ -1665,7 +1665,7 @@ describe('共有リンクの着地', () => {
   }
 
   function nameInput(): HTMLElement {
-    return screen.getByLabelText('氏名')
+    return screen.getByLabelText('なまえ')
   }
 
   it('出題の前に挑戦状が出る。砂時計も問一も出ていない', async () => {
@@ -1687,11 +1687,10 @@ describe('共有リンクの着地', () => {
     expect(text).toContain('制限: 20秒')
   })
 
-  it('氏名が未記入では始められず、放置しても砂時計は進まない', async () => {
+  it('なまえは任意で、「はじめる」を押すまでは放置しても砂時計は進まない', async () => {
     await landOnQuiz(SET_ID)
-    expect(startButton()).toBeDisabled()
+    expect(startButton()).toBeEnabled()
 
-    fireEvent.click(startButton())
     await settle(TIME_LIMIT_MS * 2)
 
     // 計測が始まっていないので自動パスも起きない
@@ -1700,7 +1699,7 @@ describe('共有リンクの着地', () => {
     expect(document.querySelector('.q-number')).toBeNull()
   })
 
-  it('前回の名前があれば氏名欄に復元される', async () => {
+  it('前回の名前があればなまえ欄に復元される', async () => {
     localStorage.setItem(NICKNAME_KEY, 'はなこ')
     await landOnQuiz(SET_ID)
 
@@ -1708,7 +1707,7 @@ describe('共有リンクの着地', () => {
     expect(startButton()).toBeEnabled()
   })
 
-  it('氏名を入れて「はじめる」で問一が出て、そこから計測が始まる', async () => {
+  it('なまえを入れて「はじめる」で問一が出て、そこから計測が始まる', async () => {
     await landOnQuiz(SET_ID)
 
     fireEvent.change(nameInput(), { target: { value: 'たろう' } })
@@ -1740,7 +1739,7 @@ describe('共有リンクの着地', () => {
     expect(el('.paper__header').textContent).toContain('制限: なし')
   })
 
-  it('着地から 10 問解くと結果へ進み、入力した氏名で登録できる', async () => {
+  it('着地から 10 問解くと結果へ進み、入力したなまえで登録できる', async () => {
     await landOnQuiz(SET_ID)
 
     fireEvent.change(nameInput(), { target: { value: 'はなこ' } })

@@ -108,7 +108,11 @@ Dela Gothic One は字幅を詰めた極太デザインで、1.4rem 前後の漢
 | `.cover__title` / `.cover__subtitle` | 表紙の大見出し（`--fs-cover`）と副題。`.paper__title` / `.paper__subtitle` に足す |
 | `.cover__bubble` | 赤ペンの吹き出し（「読めたら、…」）。尻尾は `::before` / `::after` |
 | `.cover__field` | 表紙のニックネーム欄。`.field` に足して中央寄せ・拡大 |
-| `.cover__note` | 氏名欄の下の注記 |
+| `.cover__note` | なまえ欄の下の注記 |
+| `.ranking__more` / `.ranking__foot` / `.ranking__restore` | 順位表の行の「…」、一覧の下の 1 行、「元に戻す」 |
+| `.row-menu` / `.row-menu__sheet` / `.row-menu__title` / `.row-menu__note` | 「…」から開く下からの選択肢（`components/RankingRowMenu.tsx`） |
+| `.legal` | プライバシーと利用条件（`screens/Privacy.tsx`。本文は `public/privacy.html`） |
+| `.is-native` | 殻の中だけ `<html>` に付く（`native.ts`）。長押しの選択とタップのハイライトを止める |
 | `.cover__actions` | 主ボタン「はじめる」の置き場。**表紙の主ボタンは 1 つだけ**（第 3 波 決定 ④） |
 | `.cover__start` | `.btn.btn--primary` に足して拡大＋浮きアニメ（`prefers-reduced-motion` で停止） |
 | `.cover__today` / `.cover__today-note` | 付箋（`.sticky-note`）の中の「今日の10問（全国）」と、その下の ★★★ の注記 |

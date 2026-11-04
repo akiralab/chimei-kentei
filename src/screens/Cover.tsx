@@ -1,5 +1,4 @@
 import { DATA_VERSION } from '../engine/bank.ts'
-import { isValidNickname } from '../engine/ranking.ts'
 import { SCOPE_NATIONWIDE, buildSetId, todaySeed } from '../engine/setId.ts'
 import { starsAria, starsMark } from '../engine/stars.ts'
 import { useNickname } from '../hooks/useNickname.ts'
@@ -7,7 +6,8 @@ import { HOWTO_PATH, SELECT_PATH, navigate, quizPath } from '../router.ts'
 
 /**
  * 表紙。「小テストが配られた瞬間」の 1 枚。
- * スクロールさせない前提なので、要素は 5 つ（見出し・吹き出し・氏名欄・注記・ボタン）に絞る。
+ * スクロールさせない前提なので、要素は 5 つ（見出し・吹き出し・なまえ欄・注記・ボタン）に絞る。
+ * なまえは任意（App Store Guideline 5.1.1(v)）。順位表に登録するときだけ要るので結果画面でも入れられる。
  * 装飾（赤ペンの丸・鉛筆・ゴム印）は .cover__prop で、画像を持たず CSS と絵文字だけで描く。
  *
  * **主ボタンは「はじめる」1 つ**（第 3 波 D2・決定 ④）。ランキング・間違えた問題・地名帳への
@@ -24,16 +24,13 @@ const TODAY_STARS = 3
 
 export default function Cover() {
   const [nickname, setNickname] = useNickname()
-  const ready = isValidNickname(nickname)
 
   const start = () => {
-    if (!ready) return
     setNickname(nickname.trim())
     navigate(SELECT_PATH)
   }
 
   const startToday = () => {
-    if (!ready) return
     setNickname(nickname.trim())
     navigate(quizPath(buildSetId(DATA_VERSION, 'e', SCOPE_NATIONWIDE, todaySeed(), false, TODAY_STARS)))
   }
@@ -52,7 +49,7 @@ export default function Cover() {
       <p className="cover__bubble">読めたら、あなたも地名通！</p>
 
       <label className="field cover__field">
-        <span className="field__label">氏名</span>
+        <span className="field__label">なまえ</span>
         <input
           className="field__input"
           type="text"
@@ -65,10 +62,10 @@ export default function Cover() {
           }}
         />
       </label>
-      <p className="cover__note">氏名は 1〜12 文字。順位表にこの名前で載ります。</p>
+      <p className="cover__note">任意。順位表に載る名前です。本名は避けてください。</p>
 
       <p className="cover__actions">
-        <button type="button" className="btn btn--primary cover__start" onClick={start} disabled={!ready}>
+        <button type="button" className="btn btn--primary cover__start" onClick={start}>
           はじめる
         </button>
       </p>
@@ -81,7 +78,6 @@ export default function Cover() {
           className="btn cover__today"
           aria-label={`今日の10問（全国・${starsAria(TODAY_STARS)}）`}
           onClick={startToday}
-          disabled={!ready}
         >
           今日の10問（全国）
         </button>

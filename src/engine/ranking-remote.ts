@@ -73,7 +73,13 @@ export class RemoteRankingStore implements RankingStore {
       return { ok: false, reason: 'network' }
     }
     if (res.status === 409) return { ok: false, reason: 'already_submitted' }
-    if (res.status === 400) return { ok: false, reason: 'invalid' }
+    if (res.status === 400) {
+      const detail = await res
+        .json()
+        .then((parsed: { detail?: unknown }) => (typeof parsed.detail === 'string' ? parsed.detail : undefined))
+        .catch(() => undefined)
+      return { ok: false, reason: 'invalid', detail }
+    }
     if (res.status !== 201) return { ok: false, reason: 'network' }
     let parsed: SubmitResponse
     try {

@@ -11,12 +11,14 @@ import { starsAria, starsHeaderNote, starsMark, starsRowNote } from '../engine/s
 import { defaultRankingStore, isRemoteRanking } from '../engine/ranking-factory.ts'
 import { STATS_KEY, clearRankingCache, loadStats, refresh } from '../engine/ranking-cache.ts'
 import { appendWrongFromEntry } from '../engine/wrongList.ts'
-import { readNickname } from '../hooks/useNickname.ts'
+import { useNickname } from '../hooks/useNickname.ts'
+import { useHiddenNames } from '../hooks/useHiddenNames.ts'
+import RankingRowMenu, { HiddenNote } from '../components/RankingRowMenu.tsx'
 import { readAnswerSheet } from '../hooks/answerSheet.ts'
 import { readQuizTimeLimit, readTimeLimit } from '../hooks/useTimeLimit.ts'
 import { connectionMessage } from '../hooks/connection.ts'
 import { BOARD_SCROLL, useBoardModifier } from '../hooks/useBoardModifier.ts'
-import { SELECT_PATH, absoluteUrl, navigate, quizPath } from '../router.ts'
+import { PRIVACY_PATH, SELECT_PATH, absoluteUrl, navigate, quizPath } from '../router.ts'
 import { shareNative } from '../native.ts'
 import PaperSkeleton from '../components/PaperSkeleton.tsx'
 
@@ -77,7 +79,10 @@ export default function Result({ setId }: { setId: string }) {
   const [notice, setNotice] = useState<string | null>(null)
   const [shareUrl, setShareUrl] = useState<string | null>(null)
   const clientToken = useMemo(() => getClientToken(), [])
-  const nickname = readNickname()
+  const [nickname, setNickname] = useNickname()
+  /** 結果画面でなまえを入れる欄を出すか。未記入で来たときと、サーバーに名前を断られたとき。入力の途中で消えないように開いたら開いたまま */
+  const [askName, setAskName] = useState(() => !isValidNickname(nickname))
+  const { isHidden, hide, restoreAll } = useHiddenNames()
   /** この回に使った時間制限。出題時の控えが無ければ今の設定で代用する */
   const timeLimitMs = useMemo(() => readQuizTimeLimit(setId) ?? readTimeLimit(), [setId])
 
@@ -172,14 +177,15 @@ export default function Result({ setId }: { setId: string }) {
   const register = async () => {
     if (!records || registered || submitting) return
     if (!isValidNickname(nickname)) {
-      setNotice('氏名（ニックネーム）が未記入です。表紙で記入してください。')
+      setAskName(true)
+      setNotice('順位表に載せる名前を入れてください。')
       return
     }
     setSubmitting(true)
     setSubmitFailed(false)
     const entry = {
       setId,
-      nickname,
+      nickname: nickname.trim(),
       score,
       timeMs,
       answers: records,
@@ -213,7 +219,8 @@ export default function Result({ setId }: { setId: string }) {
       setSubmitFailed(true)
       return
     }
-    setNotice('氏名が 1〜12 文字ではありません。')
+    setAskName(true)
+    setNotice(res.detail ?? '名前は 1〜12 文字にしてください。')
   }
 
   /**
@@ -272,7 +279,7 @@ export default function Result({ setId }: { setId: string }) {
       <div className="paper__header">
         <h1 className="paper__title">答案</h1>
         <span className="field">
-          <span className="field__label">氏名</span>
+          <span className="field__label">なまえ</span>
           <span className="field__input">{nickname || '名無し'}</span>
         </span>
         <span className="paper__subtitle">
@@ -341,6 +348,27 @@ export default function Result({ setId }: { setId: string }) {
 
       {/* 用紙の底の操作は 2 つだけ（決定 ⑤）。「間違えた問題を見る」「タイトルへ戻る」は
           下タブバーの「見直し」「検定」が引き取った */}
+      {askName && !registered && (
+        <label className="field">
+          <span className="field__label">なまえ</span>
+          <input
+            className="field__input"
+            type="text"
+            value={nickname}
+            maxLength={12}
+            placeholder="ニックネーム"
+            onChange={(e) => setNickname(e.target.value)}
+          />
+        </label>
+      )}
+      {remote && !registered && (
+        <p className="cover__note">
+          登録すると、なまえと得点が順位表で公開されます。本名や他の人が不快になる名前は使えません。{' '}
+          <a className="howto__link" href={PRIVACY_PATH}>
+            利用条件
+          </a>
+        </p>
+      )}
       <p>
         <button
           type="button"
@@ -384,6 +412,8 @@ export default function Result({ setId }: { setId: string }) {
             <ol className="ranking">
               {entries.map((e, i) => {
                 const me = e.entryId === myEntryId
+                // 隠しても順位の数字は詰めない（i はそのまま）
+                if (!me && isHidden(e.nickname)) return null
                 // 全市区町村名のセットは問題数が県ごとに違うので、得点の横に添える。
                 // 難易度は順位表を分けない（区分が 3 → 9 に増えると人数が薄まる）ので、
                 // 絞ったセットの行には「★★★のみ」と添えて同じ一覧に並べる
@@ -413,11 +443,18 @@ export default function Result({ setId }: { setId: string }) {
                         </>
                       )}
                     </span>
+                    {remote && !me && <RankingRowMenu row={e} onHide={hide} />}
                   </li>
                 )
               })}
             </ol>
           )}
+          <p className="cover__note ranking__foot">
+            <HiddenNote
+              count={entries.filter((e) => e.entryId !== myEntryId && isHidden(e.nickname)).length}
+              onRestore={restoreAll}
+            />
+          </p>
         </>
       )}
     </div>
