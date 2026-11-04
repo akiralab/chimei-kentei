@@ -349,7 +349,7 @@ try {
       await s.ev(TYPE(answer))
       await sleep(350)
       await s.ev(CLICK('解答'))
-      await sleep(260) // ○ は 1000ms で自動遷移するので急いで撮る
+      await sleep(700)
       await record(s, 'quiz-correct', w, h)
     } else {
       console.log('  !! 正解が取れなかったので quiz-correct を飛ばす')

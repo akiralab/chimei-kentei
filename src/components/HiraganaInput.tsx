@@ -254,7 +254,7 @@ export default function HiraganaInput({
       // 採点中。Enter（ソフトキーボードの「完了」）だけを「次へ」として親に渡し、ほかの打鍵は捨てる
       event.preventDefault()
       const toIme = event.nativeEvent.isComposing || event.keyCode === 229 || event.key === 'Process'
-      if (event.key === 'Enter' && !toIme) onSubmit()
+      if (event.key === 'Enter' && !toIme && !event.repeat) onSubmit()
       return
     }
     // IME が食べた打鍵か。1 打鍵目は composition がまだ始まっていないので
@@ -278,6 +278,8 @@ export default function HiraganaInput({
 
     if (event.key !== 'Enter') return
     event.preventDefault()
+    // 押しっぱなしの連続入力は 1 回と数える（解答と「次へ」が続けて走らないように）
+    if (event.repeat) return
     setNotice('')
     const flushed = toHiraganaStrict(event.currentTarget.value)
     if (flushed === shown) {

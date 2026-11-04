@@ -28,7 +28,11 @@ const KANJI_NUM = ['一', '二', '三', '四', '五', '六', '七', '八', '九'
 function keepFocus(event: { preventDefault(): void }) {
   event.preventDefault()
 }
-const FEEDBACK_MS = 1000
+/**
+ * 解答と「次へ」の直後に次の操作を受けない時間。「解答」と「次へ」は同じ場所のボタンと同じ Enter なので、
+ * 2 度押しで正解を見ずに進んだり、次の問をパスしたりしないように間を空ける（Issue #69）
+ */
+const DOUBLE_PRESS_MS = 300
 const URGENT_MS = 5000
 
 /** 問番号。10 問までは漢数字（問三 / 十）、全市区町村名のように多いときは算用数字（問12 / 54） */
@@ -73,6 +77,8 @@ export default function Quiz({ setId, direct = false }: { setId: string; direct?
   /** 挑戦状を出しているあいだ。砂時計も問ごとの計測も動かさない */
   const pending = direct && !started
   const startedAt = useRef(0)
+  /** 最後に解答したか次へ進んだ時刻（2 度押しの判定） */
+  const switchedAt = useRef(0)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const [nickname, setNickname] = useNickname()
   /** 900px 以上は 2 カラム。地図は左に常駐するので畳まない */
@@ -123,6 +129,7 @@ export default function Quiz({ setId, direct = false }: { setId: string; direct?
         return
       }
       clearInterval(timer)
+      switchedAt.current = Date.now()
       setRemainMs(0)
       setRecords((prev) => [
         ...prev,
@@ -133,21 +140,18 @@ export default function Quiz({ setId, direct = false }: { setId: string; direct?
     return () => clearInterval(timer)
   }, [question, feedback, pending, limited, timeLimitMs])
 
-  /** 次の問へ（最後の問なら結果へ）。計測は次の問の表示から始まるので、正解を眺めていた時間は数えない */
+  /**
+   * 次の問へ（最後の問なら結果へ）。計測は次の問の表示から始まるので、正解を眺めていた時間は数えない。
+   * ○ も × も自動では進まない。正しい読みと市区町村の情報を自分のペースで確かめてから進む
+   */
   const advance = useCallback(() => {
+    if (Date.now() - switchedAt.current < DOUBLE_PRESS_MS) return
+    switchedAt.current = Date.now()
     setFeedback(null)
     setInput('')
     setRemainMs(timeLimitMs)
     setIndex((i) => i + 1)
   }, [timeLimitMs])
-
-  // ○ は 1 秒見せて自動で次へ。× とパス（時間切れ含む）は「次へ」を押すまで止める。
-  // このアプリの目的は正しい読みを身につけることなので、間違えた読みは自分のペースで確かめてから進む
-  useEffect(() => {
-    if (!feedback || !feedback.correct) return
-    const t = setTimeout(advance, FEEDBACK_MS)
-    return () => clearTimeout(t)
-  }, [feedback, advance])
 
   // 10 問終わったら答案を保存して結果へ
   useEffect(() => {
@@ -161,6 +165,8 @@ export default function Quiz({ setId, direct = false }: { setId: string; direct?
 
   const answerNow = () => {
     if (!question || feedback) return
+    if (Date.now() - switchedAt.current < DOUBLE_PRESS_MS) return
+    switchedAt.current = Date.now()
     const passed = input.trim() === ''
     const correct = !passed && grade(input, question.answer)
     const elapsed = Math.max(Date.now() - startedAt.current, 0)
@@ -172,6 +178,11 @@ export default function Quiz({ setId, direct = false }: { setId: string; direct?
       : Math.min(elapsed, UNLIMITED_MAX_MS)
     setRecords((prev) => [...prev, { questionId: question.id, input: input.trim(), correct, ms, passed }])
     setFeedback({ correct, answer: question.answer })
+  }
+
+  /** Enter は空欄ではパスにしない。パスは「解答」を押したときだけ（Issue #69） */
+  const answerByEnter = () => {
+    if (input.trim() !== '') answerNow()
   }
 
   if (error) {
@@ -291,12 +302,12 @@ export default function Quiz({ setId, direct = false }: { setId: string; direct?
 
           {/* 入るのはひらがなだけ。ローマ字で打っても IME の変換は不要（HiraganaInput が正規化する）。
               採点中は disabled にせず locked（打鍵を捨てる）。フォーカスを保ってキーボードを閉じないため。
-              採点中の Enter は「次へ」（○ は 1 秒待たずに進める） */}
+              採点中の Enter は「次へ」 */}
           <HiraganaInput
             ref={inputRef}
             value={input}
             onChange={setInput}
-            onSubmit={feedback ? advance : answerNow}
+            onSubmit={feedback ? advance : answerByEnter}
             locked={feedback !== null}
             autoFocus
             placeholder="ひらがなで"
@@ -315,7 +326,7 @@ export default function Quiz({ setId, direct = false }: { setId: string; direct?
                 <span className="marker marker--yellow">{feedback.answer}</span>
                 {/* 畳んだままの地図を見たい人の入口。キーボードを閉じれば高さが戻って地図が開く。
                     次の問で解答欄にフォーカスが戻るので、キーボードも戻る */}
-                {folded && !feedback.correct && (
+                {folded && (
                   <button
                     type="button"
                     className="btn btn--ghost q-feedback__map"
@@ -343,10 +354,10 @@ export default function Quiz({ setId, direct = false }: { setId: string; direct?
           )}
 
           <p>
-            {/* 間違えたあとは「解答」の場所に「次へ」を出す（高さを変えず、指の位置も同じ）。
+            {/* 解答のあとは「解答」の場所に「次へ」を出す（高さを変えず、指の位置も同じ）。
                 フォーカスは解答欄に置いたまま（Enter でも進める）。ボタンに移すと iOS のキーボードが閉じる。
                 最後の問なら結果へ */}
-            {feedback && !feedback.correct ?
+            {feedback ?
               <button type="button" className="btn btn--primary" onClick={advance} onMouseDown={keepFocus}>
                 {index + 1 >= set.questions.length ? '結果を見る' : '次へ'}
               </button>
@@ -355,14 +366,13 @@ export default function Quiz({ setId, direct = false }: { setId: string; direct?
                 className="btn btn--primary"
                 onClick={answerNow}
                 onMouseDown={keepFocus}
-                disabled={feedback !== null}
               >
                 解答
               </button>
             }
           </p>
           {/* 丸バツを見せている間は要らない注意書き。消して用紙の高さを抑える（1280×800 で底が欠けないように） */}
-          {!feedback && <p className="q-note">空欄のまま解答するとパスになります。</p>}
+          {!feedback && <p className="q-note">空欄のまま「解答」を押すとパスになります。</p>}
 
         </div>
       </div>

@@ -25,7 +25,8 @@ import { quizPath, resetNavigated, resultPath } from './router.ts'
 import App from './App.tsx'
 
 /** Quiz.tsx の ○× を見せる時間。同値を保つ */
-const FEEDBACK_MS = 1000
+/** Quiz.tsx の 2 度押しの抑え。解答と「次へ」の直後はこの間だけ次の操作を受けない */
+const DOUBLE_PRESS_MS = 300
 
 // ---------------------------------------------------------------- フィクスチャ
 
@@ -187,14 +188,14 @@ function answerInput(): HTMLInputElement {
   return screen.getByLabelText('読みをひらがなで入力') as HTMLInputElement
 }
 
-/** 間違えたあとに出る「次へ」（最後の問なら「結果を見る」）。正解のあとは出ない */
+/** 解答のあとに出る「次へ」（最後の問なら「結果を見る」） */
 function nextButton(): HTMLElement | null {
   return screen.queryByRole('button', { name: /^(次へ|結果を見る)$/ })
 }
 
 /**
- * 1 問解答する。value が null なら 20 秒放置して自動パスさせる。
- * ○ は 1 秒で自動的に次へ進むが、× とパスは「次へ」を押すまで止まるので、出ていれば押す
+ * 1 問解答して次へ進む。value が null なら 20 秒放置して自動パスさせる。
+ * ○ も × もパスも「次へ」を押すまで止まる。2 度押しの抑えにかからないよう、押すたびに間を空ける
  */
 async function answerOne(value: string | null): Promise<void> {
   if (value === null) {
@@ -204,12 +205,9 @@ async function answerOne(value: string | null): Promise<void> {
     fireEvent.change(input, { target: { value } })
     fireEvent.keyDown(input, { key: 'Enter' })
   }
-  await settle(FEEDBACK_MS)
-  const next = nextButton()
-  if (next) {
-    fireEvent.click(next)
-    await settle()
-  }
+  await settle(DOUBLE_PRESS_MS)
+  fireEvent.click(nextButton()!)
+  await settle(DOUBLE_PRESS_MS)
 }
 
 /** main.tsx と同じ条件（StrictMode）で描画する */
@@ -766,7 +764,7 @@ describe('出題', () => {
     expect(el('.q-kanji').textContent).toContain(EXPECTED.questions[0].display)
   })
 
-  it('正解を入れて Enter で ○ が出て、約 1 秒後に問二へ進む', async () => {
+  it('正解でも自動では進まず、Enter で問二へ進む', async () => {
     await openQuiz(SET_ID)
 
     const input = answerInput()
@@ -776,14 +774,107 @@ describe('出題', () => {
     expect(all('.mark--correct')).toHaveLength(1)
     expect(el('.q-number__text').textContent).toBe('問一 / 十')
 
-    // 1 秒経つまでは次へ進まない
-    await settle(FEEDBACK_MS - 1)
-    expect(el('.q-number__text').textContent).toBe('問一 / 十')
+    expect(nextButton()).toHaveTextContent('次へ')
 
-    await settle(1)
+    // 情報を読みたいこともあるので、待っていても進まない
+    await settle(5000)
+    expect(el('.q-number__text').textContent).toBe('問一 / 十')
+    expect(all('.mark--correct')).toHaveLength(1)
+
+    fireEvent.keyDown(input, { key: 'Enter' })
+    await settle(DOUBLE_PRESS_MS)
     expect(el('.q-number__text').textContent).toBe('問二 / 十')
     expect(el('.q-kanji').textContent).toContain(EXPECTED.questions[1].display)
     expect(answerInput()).toHaveValue('')
+  })
+
+  it('正解のあと「次へ」でも進み、最後の問は「結果を見る」になる', async () => {
+    await openQuiz(SET_ID)
+    for (let i = 0; i < EXPECTED.questions.length - 1; i++) await answerOne(EXPECTED.questions[i].answer)
+    expect(el('.q-number__text').textContent).toBe('問十 / 十')
+
+    const input = answerInput()
+    fireEvent.change(input, { target: { value: EXPECTED.questions[9].answer } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(all('.mark--correct')).toHaveLength(1)
+    expect(nextButton()).toHaveTextContent('結果を見る')
+
+    await settle(5000)
+    expect(hash()).toBe(quizPath(SET_ID))
+
+    fireEvent.click(nextButton()!)
+    await settle()
+    expect(hash()).toBe(resultPath(SET_ID))
+  })
+
+  describe('2 度押しと空欄の Enter（Issue #69）', () => {
+    it('空欄の Enter はパスにしない。打ちかけのローマ字が消えて空になったときも同じ', async () => {
+      await openQuiz(SET_ID)
+
+      const input = answerInput()
+      fireEvent.keyDown(input, { key: 'Enter' })
+      await settle(DOUBLE_PRESS_MS)
+      expect(all('.mark')).toHaveLength(0)
+
+      fireEvent.change(input, { target: { value: 'k' } })
+      fireEvent.keyDown(input, { key: 'Enter' })
+      await settle(DOUBLE_PRESS_MS)
+      expect(all('.mark')).toHaveLength(0)
+      expect(el('.q-number__text').textContent).toBe('問一 / 十')
+
+      // 「解答」を押したときだけパスになる
+      fireEvent.click(screen.getByRole('button', { name: '解答' }))
+      expect(all('.mark--wrong')).toHaveLength(1)
+    })
+
+    it('Enter の 2 度押しで正解を飛ばさず、次の問もパスにならない', async () => {
+      await openQuiz(SET_ID)
+
+      const input = answerInput()
+      fireEvent.change(input, { target: { value: EXPECTED.questions[0].answer } })
+      fireEvent.keyDown(input, { key: 'Enter' })
+      fireEvent.keyDown(input, { key: 'Enter' })
+      await settle()
+      expect(el('.q-number__text').textContent).toBe('問一 / 十')
+      expect(all('.mark--correct')).toHaveLength(1)
+
+      await settle(DOUBLE_PRESS_MS)
+      fireEvent.keyDown(input, { key: 'Enter' })
+      fireEvent.keyDown(input, { key: 'Enter' })
+      await settle(DOUBLE_PRESS_MS)
+      expect(el('.q-number__text').textContent).toBe('問二 / 十')
+      expect(all('.mark')).toHaveLength(0)
+    })
+
+    it('同じ場所のボタンの 2 度押しで正解を飛ばさず、次の問もパスにならない', async () => {
+      await openQuiz(SET_ID)
+
+      const input = answerInput()
+      fireEvent.change(input, { target: { value: EXPECTED.questions[0].answer } })
+      fireEvent.click(screen.getByRole('button', { name: '解答' }))
+      fireEvent.click(nextButton()!)
+      await settle()
+      expect(el('.q-number__text').textContent).toBe('問一 / 十')
+
+      await settle(DOUBLE_PRESS_MS)
+      fireEvent.click(nextButton()!)
+      await settle()
+      expect(el('.q-number__text').textContent).toBe('問二 / 十')
+
+      fireEvent.click(screen.getByRole('button', { name: '解答' }))
+      await settle()
+      expect(all('.mark')).toHaveLength(0)
+    })
+
+    it('時間切れの直後の Enter で正解を飛ばさない', async () => {
+      await openQuiz(SET_ID)
+      await settle(TIME_LIMIT_MS)
+      expect(all('.mark--wrong')).toHaveLength(1)
+
+      fireEvent.keyDown(answerInput(), { key: 'Enter' })
+      await settle()
+      expect(el('.q-number__text').textContent).toBe('問一 / 十')
+    })
   })
 
   it('解答欄は最初から、次の問に進んだ後も入力できる状態（フォーカス）になっている', async () => {
@@ -794,7 +885,9 @@ describe('出題', () => {
     const input = answerInput()
     fireEvent.change(input, { target: { value: EXPECTED.questions[0].answer } })
     fireEvent.keyDown(input, { key: 'Enter' })
-    await settle(FEEDBACK_MS)
+    await settle(DOUBLE_PRESS_MS)
+    fireEvent.keyDown(input, { key: 'Enter' })
+    await settle(DOUBLE_PRESS_MS)
 
     expect(el('.q-number__text').textContent).toBe('問二 / 十')
     expect(answerInput()).toHaveFocus()
@@ -842,13 +935,14 @@ describe('出題', () => {
       expect(all('.layout__map--folded')).toHaveLength(0)
       expect(screen.queryByRole('button', { name: '地図' })).toBeNull()
 
+      await settle(DOUBLE_PRESS_MS)
       fireEvent.click(nextButton()!)
       await settle()
       expect(el('.q-number__text').textContent).toBe('問二 / 十')
       expect(answerInput()).toHaveFocus()
     })
 
-    it('○ には「地図」を出さない（1 秒で次へ進む）', async () => {
+    it('○ にも「地図」を出す（正解でも市区町村の情報を見られる）', async () => {
       setViewportHeight(420)
       await openQuiz(SET_ID)
 
@@ -857,7 +951,7 @@ describe('出題', () => {
       fireEvent.keyDown(input, { key: 'Enter' })
 
       expect(all('.mark--correct')).toHaveLength(1)
-      expect(screen.queryByRole('button', { name: '地図' })).toBeNull()
+      expect(screen.getByRole('button', { name: '地図' })).toBeInTheDocument()
     })
 
     it('背が高ければ今までどおり解答で地図が開く', async () => {
@@ -892,6 +986,7 @@ describe('出題', () => {
     expect(input).toHaveValue('さん')
 
     // Enter（ソフトキーボードの「完了」）で次へ。フォーカスはそのまま
+    await settle(DOUBLE_PRESS_MS)
     fireEvent.keyDown(input, { key: 'Enter' })
     await settle()
     expect(el('.q-number__text').textContent).toBe('問二 / 十')
@@ -926,10 +1021,10 @@ describe('出題', () => {
     fireEvent.keyDown(input, { key: 'Enter' })
     expect(all('.mark')).toHaveLength(1)
 
-    // 「さん」は不正解なので「次へ」を押して進む
-    await settle(FEEDBACK_MS)
+    // 「次へ」を押して進む
+    await settle(DOUBLE_PRESS_MS)
     fireEvent.click(nextButton()!)
-    await settle()
+    await settle(DOUBLE_PRESS_MS)
     expect(el('.q-number__text').textContent).toBe('問二 / 十')
 
     // 残り 9 問を埋めて、1 問目に「さん」が記録されていることを確かめる
@@ -952,16 +1047,16 @@ describe('出題', () => {
     expect(screen.queryByRole('button', { name: '解答' })).toBeNull()
     expect(nextButton()).toHaveTextContent('次へ')
     expect(document.activeElement).toBe(input)
-    // 間違えている間は「空欄のまま解答すると…」の注意書きを出さない（用紙の高さを抑える）
-    expect(screen.queryByText(/空欄のまま解答すると/)).toBeNull()
+    // 間違えている間は「空欄のまま…」の注意書きを出さない（用紙の高さを抑える）
+    expect(screen.queryByText(/空欄のまま/)).toBeNull()
 
-    // 正解のときの 1 秒どころか、ずっと待っても進まない
-    await settle(FEEDBACK_MS * 10)
+    // ずっと待っても進まない
+    await settle(10_000)
     expect(el('.q-number__text').textContent).toBe('問一 / 十')
     expect(all('.mark--wrong')).toHaveLength(1)
 
     fireEvent.click(nextButton()!)
-    await settle()
+    await settle(DOUBLE_PRESS_MS)
     expect(el('.q-number__text').textContent).toBe('問二 / 十')
     expect(all('.mark')).toHaveLength(0)
     expect(screen.getByRole('button', { name: '解答' })).toBeInTheDocument()
@@ -969,7 +1064,7 @@ describe('出題', () => {
     await answerOne(EXPECTED.questions[1].answer)
     for (let i = 2; i < EXPECTED.questions.length; i++) await answerOne(EXPECTED.questions[i].answer)
     const records = JSON.parse(sessionStorage.getItem(answerSheetKey(SET_ID)) ?? '[]')
-    expect(records[1].ms).toBeLessThan(FEEDBACK_MS)
+    expect(records[1].ms).toBeLessThan(1000)
   })
 
   it('最後の問を間違えると「結果を見る」になり、押すと結果へ進む', async () => {
@@ -978,7 +1073,7 @@ describe('出題', () => {
     expect(el('.q-number__text').textContent).toBe('問十 / 十')
 
     fireEvent.click(screen.getByRole('button', { name: '解答' }))
-    await settle(FEEDBACK_MS * 3)
+    await settle(3000)
     expect(hash()).toBe(quizPath(SET_ID))
     expect(nextButton()).toHaveTextContent('結果を見る')
 
@@ -993,11 +1088,11 @@ describe('出題', () => {
     fireEvent.click(screen.getByRole('button', { name: '解答' }))
     expect(all('.mark--wrong')).toHaveLength(1)
 
-    // パスも間違いと同じく「次へ」を押すまで止まる
-    await settle(FEEDBACK_MS)
+    // パスも「次へ」を押すまで止まる
+    await settle(1000)
     expect(el('.q-number__text').textContent).toBe('問一 / 十')
     fireEvent.click(nextButton()!)
-    await settle()
+    await settle(DOUBLE_PRESS_MS)
     expect(el('.q-number__text').textContent).toBe('問二 / 十')
 
     // 残り 9 問は適当に埋めて、1 問目がパスとして記録されていることを確認する
@@ -1019,7 +1114,7 @@ describe('出題', () => {
     expect(all('.mark--wrong')).toHaveLength(1)
 
     // 時間切れのあとは砂時計が止まり、「次へ」を押すまで次の問に進まない
-    await settle(FEEDBACK_MS * 5)
+    await settle(5000)
     expect(el('.q-number__text').textContent).toBe('問一 / 十')
     fireEvent.click(nextButton()!)
     await settle()
@@ -1394,9 +1489,9 @@ describe('時間制限なし', () => {
 
     await settle(3000)
     fireEvent.click(screen.getByRole('button', { name: '解答' }))
-    await settle(FEEDBACK_MS)
+    await settle(DOUBLE_PRESS_MS)
     fireEvent.click(nextButton()!)
-    await settle()
+    await settle(DOUBLE_PRESS_MS)
     for (let i = 1; i < EXPECTED.questions.length; i++) await answerOne(EXPECTED.questions[i].answer)
 
     const records = JSON.parse(sessionStorage.getItem(answerSheetKey(SET_ID)) ?? '[]')
