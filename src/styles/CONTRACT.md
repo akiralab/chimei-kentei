@@ -36,6 +36,11 @@
 | `.board--scroll` | `.board` の修飾子。結果・間違えた問題・あそびかたの 3 画面だけ、用紙ごと縦スクロールする（下の「1 画面運用」の例外） |
 | `.skeleton` / `.skeleton__line` | 読み込み中の答案（`PaperSkeleton`）。罫線の上に薄い長方形を数行 |
 | `.layout__map--folded` / `.layout__map-label`（**map.css**） | 出題画面の地図を解答前に 1 行へ畳む修飾子と、その中の範囲名 |
+| `.select` | `.paper` に併記する修飾子。範囲・科目の画面。文字は 15px 以上、押す場所は 44px 以上（Issue #63） |
+| `.level-list` / `.level-choice`（`__name` `__example` `__mark`）/ `.is-selected` | 難易度の 3 択。★ の呼び名と例の地名を添える。選択中は蛍光マーカーと ● |
+| `.place-row` / `.place-row__item` / `.is-selected` | 「全国」のボタンと都道府県のネイティブ `<select>` を 1 行に並べる |
+| `.select-more`（`__label` `__value` `__chevron` `__body`）/ `.select-row`（`__label`） | 「こまかい設定」の開閉と、開いた中の 科目・問題数・時間制限 の行 |
+| `.select__heading` / `.select__start` / `.select__summary` | 「どこの地名？」の見出し／「始める」と要約の 1 行の入れ物（用紙の下端に寄せる）／要約の 1 行 |
 | `.layout--quiz` | `.layout` の修飾子。出題画面の印で、ソフトキーボードが出ている高さ（`@media (max-height: 600px) and (max-width: 899px)`）の詰めはこれにぶら下げる（帯・問いの文・タブバーを外す） |
 | `.q-feedback` / `.q-feedback__map` | 入力欄の直下の ○× と正解の行と、キーボードが出ている間だけ × に添える「地図」（押すとキーボードが閉じて地図が開く） |
 | `.paper__help` | 見出し行（`.paper__header`）の右端に置く丸い「？」。あそびかた（`#/howto`）への入口。行を足さない（表紙では帯の右下に重ねる） |
@@ -178,7 +183,7 @@ Dela Gothic One は字幅を詰めた極太デザインで、1.4rem 前後の漢
 - `.atlas` は `AtlasList`（`src/components/AtlasList.tsx`）が描く。行は `{key, name, kana, href?, selected?}` の配列で受け取る **meta 非依存の表示部品**なので、段階 2 の町名もそのまま並べられる。
 - 900px 以上の地名帳は出題画面と同じ `.layout` / `.layout__map` / `.layout__quiz` をそのまま使う（CSS の追加なし）。
 - **`.atlas__row` は `position: relative`。** 行の `.sr-only`（`position: absolute`）を行の中で止めるため。 ここで止めないと `.paper`（`position: relative`）を基準に置かれ、一覧の内側スクロールに切り取られずに用紙の高さを押し広げる。
-- 地名帳の難易度の切替は範囲選択と同じ `.mode-switch.mode-switch--compact.mode-switch--fit` だが、**`.switch-row` に入れず 1 行に単独で置く**。そのため `.paper > .mode-switch--fit` だけ `width: auto`（枠を中身に合わせる）にしてある。
+- 地名帳の難易度の切替は `.mode-switch.mode-switch--compact.mode-switch--fit` だが、**`.switch-row` に入れず 1 行に単独で置く**。そのため `.paper > .mode-switch--fit` だけ `width: auto`（枠を中身に合わせる）にしてある。
 
 ## v1 追加（2026-10-04 / スマホアプリ化 第 1 波）
 

@@ -353,56 +353,11 @@
   min-height: 30px;
 }
 
-/* 見出し行に同居する「全国」。.pref-grid__item と同じ見た目だが縦を詰めている */
-.jp-map__all {
-  min-height: var(--tap-min);
-  padding: var(--space-1) var(--space-4);
-  font-family: var(--font-hand);
-  font-size: var(--fs-md);
-  line-height: 1.2;
-  white-space: nowrap;
-  color: var(--color-ink);
-  background: color-mix(in srgb, var(--color-paper) 70%, #fff);
-  border: 1.5px solid var(--color-paper-line);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-}
-
-.jp-map__all:hover {
-  border-color: var(--color-pencil);
-}
-
-.jp-map__all--selected {
-  font-weight: 600;
-  background: var(--color-marker-blue);
-  border-color: var(--color-ink);
-  box-shadow: inset 0 0 0 1px var(--color-ink);
-}
-
 .jp-map__step {
   margin: 0;
   font-family: var(--font-body);
   font-size: var(--fs-sm);
   color: var(--color-pencil);
-}
-
-/* 見出し行の余白に出す「千葉県 全54市町村」。選んだ県と同じ青で塗る */
-.jp-map__note {
-  margin-right: auto;
-  padding: 1px var(--space-2);
-  font-family: var(--font-hand);
-  font-size: var(--fs-sm);
-  line-height: 1.4;
-  white-space: nowrap;
-  color: var(--color-ink);
-  background: var(--color-marker-blue);
-  border-radius: var(--radius-sm);
-}
-
-@media (max-width: 719px) {
-  .jp-map__note-name {
-    display: none;
-  }
 }
 
 .jp-map__back.btn {

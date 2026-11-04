@@ -1839,6 +1839,269 @@ select.field__input {
 }
 
 /* --------------------------------------------------------------------------
+   範囲・科目（.select）。決めるのは「難しさ」と「場所」の 2 つだけ（Issue #63）
+   スマホで読むので文字は 15px 以上、押す場所は 44px 以上。「始める」は親指の届く下端に置く
+   -------------------------------------------------------------------------- */
+/* 下の余白は .select__start が持つ（「始める」を底に貼り付けるので、用紙の余白が残ると隙間から透ける） */
+.paper.select {
+  gap: var(--space-3);
+  padding-bottom: 0;
+}
+
+/* 下に margin が無いと sticky のぶん 1 段目に重なる。この画面の見出しは動かなくてよい */
+.select > .paper__header {
+  position: static;
+  margin-bottom: 0;
+}
+
+/* 2 つの問いを同じ段で見せる。--fs-title のままだと 375px で「？」が 2 行目へ落ちる */
+.select .paper__title {
+  font-size: var(--fs-xl);
+}
+
+.select__heading {
+  margin: var(--space-2) 0 0;
+}
+
+.level-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.level-choice {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  column-gap: var(--space-3);
+  width: 100%;
+  min-height: 3.75rem;
+  padding: var(--space-2) var(--space-4);
+  font-family: var(--font-body);
+  text-align: left;
+  color: var(--color-ink);
+  background: var(--color-paper);
+  border: 2px solid var(--color-rule-strong);
+  border-radius: var(--radius-paper);
+  cursor: pointer;
+}
+
+.level-choice__name {
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.level-choice__example {
+  grid-column: 1;
+  font-size: 0.9375rem;
+  line-height: 1.4;
+  color: var(--color-pencil);
+}
+
+/* 蛍光黄の .stars は選択中の黄色に沈むので、ここだけ赤ペンで書く */
+.level-choice .stars {
+  color: var(--color-red-pen);
+  text-shadow: none;
+  -webkit-text-stroke: 0;
+}
+
+.level-choice__mark {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  font-size: var(--fs-lg);
+  line-height: 1;
+  color: var(--color-rule-strong);
+}
+
+.level-choice.is-selected {
+  background: var(--color-marker-yellow);
+  border-color: var(--color-ink);
+  box-shadow: var(--shadow-chip);
+}
+
+.level-choice.is-selected .level-choice__example,
+.level-choice.is-selected .level-choice__mark {
+  color: var(--color-ink);
+}
+
+.level-choice:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.place-row {
+  display: grid;
+  grid-template-columns: 2fr 3fr;
+  gap: var(--space-2);
+}
+
+.place-row__item {
+  width: 100%;
+  min-width: 0;
+  min-height: 3.25rem;
+  padding: var(--space-2);
+  font-family: var(--font-body);
+  /* 16px 未満の <select> は iOS がフォーカスで画面を拡大してしまう */
+  font-size: var(--fs-md);
+  font-weight: 700;
+  text-align: center;
+  color: var(--color-ink);
+  background: var(--color-paper);
+  border: 2px solid var(--color-rule-strong);
+  border-radius: var(--radius-paper);
+  cursor: pointer;
+}
+
+select.place-row__item {
+  appearance: none;
+  text-align-last: center;
+}
+
+.place-row__item.is-selected {
+  background: var(--color-marker-yellow);
+  border-color: var(--color-ink);
+  box-shadow: var(--shadow-chip);
+}
+
+.select .mode-switch__item {
+  font-size: 0.9375rem;
+}
+
+.select-more {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--space-3);
+  width: 100%;
+  min-height: var(--tap-min);
+  margin-top: var(--space-1);
+  padding: var(--space-2) 0;
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  text-align: left;
+  color: var(--color-pencil);
+  background: none;
+  border: 0;
+  border-block: 1.5px dashed var(--color-rule-strong);
+  cursor: pointer;
+}
+
+.select-more__label {
+  font-size: var(--fs-md);
+  font-weight: 700;
+  color: var(--color-ink);
+}
+
+.select-more__chevron {
+  margin-left: auto;
+  font-size: var(--fs-lg);
+  line-height: 1;
+}
+
+.select-more__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.select-row {
+  display: grid;
+  grid-template-columns: 4.5rem 1fr;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.select-row__label {
+  font-size: 0.9375rem;
+  color: var(--color-pencil);
+}
+
+.select-more__body .field__label {
+  font-size: 0.9375rem;
+}
+
+/* 用紙が余ったぶんは「始める」の上に空ける。こまかい設定を開いて用紙が動いても底に残す。
+   地を塗るのは下を流れる行の文字と重ならないように（影は付けない。CONTRACT の「影が文字を隠す」の教訓） */
+.select__start {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-block: var(--space-2) var(--space-4);
+  background: var(--color-paper);
+}
+
+.select__summary {
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  text-align: center;
+  color: var(--color-pencil);
+}
+
+.select__start .btn {
+  width: 100%;
+  min-height: 3.5rem;
+  font-size: var(--fs-lg);
+}
+
+/* スマホは用紙を縦いっぱいに使う（PC は中身の高さのまま中央に置く） */
+@media (max-width: 719px) {
+  .paper.select {
+    flex: 1 1 auto;
+  }
+}
+
+/* SE（375x667）では見える高さが 575px しかない。文字はそのままで余白だけを詰める */
+@media (max-height: 740px) {
+  .paper.select {
+    gap: var(--space-2);
+  }
+
+  .select > .paper__header {
+    margin-bottom: 0;
+    padding-block: var(--space-2);
+  }
+
+  .select__heading {
+    margin-top: var(--space-1);
+  }
+
+  .level-choice {
+    min-height: 3.25rem;
+    padding-block: var(--space-1);
+  }
+
+  .level-choice__name,
+  .level-choice__example {
+    line-height: 1.3;
+  }
+
+  .place-row__item {
+    min-height: var(--tap-min);
+    padding-block: var(--space-1);
+  }
+
+  .select-more {
+    margin-top: 0;
+    padding-block: var(--space-1);
+  }
+
+  .select__start {
+    gap: var(--space-1);
+    padding-block: var(--space-1) var(--space-3);
+  }
+
+  .select__start .btn {
+    min-height: 3rem;
+  }
+}
+
+/* --------------------------------------------------------------------------
    出題画面: ソフトキーボードが出ている高さ（Issue #64）
    iPhone の日本語キーボードでは見える高さが 390x420 まで落ちる（844 − ステータスバー 59 −
    キーボードと変換候補 365）。○× と正解と「次へ」を内側スクロールなしで見せるために、

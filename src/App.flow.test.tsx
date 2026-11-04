@@ -78,6 +78,8 @@ const EASY_ALL: Question[] = [...EASY_12, ...EASY_13, ...EASY_01]
 const DIFFICULT_12 = [
   ...kanaizeAnswers(makeDifficult('12', '千葉県', 1, 30)),
   ...kanaizeAnswers(makeDifficult('12', '千葉県', 2, 7)),
+  // 全町名は組めるが、どの ★ も 10 件に足りない市区町村（★ は 4 件ずつ）
+  ...kanaizeAnswers(makeDifficult('12', '千葉県', 4, 12)),
 ]
 const DIFFICULT_13 = kanaizeAnswers(makeDifficult('13', '東京都', 1, 30))
 const DIFFICULT_ALL: Question[] = [...DIFFICULT_12, ...DIFFICULT_13]
@@ -156,6 +158,11 @@ async function settle(ms = 0): Promise<void> {
   await act(async () => {
     await vi.advanceTimersByTimeAsync(ms)
   })
+}
+
+/** 選択画面の都道府県（ネイティブの <select>）を選ぶ */
+function choosePref(prefCode: string): void {
+  fireEvent.change(screen.getByLabelText('都道府県'), { target: { value: prefCode } })
 }
 
 function goto(hash: string): void {
@@ -311,16 +318,18 @@ describe('範囲・科目', () => {
     goto('#/select')
     renderApp()
     await settle()
+    // 科目・問題数・時間制限は畳んであるので、このまとまりのテストでは開いておく
+    fireEvent.click(screen.getByRole('button', { name: /^こまかい設定/ }))
   }
 
-  it('都道府県を選んで「始める」で #/q/{dataVersion}-e-{prefCode}-{4桁} へ', async () => {
+  it('都道府県を選んで「始める」で #/q/{dataVersion}-e-{prefCode}-{4桁}-s3 へ（既定は ★★★）', async () => {
     await openSelect()
 
-    fireEvent.click(screen.getByRole('button', { name: '千葉県' }))
+    choosePref('12')
     fireEvent.click(screen.getByRole('button', { name: '始める' }))
     await settle()
 
-    expect(hash()).toMatch(new RegExp(`^#/q/${DATA_VERSION}-e-12-\\d{4}$`))
+    expect(hash()).toMatch(new RegExp(`^#/q/${DATA_VERSION}-e-12-\\d{4}-s3$`))
   })
 
   // 範囲・科目ごとの日替わりは全員が同じ問題にならないので廃止。日替わりは表紙の「今日の10問（全国）」だけ
@@ -345,11 +354,11 @@ describe('範囲・科目', () => {
     expect(hash()).toBe('#/select')
 
     // 都道府県を選べば「始める」に戻って始められる（科目の選択は保たれる）
-    fireEvent.click(screen.getByRole('button', { name: '千葉県' }))
+    choosePref('12')
     expect(screen.queryByRole('button', { name: '都道府県を選ぶと始められます' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: '始める' }))
     await settle()
-    expect(hash()).toMatch(new RegExp(`^#/q/${DATA_VERSION}-d-12-\\d{4}$`))
+    expect(hash()).toMatch(new RegExp(`^#/q/${DATA_VERSION}-d-12-\\d{4}-s3$`))
   })
 
   it('時間制限の既定は「なし」で、出題画面にタイマーが出ない', async () => {
@@ -359,10 +368,9 @@ describe('範囲・科目', () => {
     await openSelect()
 
     expect(screen.getByRole('button', { name: '時間制限: なし' })).toHaveClass('is-selected')
-    // 「時間制限: なし」ボタンとも当たるので、見出し行を名指しで見る
-    expect(el('.paper__subtitle').textContent).toContain('制限: なし')
+    expect(el('.select-more__value').textContent).toContain('制限なし')
 
-    fireEvent.click(screen.getByRole('button', { name: '千葉県' }))
+    choosePref('12')
     fireEvent.click(screen.getByRole('button', { name: '始める' }))
     await settle()
 
@@ -377,7 +385,7 @@ describe('範囲・科目', () => {
     await settle()
     expect(screen.getByRole('button', { name: '時間制限: 20秒' })).toHaveClass('is-selected')
 
-    fireEvent.click(screen.getByRole('button', { name: '千葉県' }))
+    choosePref('12')
     fireEvent.click(screen.getByRole('button', { name: '始める' }))
     await settle()
 
@@ -388,72 +396,131 @@ describe('範囲・科目', () => {
   it('都道府県を選べば difficult で始められる', async () => {
     await openSelect()
 
-    fireEvent.click(screen.getByRole('button', { name: '千葉県' }))
+    choosePref('12')
     fireEvent.click(screen.getByRole('button', { name: '市区町村名＋町名' }))
     fireEvent.click(screen.getByRole('button', { name: '始める' }))
     await settle()
 
-    expect(hash()).toMatch(new RegExp(`^#/q/${DATA_VERSION}-d-12-\\d{4}$`))
+    expect(hash()).toMatch(new RegExp(`^#/q/${DATA_VERSION}-d-12-\\d{4}-s3$`))
   })
 
-  it('都道府県を選ぶと出題数が出て、全市区町村名（問題バンクの件数）で -all のセットになる', async () => {
+  it('都道府県を選ぶと全市区町村名に問題数（問題バンクの件数）が出て、-all のセットになる', async () => {
     await openSelect()
 
     // 全国のあいだは「全市区町村名」を選べない（都道府県ごとの出題なので）
     expect(screen.getByRole('button', { name: '問題数: 全市区町村名' })).toBeDisabled()
-    expect(document.querySelector('.jp-map__note')).toBeNull()
 
-    fireEvent.click(screen.getByRole('button', { name: '千葉県' }))
-    // 見出し行の余白には **問題数**（easy の 15 件）が出る。市区町村の数（meta.cities の 16 件）
-    // ではない — 除外した「さいたま市」は出題しないので、数えても出題数と合わない
-    expect(el('.jp-map__note').textContent).toBe('千葉県 15問')
-    expect(el('.jp-map__note')).toHaveAttribute('title', '問題数 15 問')
-    const allButton = screen.getByRole('button', { name: '問題数: 全市区町村名（15 問）' })
+    choosePref('12')
+    // 既定の ★★★ の件数（easy の 11 件）。市区町村の数（meta.cities）ではない
+    const allButton = screen.getByRole('button', { name: '問題数: 全市区町村名（11 問）' })
     expect(allButton).toBeEnabled()
     fireEvent.click(allButton)
     expect(allButton).toHaveAttribute('aria-pressed', 'true')
-    expect(el('.paper__subtitle').textContent).toContain('問題数: 全 15 問')
+    expect(el('.select-more__value').textContent).toContain('全 11 問')
 
-    // 町名を含める科目に切り替えると「全部」の単位が全町名になり、市区町村を選ぶまで始められない
+    // 町名を含める科目に切り替えると全問の単位が全町名になり、市区町村を選ぶまで始められない
     fireEvent.click(screen.getByRole('button', { name: '市区町村名＋町名' }))
     expect(screen.getByRole('button', { name: '問題数: 全町名' })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('button', { name: '市区町村を選ぶと始められます' })).toBeDisabled()
 
     fireEvent.click(screen.getByRole('button', { name: '市区町村名' }))
-    fireEvent.click(screen.getByRole('button', { name: '問題数: 全市区町村名（15 問）' }))
+    fireEvent.click(screen.getByRole('button', { name: '問題数: 全市区町村名（11 問）' }))
     fireEvent.click(screen.getByRole('button', { name: '始める' }))
     await settle()
 
-    expect(hash()).toMatch(new RegExp(`^#/q/${DATA_VERSION}-e-12-\\d{4}-all$`))
+    expect(hash()).toMatch(new RegExp(`^#/q/${DATA_VERSION}-e-12-\\d{4}-all-s3$`))
     // 10 問を超えるので問番号は算用数字（fake timers なので waitFor ではなく settle で流す）
     await settle()
-    expect(el('.q-number__text').textContent).toBe('問1 / 15')
-    expect(all('.q-kanji').every((e) => !e.textContent?.includes('さいたま'))).toBe(true)
+    expect(el('.q-number__text').textContent).toBe('問1 / 11')
   })
 
   // ---- 難易度（★1〜3。Issue #33 / PR #38 の build_stars.py） ----
 
-  it('難易度の行は両科目で出て、選んだ ★ は科目を替えても残る（Issue #46）', async () => {
+  it('難易度は ★★★ が既定で「全部」は無く、選んだ ★ は科目を替えても残る（Issue #46 / #63）', async () => {
     await openSelect()
 
     // 全国のままでも難易度は選べる（★ は問ごとに付いているので範囲に依らない）
     expect(screen.getByRole('group', { name: '難易度' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '難易度: 全部' })).toHaveAttribute('aria-pressed', 'true')
-    fireEvent.click(screen.getByRole('button', { name: '難易度: ★3' }))
+    expect(screen.getByRole('button', { name: '難易度: ★3' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.queryByRole('button', { name: '難易度: 全部' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '難易度: ★2' }))
 
     // 町名を含める科目でも行は消えない（町名にも ★1〜3 が付いた）
     fireEvent.click(screen.getByRole('button', { name: '市区町村名＋町名' }))
     expect(screen.getByRole('group', { name: '難易度' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '難易度: ★3' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: '難易度: ★2' })).toHaveAttribute('aria-pressed', 'true')
 
     fireEvent.click(screen.getByRole('button', { name: '市区町村名' }))
-    expect(screen.getByRole('button', { name: '難易度: ★3' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: '難易度: ★2' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('何も触らずに「始める」と全国の ★★★ の 10 問になる（Issue #63）', async () => {
+    await openSelect()
+
+    expect(el('.select__summary').textContent).toBe('全国の★★★から 10 問')
+    fireEvent.click(screen.getByRole('button', { name: '始める' }))
+    await settle()
+
+    expect(hash()).toMatch(new RegExp(`^#/q/${DATA_VERSION}-e-00-\\d{4}-s3$`))
+    await settle()
+    expect(el('.q-number__text').textContent).toBe('問一 / 十')
+    expect(el('.q-number .stars').textContent).toBe('★★★')
+  })
+
+  it('こまかい設定は既定で畳み、見出しの行に今の設定を出す（Issue #63）', async () => {
+    localStorage.removeItem(TIME_LIMIT_KEY)
+    goto('#/select')
+    renderApp()
+    await settle()
+
+    const more = screen.getByRole('button', { name: /^こまかい設定/ })
+    expect(more).toHaveAttribute('aria-expanded', 'false')
+    expect(el('.select-more__value').textContent).toBe('市区町村・10 問・制限なし')
+    expect(screen.queryByRole('group', { name: '科目' })).toBeNull()
+    expect(screen.queryByRole('group', { name: '問題数' })).toBeNull()
+    expect(screen.queryByRole('group', { name: '時間制限' })).toBeNull()
+
+    fireEvent.click(more)
+    expect(more).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByRole('group', { name: '科目' })).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: '問題数' })).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: '時間制限' })).toBeInTheDocument()
+  })
+
+  it('選択画面は日本地図を読まない（地図を外した。Issue #63）', async () => {
+    await openSelect()
+
+    expect(document.querySelector('.jp-map')).toBeNull()
+    const urls = vi.mocked(fetch).mock.calls.map(([input]) => String(input))
+    expect(urls.filter((url) => url.includes('/geo/'))).toEqual([])
+  })
+
+  it('都道府県の一覧は地方ごとに分かれ、選び直すと全国に戻せる', async () => {
+    await openSelect()
+
+    const picker = screen.getByLabelText('都道府県')
+    expect(picker).toHaveValue('')
+    expect(screen.getByRole('button', { name: '全国' })).toHaveAttribute('aria-pressed', 'true')
+
+    // フィクスチャの 3 都道県。北から南へ並ぶ
+    expect([...picker.querySelectorAll('optgroup')].filter((g) => g.children.length > 0).map((g) => g.label)).toEqual([
+      '北海道',
+      '関東',
+    ])
+
+    choosePref('12')
+    expect(picker).toHaveValue('12')
+    expect(screen.getByRole('button', { name: '全国' })).toHaveAttribute('aria-pressed', 'false')
+
+    fireEvent.click(screen.getByRole('button', { name: '全国' }))
+    expect(picker).toHaveValue('')
+    expect(el('.select__summary').textContent).toBe('全国の★★★から 10 問')
   })
 
   it('町名 × ★★★ の 10 問は setId に -s3 が付き、出題にも ★ が出る', async () => {
     await openSelect()
 
-    fireEvent.click(screen.getByRole('button', { name: '千葉県' }))
+    choosePref('12')
     fireEvent.click(screen.getByRole('button', { name: '市区町村名＋町名' }))
     fireEvent.click(screen.getByRole('button', { name: '難易度: ★3' }))
     fireEvent.click(screen.getByRole('button', { name: '始める' }))
@@ -468,7 +535,7 @@ describe('範囲・科目', () => {
   it('町名 × 全町名は市区町村を選んでから始められ、setId は 6 桁 scope の -all になる', async () => {
     await openSelect()
 
-    fireEvent.click(screen.getByRole('button', { name: '千葉県' }))
+    choosePref('12')
     fireEvent.click(screen.getByRole('button', { name: '市区町村名＋町名' }))
     // 市区町村の <select> は全町名を選ぶまで出さない（1 画面に収めるため）
     expect(screen.queryByLabelText('市区町村')).toBeNull()
@@ -482,45 +549,83 @@ describe('範囲・科目', () => {
     expect(screen.getByRole('button', { name: '市区町村を選ぶと始められます' })).toBeDisabled()
 
     fireEvent.change(picker, { target: { value: '120001' } })
-    expect(screen.getByRole('button', { name: '問題数: 全町名（30 問）' })).toHaveAttribute('aria-pressed', 'true')
-    expect(el('.paper__subtitle').textContent).toContain('いまの範囲: 千市1')
-    expect(el('.paper__subtitle').textContent).toContain('問題数: 全 30 問')
+    expect(screen.getByRole('button', { name: '問題数: 全町名（10 問）' })).toHaveAttribute('aria-pressed', 'true')
+    expect(el('.select__summary').textContent).toBe('千市1の★★★から 全 10 問')
 
     fireEvent.click(screen.getByRole('button', { name: '始める' }))
     await settle()
-    expect(hash()).toMatch(new RegExp(`^#/q/${DATA_VERSION}-d-120001-\\d{4}-all$`))
+    expect(hash()).toMatch(new RegExp(`^#/q/${DATA_VERSION}-d-120001-\\d{4}-all-s3$`))
     await settle()
-    expect(el('.q-number__text').textContent).toBe('問1 / 30')
+    expect(el('.q-number__text').textContent).toBe('問一 / 十')
+  })
+
+  it('全町名で市区町村のどの ★ も 10 件に足りなければ、★ で絞らずに全町名を出す', async () => {
+    await openSelect()
+
+    choosePref('12')
+    fireEvent.click(screen.getByRole('button', { name: '市区町村名＋町名' }))
+    fireEvent.click(screen.getByRole('button', { name: '問題数: 全町名' }))
+    fireEvent.change(screen.getByLabelText('市区町村'), { target: { value: '120004' } })
+
+    for (const name of ['難易度: ★1', '難易度: ★2', '難易度: ★3']) {
+      const button = screen.getByRole('button', { name })
+      expect(button).toBeDisabled()
+      expect(button).toHaveAttribute('aria-pressed', 'false')
+      // 押せない理由は例の地名の代わりに見える文字で出す
+      expect(button.textContent).toContain('千市4は 4 問')
+    }
+    expect(screen.getByRole('button', { name: '問題数: 全町名（12 問）' })).toHaveAttribute('aria-pressed', 'true')
+    expect(el('.select__summary').textContent).toBe('千市4から 全 12 問')
+
+    fireEvent.click(screen.getByRole('button', { name: '始める' }))
+    await settle()
+    expect(hash()).toMatch(new RegExp(`^#/q/${DATA_VERSION}-d-120004-\\d{4}-all$`))
+  })
+
+  it('選んだ ★ が今の範囲で選べないと近い ★ へ移り、範囲を戻すと選び直した ★ に戻る', async () => {
+    await openSelect()
+
+    choosePref('12')
+    fireEvent.click(screen.getByRole('button', { name: '市区町村名＋町名' }))
+    fireEvent.click(screen.getByRole('button', { name: '問題数: 全町名' }))
+    expect(screen.getByRole('button', { name: '難易度: ★3' })).toHaveAttribute('aria-pressed', 'true')
+
+    // 千市4 はどの ★ も足りない（絞らない）。千市1 に戻せば既定の ★★★ が生きている
+    const picker = screen.getByLabelText('市区町村')
+    fireEvent.change(picker, { target: { value: '120004' } })
+    expect(screen.getByRole('button', { name: '難易度: ★3' })).toHaveAttribute('aria-pressed', 'false')
+    fireEvent.change(picker, { target: { value: '120001' } })
+    expect(screen.getByRole('button', { name: '難易度: ★3' })).toHaveAttribute('aria-pressed', 'true')
   })
 
   it('全町名から 10 問に戻すと市区町村を捨てて都道府県に戻る', async () => {
     await openSelect()
 
-    fireEvent.click(screen.getByRole('button', { name: '千葉県' }))
+    choosePref('12')
     fireEvent.click(screen.getByRole('button', { name: '市区町村名＋町名' }))
     fireEvent.click(screen.getByRole('button', { name: '問題数: 全町名' }))
     fireEvent.change(screen.getByLabelText('市区町村'), { target: { value: '120001' } })
-    expect(el('.paper__subtitle').textContent).toContain('いまの範囲: 千市1')
+    expect(el('.select__summary').textContent).toContain('千市1')
 
     fireEvent.click(screen.getByRole('button', { name: `問題数: ${QUESTIONS_PER_SET} 問` }))
     expect(screen.queryByLabelText('市区町村')).toBeNull()
-    expect(el('.paper__subtitle').textContent).toContain('いまの範囲: 千葉県')
+    expect(el('.select__summary').textContent).toContain('千葉県')
 
     fireEvent.click(screen.getByRole('button', { name: '始める' }))
     await settle()
-    expect(hash()).toMatch(new RegExp(`^#/q/${DATA_VERSION}-d-12-\\d{4}$`))
+    expect(hash()).toMatch(new RegExp(`^#/q/${DATA_VERSION}-d-12-\\d{4}-s3$`))
   })
 
   it('★★★ を選んで始めると setId に -s3 が付き、出題画面に ★★★ が出る', async () => {
     await openSelect()
 
-    fireEvent.click(screen.getByRole('button', { name: '千葉県' }))
+    choosePref('12')
     const three = screen.getByRole('button', { name: '難易度: ★3' })
     expect(three).toBeEnabled()
     fireEvent.click(three)
     expect(three).toHaveAttribute('aria-pressed', 'true')
-    // 帯に難易度が出て、問題数は ★3 の件数（11 件）で数える
-    expect(el('.paper__subtitle').textContent).toContain('難易度: ★★★')
+    // 要約に難易度が出て、問題数は ★3 の件数（11 件）で数える
+    expect(el('.select__summary').textContent).toBe('千葉県の★★★から 10 問')
     expect(screen.getByRole('button', { name: '問題数: 全市区町村名（11 問）' })).toBeEnabled()
 
     fireEvent.click(screen.getByRole('button', { name: '始める' }))
@@ -536,43 +641,32 @@ describe('範囲・科目', () => {
 
   it('難易度を切り替えると問題数の表示もその ★ の件数になる', async () => {
     await openSelect()
-    fireEvent.click(screen.getByRole('button', { name: '千葉県' }))
+    choosePref('12')
 
-    // 全部 15 件 → ★3 は 11 件 → ★2 は 3 件
-    expect(screen.getByRole('button', { name: '問題数: 全市区町村名（15 問）' })).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: '難易度: ★3' }))
+    // ★3 は 11 件 → ★2 は 3 件 → ★1 は 1 件
     expect(screen.getByRole('button', { name: '問題数: 全市区町村名（11 問）' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '難易度: ★2' }))
     expect(screen.getByRole('button', { name: '問題数: 全市区町村名（3 問）' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '難易度: ★1' }))
+    expect(screen.getByRole('button', { name: '問題数: 全市区町村名（1 問）' })).toBeInTheDocument()
   })
 
-  it('地図の見出しの数は難易度と科目に連れて動く', async () => {
+  it('要約の 1 行は難易度と科目に連れて動き、10 問に足りない理由も見える文字で出す', async () => {
     await openSelect()
-    fireEvent.click(screen.getByRole('button', { name: '千葉県' }))
-    expect(el('.jp-map__note').textContent).toBe('千葉県 15問')
-
-    // ★ で絞ると「★★★ 11問」。記号だけでは何の数か分からないので読み上げ名で言い換える
-    fireEvent.click(screen.getByRole('button', { name: '難易度: ★3' }))
-    expect(el('.jp-map__note').textContent).toBe('千葉県 ★★★ 11問')
-    expect(screen.getByRole('note', { name: '★★★ の問題数 11 問' })).toBeInTheDocument()
+    choosePref('12')
+    expect(el('.select__summary').textContent).toBe('千葉県の★★★から 10 問')
 
     fireEvent.click(screen.getByRole('button', { name: '難易度: ★2' }))
-    expect(el('.jp-map__note').textContent).toBe('千葉県 ★★ 3問')
+    expect(el('.select__summary').textContent).toBe('千葉県の★★は 3 問なので、全 3 問で解きます')
 
-    // 町名も出す（meta の townStars で地域まで数えられるようになった）。
-    // 千葉県の町名は 37 件（千市1 の 30 ＋ 千市2 の 7）で ★1 が 13・★2 と ★3 が 12 件ずつ
+    // 町名は ★2 が 10 件以上あるので 10 問を組める
     fireEvent.click(screen.getByRole('button', { name: '市区町村名＋町名' }))
-    expect(el('.jp-map__note').textContent).toBe('千葉県 ★★ 12問')
-    fireEvent.click(screen.getByRole('button', { name: '難易度: 全部' }))
-    expect(el('.jp-map__note').textContent).toBe('千葉県 37問')
-
-    fireEvent.click(screen.getByRole('button', { name: '市区町村名' }))
-    expect(el('.jp-map__note').textContent).toBe('千葉県 15問')
+    expect(el('.select__summary').textContent).toBe('千葉県の★★から 10 問')
   })
 
-  it('10 問に足りない難易度は島しょと同じく全市区町村名に固定し、理由を読み上げる', async () => {
+  it('10 問に足りない難易度は全市区町村名に固定し、理由を要約の行に出す', async () => {
     await openSelect()
-    fireEvent.click(screen.getByRole('button', { name: '千葉県' }))
+    choosePref('12')
     // ★2 は 3 件しかない
     fireEvent.click(screen.getByRole('button', { name: '難易度: ★2' }))
 
@@ -581,7 +675,7 @@ describe('範囲・科目', () => {
       'aria-pressed',
       'true',
     )
-    expect(el('.sr-only').textContent).toBe('千葉県の★★は 3 問なので、10 問ではなく全市区町村名で解きます')
+    expect(el('.select__summary').textContent).toBe('千葉県の★★は 3 問なので、全 3 問で解きます')
 
     fireEvent.click(screen.getByRole('button', { name: '始める' }))
     await settle()
@@ -599,11 +693,11 @@ describe('範囲・科目', () => {
 
     expect(screen.queryByRole('button', { name: '地域: 道央' })).toBeNull()
 
-    fireEvent.click(screen.getByRole('button', { name: '千葉県' }))
+    choosePref('12')
     expect(screen.queryByRole('button', { name: '地域: 道央' })).toBeNull()
     expect(screen.queryByRole('group', { name: '地域' })).toBeNull()
 
-    fireEvent.click(screen.getByRole('button', { name: '北海道' }))
+    choosePref('01')
     expect(screen.getByRole('group', { name: '地域' })).toBeInTheDocument()
     // 既定は「全道」（scope は 2 桁のまま）
     expect(screen.getByRole('button', { name: '地域: 全道' })).toHaveAttribute('aria-pressed', 'true')
@@ -617,8 +711,8 @@ describe('範囲・科目', () => {
 
     // 都道府県を選び直すと地域は外れる（全国に戻せば切替そのものが消える）
     fireEvent.click(screen.getByRole('button', { name: '地域: 道東' }))
-    expect(el('.paper__subtitle').textContent).toContain('いまの範囲: 北海道・道東')
-    fireEvent.click(screen.getByRole('button', { name: '東京都' }))
+    expect(el('.select__summary').textContent).toContain('北海道・道東')
+    choosePref('13')
     expect(screen.getByRole('button', { name: '地域: 全域' })).toHaveAttribute('aria-pressed', 'true')
     fireEvent.click(screen.getByRole('button', { name: '全国' }))
     expect(screen.queryByRole('group', { name: '地域' })).toBeNull()
@@ -627,50 +721,38 @@ describe('範囲・科目', () => {
   it('北海道→道央で始めると scope が 01c になり、出題の範囲に「北海道・道央」が出る', async () => {
     await openSelect()
 
-    fireEvent.click(screen.getByRole('button', { name: '北海道' }))
+    choosePref('01')
     fireEvent.click(screen.getByRole('button', { name: '地域: 道央' }))
-    // 地図の見出しの件数は地域の出題数（フィクスチャの道央は 12 問）
-    expect(el('.jp-map__note').textContent).toBe('北海道 12問')
-    expect(el('.paper__subtitle').textContent).toContain('いまの範囲: 北海道・道央')
+    // フィクスチャの道央は 12 問で ★3 は 4 問なので、4 問で解く
+    expect(el('.select__summary').textContent).toBe('北海道・道央の★★★は 4 問なので、全 4 問で解きます')
 
     fireEvent.click(screen.getByRole('button', { name: '始める' }))
     await settle()
 
-    expect(hash()).toMatch(new RegExp(`^#/q/${DATA_VERSION}-e-01c-\\d{4}$`))
+    expect(hash()).toMatch(new RegExp(`^#/q/${DATA_VERSION}-e-01c-\\d{4}-all-s3$`))
     expect(el('.paper__header').textContent).toContain('範囲: 北海道・道央')
-    expect(el('.q-number__text').textContent).toBe('問一 / 十')
+    expect(el('.q-number__text').textContent).toBe('問一 / 四')
   })
 
-  it('東京都→島しょ × 市区町村名は 10 問が押せず、全市区町村名（9 問）になる', async () => {
+  it('東京都→島しょ × 市区町村名は 10 問が押せず、全市区町村名になる', async () => {
     await openSelect()
 
-    fireEvent.click(screen.getByRole('button', { name: '東京都' }))
+    choosePref('13')
     fireEvent.click(screen.getByRole('button', { name: '地域: 島しょ' }))
 
-    // 母集団 9 件なので 10 問は組めない。全市区町村名に固定され、理由が 1 行で出る
+    // 島しょの ★3 は 3 件なので 10 問は組めない。全市区町村名に固定され、理由が見える文字で出る
     expect(screen.getByRole('button', { name: '問題数: 10 問' })).toBeDisabled()
-    const allButton = screen.getByRole('button', { name: '問題数: 全市区町村名（9 問）' })
+    const allButton = screen.getByRole('button', { name: '問題数: 全市区町村名（3 問）' })
     expect(allButton).toHaveAttribute('aria-pressed', 'true')
-    // 理由は行を足さずに伝える（読み上げ専用テキスト ＋ 押せない 10 問ボタンの title）
-    expect(el('.sr-only').textContent).toBe('東京都・島しょは 9 市町村なので、10 問ではなく全市区町村名で解きます')
-    expect(screen.getByRole('button', { name: '問題数: 10 問' })).toHaveAttribute(
-      'title',
-      '東京都・島しょは 9 市町村なので全市区町村名で解きます',
-    )
-    expect(el('.paper__subtitle').textContent).toContain('問題数: 全 9 問')
-
-    // 市区町村名＋町名なら 40 件あるので 10 問に戻れる（制限は科目側の事情ではない）
-    fireEvent.click(screen.getByRole('button', { name: '市区町村名＋町名' }))
-    expect(screen.getByRole('button', { name: '問題数: 10 問' })).toBeEnabled()
-    expect(document.querySelector('.sr-only')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: '市区町村名' }))
+    expect(el('.select__summary').textContent).toBe('東京都・島しょの★★★は 3 問なので、全 3 問で解きます')
+    expect(el('.select-more__value').textContent).toContain('全 3 問')
 
     fireEvent.click(screen.getByRole('button', { name: '始める' }))
     await settle()
 
-    expect(hash()).toMatch(new RegExp(`^#/q/${DATA_VERSION}-e-13i-\\d{4}-all$`))
+    expect(hash()).toMatch(new RegExp(`^#/q/${DATA_VERSION}-e-13i-\\d{4}-all-s3$`))
     expect(el('.paper__header').textContent).toContain('範囲: 東京都・島しょ')
-    expect(el('.q-number__text').textContent).toBe('問一 / 九')
+    expect(el('.q-number__text').textContent).toBe('問一 / 三')
   })
 })
 
@@ -1121,12 +1203,12 @@ describe('通しフロー', () => {
     expect(hash()).toBe('#/select')
 
     // 範囲・科目
-    fireEvent.click(screen.getByRole('button', { name: '千葉県' }))
+    choosePref('12')
     fireEvent.click(screen.getByRole('button', { name: '始める' }))
     await settle()
 
     const setId = hash().replace('#/q/', '')
-    const set = await buildQuestionSet('e', '12', setId.split('-')[3], FIXTURE_SOURCE)
+    const set = await buildQuestionSet('e', '12', setId.split('-')[3], FIXTURE_SOURCE, false, 3)
     expect(el('.q-number__text').textContent).toBe('問一 / 十')
     expect(el('.answer-input')).toBeInTheDocument()
 
@@ -1273,11 +1355,11 @@ describe('もう一度', () => {
     await settle()
     expect(hash()).toBe('#/select')
 
-    fireEvent.click(screen.getByRole('button', { name: '東京都' }))
+    choosePref('12')
     fireEvent.click(screen.getByRole('button', { name: '始める' }))
     await settle()
 
-    expect(hash()).toMatch(new RegExp(`^#/q/${DATA_VERSION}-e-13-\\d{4}$`))
+    expect(hash()).toMatch(new RegExp(`^#/q/${DATA_VERSION}-e-12-\\d{4}-s3$`))
     expect(el('.q-number__text').textContent).toBe('問一 / 十')
     expect(el('.answer-input')).toHaveValue('')
   })
@@ -1531,7 +1613,7 @@ describe('共有リンクの着地', () => {
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'たろう' } })
     fireEvent.click(screen.getByRole('button', { name: 'はじめる' }))
     await settle()
-    fireEvent.click(screen.getByRole('button', { name: '千葉県' }))
+    choosePref('12')
     fireEvent.click(screen.getByRole('button', { name: '始める' }))
     await settle()
 
