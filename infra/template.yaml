@@ -16,7 +16,9 @@ Globals:
   Function:
     Runtime: nodejs22.x
     Architectures: [arm64]
-    MemorySize: 256
+    # CPU はメモリに比例する。コールドスタートの合計は 256MB で 0.8〜0.95 秒、512MB で 0.5〜0.6 秒（Issue #71）。
+    # 呼び出しが少なく無料枠（月 40 万 GB 秒）に収まるので、待ち時間を優先する
+    MemorySize: 512
     Timeout: 10
 
 Resources:
