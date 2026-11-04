@@ -1268,6 +1268,50 @@ select.field__input {
    15. .ranking — 順位表
    -------------------------------------------------------------------------- */
 
+.ranking-sync {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  /* 「更新」と「更新中…」で行の高さとボタンの位置が動かないように */
+  min-height: var(--tap-min);
+  margin: var(--space-2) 0 0;
+}
+
+.ranking-sync__status {
+  min-width: 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  color: var(--color-pencil);
+}
+
+.ranking-sync__failed {
+  color: var(--color-red-pen);
+}
+
+.ranking-sync__button {
+  flex: 0 0 auto;
+  min-width: 6.5em;
+  padding-inline: var(--space-3);
+}
+
+/* 待機中のサークル。動きを減らす設定では §18 の一括指定で止まる（文言の「更新中…」は残る） */
+.spinner {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spinner-turn 800ms linear infinite;
+}
+
+@keyframes spinner-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .ranking {
   margin: var(--space-4) 0;
   padding: 0;
