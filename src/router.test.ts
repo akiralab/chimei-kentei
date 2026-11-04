@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest'
 import {
+  absoluteUrl,
   ATLAS_PATH,
   COVER_PATH,
   HOWTO_PATH,
@@ -92,5 +93,23 @@ describe('ハッシュ遷移の記録', () => {
     location.hash = COVER_PATH
     navigate(COVER_PATH)
     expect(hasNavigated()).toBe(true)
+  })
+})
+
+describe('absoluteUrl', () => {
+  it('Web ではいまの場所を使う', () => {
+    const at = { protocol: 'https:', origin: 'https://akiralab.github.io', pathname: '/chimei-kentei/' }
+    expect(absoluteUrl('#/q/abc', at)).toBe('https://akiralab.github.io/chimei-kentei/#/q/abc')
+  })
+
+  it('殻の中（capacitor://localhost）では他の人が開ける公開サイトを指す', () => {
+    const at = { protocol: 'capacitor:', origin: 'capacitor://localhost', pathname: '/index.html' }
+    expect(absoluteUrl('#/q/abc', at)).toBe('https://akiralab.github.io/chimei-kentei/#/q/abc')
+  })
+})
+
+describe('プライバシーの経路', () => {
+  it('#/privacy を読む', () => {
+    expect(parseHash('#/privacy')).toEqual({ name: 'privacy' })
   })
 })

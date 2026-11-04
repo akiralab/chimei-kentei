@@ -1,6 +1,6 @@
 /**
  * あそびかた（#/howto）。初めて開いた人が画面だけでは分からないこと（市・区・町・村を書かない、
- * ローマ字で打ってもひらがなになる、★ の意味、得点の付け方の違い…）を 7 節で説明する。
+ * ローマ字で打ってもひらがなになる、★ の意味、得点の付け方の違い…）を 8 節で説明する。
  *
  * **遊ぶ人向けの原稿の正本はこのページ**（README は開発者向けのまま）。
  * 読み込みは無し（静的な本文だけ）なので、通信が無くても開ける。
@@ -11,11 +11,13 @@
  *
  * **出典の正本はこのページの節 7**（第 3 波 D3・決定 ②）。各画面に常駐していた
  * .footer-credit を外した代わりに、CC BY 4.0 のライセンス URL を節 7 に置く。
- * アプリ内で外部リンクを開くのはこの 1 か所だけ。
+ * アプリの外へ出るのは節 7 と節 8 のリンクと、順位表の行の報告（メール）だけ。
  */
 import type { Stars as StarsLevel } from '../engine/types.ts'
 import { starsAria, starsMark } from '../engine/stars.ts'
 import { BOARD_SCROLL, useBoardModifier } from '../hooks/useBoardModifier.ts'
+import { CONTACT_EMAIL } from '../contact.ts'
+import { PRIVACY_PATH } from '../router.ts'
 
 /** 本文に混ぜる ★。記号は読み上げから外し、言い換えを添える（engine/stars.ts・CONTRACT.md） */
 function Stars({ level }: { level: StarsLevel }) {
@@ -46,7 +48,7 @@ function StarMark({ label = '難易度' }: { label?: string }) {
 }
 
 export default function HowTo() {
-  // 7 節は 375px で 3〜4 画面ぶんになる。内側スクロールに押し込むと底が切れるので用紙ごと伸ばす
+  // 8 節は 375px で 3〜4 画面ぶんになる。内側スクロールに押し込むと底が切れるので用紙ごと伸ばす
   useBoardModifier(BOARD_SCROLL)
 
   return (
@@ -57,9 +59,9 @@ export default function HowTo() {
       </div>
 
       <section className="howto__section">
-        <h2 className="paper__section">1. 氏名を書いて、はじめる</h2>
+        <h2 className="paper__section">1. なまえを書いて、はじめる</h2>
         <ul>
-          <li>氏名は 1〜12 文字。順位表にこの名前で載ります</li>
+          <li>なまえは任意で 1〜12 文字。順位表に載せるときだけ使います。本名は書かないでください</li>
           <li>
             「はじめる」で難しさと場所を選びます。「今日の10問（全国）」は全国の
             <Stars level={3} />
@@ -144,6 +146,7 @@ export default function HowTo() {
             つの問題セットに 1 回）
           </li>
           <li>見出しの右の「共有」で同じ 10 問のリンクを送れます</li>
+          <li>順位表の行の「…」で、不適切な名前の報告と、この端末での非表示ができます</li>
           <li>
             間違えた問題は、<strong>登録した答案のぶんだけ</strong>この端末に残ります（下の「見直し」）
           </li>
@@ -171,6 +174,25 @@ export default function HowTo() {
             ）を<strong>加工して利用</strong>しています（読みの正規化・難易度の判定・出題の抽出）。
             人口・地図は総務省統計局 e-Stat（2020 年国勢調査）、難易度の判定に KANJIDIC2（EDRDG, CC BY-SA
             4.0）、書体は SIL Open Font License の 5 書体を同梱
+          </li>
+        </ul>
+      </section>
+
+      <section className="howto__section">
+        <h2 className="paper__section">8. プライバシーと問い合わせ</h2>
+        <ul>
+          <li>
+            順位表に登録しない限り、遊んだ内容は端末の外に出ません。広告も解析もありません（
+            <a className="howto__link" href={PRIVACY_PATH}>
+              プライバシーと利用条件
+            </a>
+            ）
+          </li>
+          <li>
+            問い合わせ:{' '}
+            <a className="howto__link" href={`mailto:${CONTACT_EMAIL}`}>
+              {CONTACT_EMAIL}
+            </a>
           </li>
         </ul>
       </section>

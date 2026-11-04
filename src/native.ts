@@ -46,6 +46,19 @@ export async function shareNative(payload: SharePayload): Promise<boolean> {
 }
 
 /**
+ * 殻の中だけ、Web らしい挙動を消す（App Store Guideline 4.2）。起動時に 1 回。
+ * 長押しの選択・リンクのプレビュー・タップのハイライトは theme.css の .is-native が止め、
+ * ピンチの拡大はここで viewport を締める。Web 版は拡大を残す（読みやすさのため）。
+ */
+export function setupNativeFeel(): void {
+  if (!isNative()) return
+  document.documentElement.classList.add('is-native')
+  document
+    .querySelector('meta[name="viewport"]')
+    ?.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover')
+}
+
+/**
  * ステータスバーの文字色。盤面（.board）の上端は黒板の緑なので白文字
  * （@capacitor/status-bar の `Style.Dark` ＝「暗い背景に明るい文字」）。起動時に 1 回。
  */

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * 表紙。氏名が入るまで主ボタンは押せず、「今日の10問」は全国・市区町村名・★★★・日付シードの
+ * 表紙。なまえは任意で主ボタンは最初から押せる。「今日の10問」は全国・市区町村名・★★★・日付シードの
  * 共通セット（誰が・どの端末で押しても同じ setId）へ 1 タップで入る。
  */
 import '@testing-library/jest-dom/vitest'
@@ -41,10 +41,12 @@ afterEach(() => {
 })
 
 describe('表紙のボタン', () => {
-  it('氏名が未入力ならどちらのボタンも押せない', () => {
+  it('なまえが未入力でもどちらのボタンも押せる（App Store Guideline 5.1.1(v)）', () => {
     render(<Cover />)
-    expect(startBtn()).toBeDisabled()
-    expect(todayBtn()).toBeDisabled()
+    expect(startBtn()).toBeEnabled()
+    expect(todayBtn()).toBeEnabled()
+    fireEvent.click(todayBtn())
+    expect(hash()).toBe(`#/q/${TODAY_SET}`)
   })
 
   it('主ボタンは「はじめる」1 つだけ（第 3 波 決定 ④）', () => {
@@ -73,7 +75,7 @@ describe('表紙のボタン', () => {
     expect(document.querySelector('.cover__today-note .stars')).toHaveAttribute('aria-hidden', 'true')
   })
 
-  it('氏名を入れると「今日の10問」で全国・市区町村名・★★★・日付シードの出題へ移る', () => {
+  it('なまえを入れると「今日の10問」で全国・市区町村名・★★★・日付シードの出題へ移る', () => {
     render(<Cover />)
     typeNickname('たろう')
     expect(todayBtn()).toBeEnabled()
@@ -96,7 +98,7 @@ describe('表紙のボタン', () => {
     expect(hash()).toBe(first)
   })
 
-  it('前後に空白のある氏名でも trim して保存する', () => {
+  it('前後に空白のあるなまえでも trim して保存する', () => {
     render(<Cover />)
     typeNickname('  はなこ  ')
     fireEvent.click(todayBtn())

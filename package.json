@@ -15,6 +15,7 @@
     "build:icons": "node og/render-icons.mjs",
     "build:fonts": "node scripts/build-fonts.mjs",
     "measure": "node scripts/measure.mjs",
+    "screenshots": "node scripts/screenshots.mjs",
     "build:questions": "python3 data/build_questions.py",
     "build:api": "esbuild infra/api/src/handler.ts --bundle --platform=node --target=node22 --format=esm --minify --main-fields=module,main --outfile=infra/api/dist/handler.mjs",
     "deploy:api": "bash infra/deploy.sh"

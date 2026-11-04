@@ -251,7 +251,7 @@ try {
     console.log(`\n=== ${w}x${h} ===`)
     const s = await session(w, h)
 
-    // storage を白紙に戻してから氏名だけ入れる
+    // storage を白紙に戻してからなまえだけ入れる
     await s.go('#/', 2600)
     await s.ev(`(() => { localStorage.clear(); sessionStorage.clear(); return 'ok' })()`)
     await s.ev(`(() => { localStorage.setItem('nickname', ${JSON.stringify(NICK)}); return 'ok' })()`)
@@ -300,6 +300,8 @@ try {
     //     上の 2 件で確かめている
     await s.go('#/howto', 2200)
     await record(s, 'howto', w, h)
+    await s.go('#/privacy', 1500)
+    await record(s, 'privacy', w, h)
 
     // --- 地名帳
     await s.go('#/atlas', 2600)

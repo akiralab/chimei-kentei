@@ -12,6 +12,10 @@ const config: CapacitorConfig = {
   backgroundColor: '#2e6b5e',
   ios: {
     contentInset: 'never',
+    // 長押しで URL のプレビューを出さない。外側の WebView は動かさない（中の用紙はそれぞれ
+    // overflow で動く）。どちらも「Web ページらしさ」を消すため（App Store Guideline 4.2）
+    allowsLinkPreview: false,
+    scrollEnabled: false,
   },
   plugins: {
     // ソフトキーボードの高さぶん WebView そのものを縮める（Issue #61）。プラグインが無いと

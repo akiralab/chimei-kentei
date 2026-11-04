@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * あそびかた（#/howto）。読み込みも通信も無い静的な 1 枚なので、確かめるのは
- * 骨組みだけ ——  見出しの階層（h1 → h2 が 7 つ）・節 7 の出典リンク・
+ * 骨組みだけ ——  見出しの階層（h1 → h2 が 8 つ）・節 7 の出典リンク・
  * 1 画面契約の例外（.board に board--scroll が付く）。
  *
  * .board を描くのは App なので、この画面だけ単体で描くと useBoardModifier の
@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 import { resetNavigated } from '../router.ts'
 import App from '../App.tsx'
+import { CONTACT_EMAIL } from '../contact.ts'
 
 beforeEach(() => {
   localStorage.clear()
@@ -22,10 +23,10 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('あそびかた', () => {
-  it('見出しは h1「あそびかた」と 7 つの h2（階層を飛ばさない）', () => {
+  it('見出しは h1「あそびかた」と 8 つの h2（階層を飛ばさない）', () => {
     render(<App />)
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('あそびかた')
-    expect(screen.getAllByRole('heading', { level: 2 })).toHaveLength(7)
+    expect(screen.getAllByRole('heading', { level: 2 })).toHaveLength(8)
     // 中の見出しは h3 以降を使わない（h1 → h2 の 2 段だけ）
     expect(screen.queryAllByRole('heading', { level: 3 })).toHaveLength(0)
   })
@@ -44,6 +45,12 @@ describe('あそびかた', () => {
     const tab = screen.getByRole('link', { name: '検定' })
     expect(tab).toHaveAttribute('href', '#/')
     expect(tab.closest('.paper')).toBeNull()
+  })
+
+  it('節 8 にプライバシーと利用条件へのリンクと問い合わせ先がある（App Store Guideline 1.2・5.1.1）', () => {
+    render(<App />)
+    expect(screen.getByRole('link', { name: 'プライバシーと利用条件' })).toHaveAttribute('href', '#/privacy')
+    expect(screen.getByRole('link', { name: CONTACT_EMAIL })).toHaveAttribute('href', `mailto:${CONTACT_EMAIL}`)
   })
 
   it('節 7 に CC BY 4.0 のリンクと「加工して利用」がある（出典の正本。第 3 波 決定 ②）', () => {

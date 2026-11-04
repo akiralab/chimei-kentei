@@ -2,15 +2,14 @@ import type { Mode, Stars } from '../engine/types.ts'
 import { modeName } from '../engine/modes.ts'
 import { allSetLabel } from '../engine/score.ts'
 import { starsHeaderNote } from '../engine/stars.ts'
-import { isValidNickname } from '../engine/ranking.ts'
 import { TIME_LIMIT_CHOICES, useTimeLimit } from '../hooks/useTimeLimit.ts'
 
 /**
  * 挑戦状。共有リンク（`#/q/{setId}`）を直接開いた人に、出題の前に 1 枚だけ挟む着地画面。
  *
  * 砂時計は「はじめる」を押してから動かす（Quiz 側が started を立てる）。
- * ここで氏名を必須にしておくので、名無しのまま結果画面に着いて登録できない経路は生まれない。
- * スクロールさせない前提なので、要素は 4 つ（帯＝見出しと条件・制限の切替・氏名欄・ボタン）に絞る。
+ * なまえは任意（表紙と同じ）。未記入のまま解いても、結果画面で入れて登録できる。
+ * スクロールさせない前提なので、要素は 4 つ（帯＝見出しと条件・制限の切替・なまえ欄・ボタン）に絞る。
  */
 export default function Challenge({
   rangeLabel,
@@ -36,7 +35,6 @@ export default function Challenge({
   onStart: () => void
 }) {
   const [timeLimitMs, setTimeLimitMs] = useTimeLimit()
-  const ready = isValidNickname(nickname)
 
   /** 「制限なし」→「なし」。Select と同じく「制限: 制限なし」と重ならないように頭を落とす */
   const shortLimit = (label: string) => label.replace(/^制限/, '')
@@ -45,7 +43,6 @@ export default function Challenge({
   )
 
   const start = () => {
-    if (!ready) return
     onNicknameChange(nickname.trim())
     onStart()
   }
@@ -88,7 +85,7 @@ export default function Challenge({
       </div>
 
       <label className="field cover__field">
-        <span className="field__label">氏名</span>
+        <span className="field__label">なまえ</span>
         <input
           className="field__input"
           type="text"
@@ -101,10 +98,10 @@ export default function Challenge({
           }}
         />
       </label>
-      <p className="cover__note">氏名は 1〜12 文字。順位表にこの名前で載ります。</p>
+      <p className="cover__note">任意。順位表に載る名前です。本名は避けてください。</p>
 
       <p className="cover__actions">
-        <button type="button" className="btn btn--primary cover__start" onClick={start} disabled={!ready}>
+        <button type="button" className="btn btn--primary cover__start" onClick={start}>
           はじめる
         </button>
       </p>

@@ -7,10 +7,11 @@ import './styles/theme.css'
 import './styles/map.css'
 import App from './App.tsx'
 import { startStatsSync } from './engine/ranking-cache.ts'
-import { setupStatusBar } from './native.ts'
+import { setupNativeFeel, setupStatusBar } from './native.ts'
 
 // 殻のときだけステータスバーを白文字に（Web では何もしない）
 void setupStatusBar()
+setupNativeFeel()
 
 // 順位タブを開く前に一覧を温めておく。前面にいる間は古くなるたびに取り直す
 startStatsSync()
