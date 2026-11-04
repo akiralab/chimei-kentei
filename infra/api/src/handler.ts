@@ -43,6 +43,7 @@ import {
   TIME_LIMIT_MIN_MS,
   UNLIMITED_MAX_MS,
 } from '../../../src/engine/types.ts'
+import { containsNgWord } from './ngwords.ts'
 
 // ---------------------------------------------------------------- 入出力の型
 
@@ -335,6 +336,7 @@ function validateSubmitBody(raw: unknown): { body: SubmitBody } | { detail: stri
   const trimmed = nickname.trim()
   const len = [...trimmed].length
   if (len < 1 || len > NICKNAME_MAX) return { detail: `nickname は 1〜${NICKNAME_MAX} 文字です。` }
+  if (containsNgWord(trimmed)) return { detail: 'この名前は順位表に載せられません。別の名前にしてください。' }
   // 省略 ＝ 0 ＝ 制限なし（旧クライアントの「20 秒固定」という後方互換は持たない）
   let limit = 0
   if (timeLimitMs !== undefined && timeLimitMs !== null) {
