@@ -243,6 +243,7 @@ Dela Gothic One は字幅を詰めた極太デザインで、1.4rem 前後の漢
   罫線に乗る薄い長方形を 3〜5 行置く。`role="status"` ＋ `aria-busy="true"` ＋ `.sr-only` の「読み込み中」
 - 色は `--color-paper-line` を薄めた 1 色だけ。明滅は `prefers-reduced-motion: no-preference` のときだけ 1.2s
 - 順位表に届かなかったときは原因を言い分け（`src/hooks/connection.ts`）、**どちらでも「もう一度ためす」を出す**
+- 順位タブはスケルトンの代わりに前回の順位を出す（`src/engine/ranking-cache.ts`）。スケルトンは手元に何も無いときだけ。最終更新と更新ボタンは `.ranking-sync`、待機中のサークルは `.spinner`（動きを減らす設定では §18 の一括指定で止まるので、文言でも「更新中…」と出す）
 
 ### safe-area
 

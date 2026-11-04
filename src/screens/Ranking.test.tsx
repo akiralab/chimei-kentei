@@ -9,6 +9,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import type { ResultEntry } from '../engine/types.ts'
 import { DATA_VERSION } from '../engine/bank.ts'
 import { LocalRankingStore, rankingKey } from '../engine/ranking.ts'
+import { resetRankingCacheForTest } from '../engine/ranking-cache.ts'
 import { RANKING_MODE_KEY } from '../hooks/useRankingMode.ts'
 import { EASY_12, META } from '../engine/__fixtures__/questions.ts'
 import { quizPath } from '../router.ts'
@@ -69,6 +70,7 @@ function hash(): string {
 
 beforeEach(() => {
   localStorage.clear() // 科目の設定（rankingMode）も毎回 easy に戻る
+  resetRankingCacheForTest()
   window.location.hash = '#/ranking'
 })
 
@@ -413,5 +415,99 @@ describe('全問（3 つ目の区分。全市区町村名と全町名が同居�
       expect(screen.getByRole('button', { name: '全問' })).toBeDisabled()
     })
     expect(screen.getByRole('button', { name: '市区町村名＋町名' })).toBeEnabled()
+  })
+})
+
+describe('前回の順位をすぐ出して裏で更新する（Issue #70）', () => {
+  /** 前回の取得結果を持った状態で画面を開き直す */
+  async function openTwice(): Promise<void> {
+    installFetchMock()
+    put(SET_12A, [entry({ entryId: 'a', setId: SET_12A, clientToken: 'tok-a' })])
+    render(<Ranking />)
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '千葉県 1人が回答（市区町村名）' })).toBeInTheDocument()
+    })
+    cleanup()
+  }
+
+  it('2 回目はスケルトンを出さず、開いた瞬間に前回の順位が出る', async () => {
+    await openTwice()
+    const spy = vi.spyOn(LocalRankingStore.prototype, 'prefectureStats')
+    try {
+      render(<Ranking />)
+      expect(document.querySelector('.skeleton')).toBeNull()
+      expect(document.querySelector('.pref-grid')).not.toBeNull()
+      expect(document.querySelector('.ranking-sync__status')?.textContent).toMatch(/最終更新 \d+:\d{2}/)
+      // 5 分経っていないので取り直さない
+      expect(spy).not.toHaveBeenCalled()
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it('起動し直しても localStorage から前回の順位が出る。機内モードでも消えない', async () => {
+    await openTwice()
+    // メモリを失った状態（起動し直し）を作る。localStorage の写しだけ戻す
+    const saved = localStorage.getItem('rankingCache:v1')
+    resetRankingCacheForTest()
+    localStorage.setItem('rankingCache:v1', saved!)
+    const spy = vi.spyOn(LocalRankingStore.prototype, 'prefectureStats').mockRejectedValue(new Error('offline'))
+    try {
+      render(<Ranking />)
+      expect(screen.getByRole('button', { name: '千葉県 1人が回答（市区町村名）' })).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: '更新' }))
+      await waitFor(() => {
+        expect(screen.getByText('更新できませんでした')).toBeInTheDocument()
+      })
+      expect(screen.getByRole('button', { name: '千葉県 1人が回答（市区町村名）' })).toBeInTheDocument()
+      expect(document.querySelector('.ranking-sync__status')?.textContent).toMatch(/最終更新/)
+      expect(screen.queryByRole('button', { name: 'もう一度ためす' })).toBeNull()
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it('更新ボタンで待機サークルが出て二重に押せず、新しい順位に差し替わる', async () => {
+    await openTwice()
+    let finish: (stats: []) => void = () => {}
+    const spy = vi
+      .spyOn(LocalRankingStore.prototype, 'prefectureStats')
+      .mockImplementation(() => new Promise((resolve) => (finish = resolve)))
+    try {
+      render(<Ranking />)
+      const button = screen.getByRole('button', { name: '更新' })
+      fireEvent.click(button)
+
+      expect(document.querySelector('.spinner')).not.toBeNull()
+      expect(button).toBeDisabled()
+      expect(button).toHaveTextContent('更新中…')
+      fireEvent.click(button)
+      expect(spy).toHaveBeenCalledTimes(1)
+      // 更新中も前の順位は消さない
+      expect(screen.getByRole('button', { name: '千葉県 1人が回答（市区町村名）' })).toBeInTheDocument()
+
+      finish([])
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: '更新' })).toBeEnabled()
+      })
+      expect(document.querySelector('.spinner')).toBeNull()
+      expect(screen.getByRole('button', { name: /^千葉県 0人/ })).toBeDisabled()
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it('都道府県の順位も区分ごとに持ち、開き直すとすぐ出る', async () => {
+    installFetchMock()
+    put(SET_12A, [entry({ entryId: 'a', setId: SET_12A, nickname: 'あきら', clientToken: 'tok-a' })])
+    render(<Ranking prefCode="12" />)
+    await waitFor(() => {
+      expect(rows()).toHaveLength(1)
+    })
+    cleanup()
+
+    render(<Ranking prefCode="12" />)
+    expect(rows()).toHaveLength(1)
+    expect(document.querySelector('.skeleton')).toBeNull()
   })
 })
