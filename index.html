@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/chimei-kentei/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- ホーム画面・ネイティブの殻（設計ノート §13 / Issue #42）。
+         href は public/ 直下のファイル。Vite が base（/chimei-kentei/ か、
+         --mode capacitor のときは相対）を付け直すので、ここでは / 始まりで書く -->
+    <meta name="theme-color" content="#2e6b5e" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="地名検定" />
+    <link rel="apple-touch-icon" href="/chimei-kentei/apple-touch-icon.png" />
+    <link rel="manifest" href="/chimei-kentei/manifest.webmanifest" />
+    <!-- iOS の Safari でウェブ版を開くと、App Store への帯（Smart App Banner）を出す。殻（WKWebView）の中では出ないのでアプリの表示は変わらない -->
+    <meta name="apple-itunes-app" content="app-id=6830130673" />
+    <title>地名読み検定</title>
+    <meta name="description" content="難読地名をひらがなで答える検定。都道府県を選んで 10 問、順位表で競えます。" />
+    <!-- リンクプレビュー（Slack・LINE・X 向け）。ハッシュルーティングなので全画面で共通の 1 枚。
+         画像は og/og.html が原稿で、`npm run build:og` が public/og.png を作り直す。
+         プレビュー側は絶対 URL しか受け付けないので公開先を直書きしている -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="地名読み検定" />
+    <meta property="og:title" content="地名読み検定" />
+    <meta property="og:description" content="この地名、読めますか。難読地名をひらがなで答える検定。都道府県を選んで 10 問、順位表で競えます。" />
+    <meta property="og:url" content="https://akiralab.github.io/chimei-kentei/" />
+    <meta property="og:image" content="https://akiralab.github.io/chimei-kentei/og.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="地名読み検定の答案用紙。匝瑳・宿毛・南風原の読みを問う出題例" />
+    <meta property="og:locale" content="ja_JP" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="地名読み検定" />
+    <meta name="twitter:description" content="この地名、読めますか。難読地名をひらがなで答える検定。都道府県を選んで 10 問、順位表で競えます。" />
+    <meta name="twitter:image" content="https://akiralab.github.io/chimei-kentei/og.png" />
+    <!-- 答案用紙テーマのフォントは同梱（public/fonts/）。@font-face は src/styles/fonts.css、
+         作り直しは npm run build:fonts。外部ホストからは読まない（オフラインで書体が落ちないように） -->
+    <script type="module" crossorigin src="/chimei-kentei/assets/index-BgEMUAZW.js"></script>
+    <link rel="stylesheet" crossorigin href="/chimei-kentei/assets/index-roD3yN55.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
