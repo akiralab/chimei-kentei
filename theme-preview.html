@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>地名読み検定 — 答案用紙テーマ スタイルガイド</title>
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <!-- フォント（index.html と同じ 5 書体）は theme-preview.css の @font-face で同梱ぶんを読む -->
+    <!-- fonts.css + tokens.css + theme.css の結合コピー（正本は src/styles/）。相対パスなので file:// でも開ける
+         （file:// では public/fonts/ を辿れないので書体はフォールバックになる。配信先では読める） -->
+    <link rel="stylesheet" href="./theme-preview.css" />
+    <style>
+      /* ここから下はプレビュー専用の飾り。テーマの部品ではない（.preview-* 接頭辞） */
+
+      /* 本番は 1 画面＝1 枚でページがスクロールしない（theme.css が body に
+         overflow: hidden を掛ける）。このページだけは 4 画面を縦に並べて
+         見比べたいので解除し、各画面を .board（= 100dvh）1 つずつで包む。 */
+      html,
+      body {
+        height: auto;
+        overflow: auto;
+      }
+      .preview-label {
+        width: 100%;
+        max-width: var(--paper-max);
+        margin: var(--space-6) auto var(--space-2);
+        font-family: var(--font-display);
+        font-size: var(--fs-md);
+        font-weight: 400;
+        letter-spacing: 0.08em;
+        color: rgba(255, 255, 255, 0.82);
+      }
+      .preview-note {
+        width: 100%;
+        max-width: var(--paper-max);
+        margin: 0 auto var(--space-2);
+        font-size: var(--fs-xs);
+        color: rgba(255, 255, 255, 0.5);
+      }
+      /* 下タブバーは本番では position: fixed（画面の底）。このページは 1 枚に複数の画面を
+         縦に並べるので、見本のときだけ流し込みに戻して黒板の底に置く */
+      .preview-tabbar .tabbar {
+        position: static;
+        width: 100%;
+      }
+      .preview-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--space-3);
+        margin: var(--space-4) 0;
+      }
+      .preview-hr {
+        margin: var(--space-5) 0 var(--space-4);
+        border: 0;
+        border-top: 1px dashed var(--color-rule-strong);
+      }
+      .preview-h {
+        margin: 0 0 var(--space-2);
+        font-family: var(--font-body);
+        font-size: var(--fs-sm);
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        color: var(--color-pencil);
+      }
+    </style>
+  </head>
+  <body>
+    <!-- ================================================================
+         各ブロックは「1 画面 = .board 1 つ（100dvh）」。
+         ページスクロールなしで操作できるかは、ブロック内の用紙が
+         黒板からはみ出していないかで見る。
+         ================================================================ -->
+
+    <p class="preview-label">① 表紙（.cover*）</p>
+    <div class="board">
+      <section class="paper cover">
+        <header class="paper__header">
+          <h1 class="paper__title cover__title">地名読み検定</h1>
+          <p class="paper__subtitle cover__subtitle">この地名、読めますか</p>
+        </header>
+
+        <p class="cover__bubble">読めたら、あなたも地名通！</p>
+
+        <label class="field cover__field">
+          <span class="field__label">なまえ</span>
+          <input class="field__input" type="text" placeholder="ニックネーム" value="かわい" />
+        </label>
+        <p class="cover__note">任意。順位表に載る名前です。本名は避けてください。</p>
+
+        <p class="cover__actions">
+          <button class="btn btn--primary cover__start" type="button">はじめる</button>
+        </p>
+
+        <!-- 用紙に貼った付箋（.sticky-note）。主ボタンは「はじめる」1 つだけ（第 3 波 決定 ④） -->
+        <div class="sticky-note">
+          <button class="btn cover__today" type="button">今日の10問（全国）</button>
+          <p class="cover__note cover__today-note">
+            全国の<span class="stars" aria-hidden="true">★★★</span>から出題。だれが押しても同じ 10 問。
+          </p>
+        </div>
+
+        <span class="cover__prop cover__prop--circle" aria-hidden="true"></span>
+        <span class="cover__prop cover__prop--pencil" aria-hidden="true">✏️</span>
+        <span class="cover__prop cover__prop--stamp" aria-hidden="true">満点</span>
+      </section>
+    </div>
+
+    <p class="preview-label">② 範囲選択</p>
+    <p class="preview-note">
+      .pref-grid は auto-fill なので 375px で 3〜4 列、1024px で 7 列前後。47 件が入りきらない高さでは
+      .pref-grid の中だけがスクロールし、見出しと下のボタンは残る
+    </p>
+    <div class="board">
+      <section class="paper">
+        <header class="paper__header">
+          <h2 class="paper__title">出題範囲</h2>
+          <div class="field">
+            <span class="field__label">市区町村</span>
+            <input class="field__input" type="search" placeholder="匝瑳市 など" />
+          </div>
+        </header>
+
+        <p class="q-prompt">
+          都道府県を 1 つ選ぶか、空欄のまま<span class="marker marker--yellow">全国</span>で挑戦します。
+        </p>
+
+        <div class="mode-switch" role="group" aria-label="難易度">
+          <button class="mode-switch__item is-selected" type="button" aria-pressed="true">
+            かんたん<span class="sr-only">（選択中）</span>
+          </button>
+          <button class="mode-switch__item" type="button" aria-pressed="false">むずかしい</button>
+        </div>
+
+        <!-- 難易度の ★（.stars）。選択肢ごとに幅が違うので .mode-switch--fit で中身の幅に置く。
+             記号はボタンの aria-label に任せて aria-hidden にする -->
+        <div class="mode-switch mode-switch--compact mode-switch--fit" role="group" aria-label="難易度（★）">
+          <button class="mode-switch__item is-selected" type="button" aria-pressed="true" aria-label="難易度: 全部">
+            全部<span class="sr-only">（選択中）</span>
+          </button>
+          <button class="mode-switch__item" type="button" aria-pressed="false" aria-label="難易度: ★1">
+            <span class="stars" aria-hidden="true">★</span>
+          </button>
+          <button class="mode-switch__item" type="button" aria-pressed="false" aria-label="難易度: ★2">
+            <span class="stars" aria-hidden="true">★★</span>
+          </button>
+          <button class="mode-switch__item" type="button" aria-pressed="false" aria-label="難易度: ★3">
+            <span class="stars" aria-hidden="true">★★★</span>
+          </button>
+        </div>
+
+        <ul class="pref-grid">
+          <li><button class="pref-grid__item" type="button">北海道</button></li>
+          <li><button class="pref-grid__item" type="button">青森県</button></li>
+          <li><button class="pref-grid__item" type="button">岩手県</button></li>
+          <li><button class="pref-grid__item" type="button">宮城県</button></li>
+          <li><button class="pref-grid__item" type="button">秋田県</button></li>
+          <li><button class="pref-grid__item" type="button">山形県</button></li>
+          <li><button class="pref-grid__item" type="button">福島県</button></li>
+          <li><button class="pref-grid__item" type="button">茨城県</button></li>
+          <li><button class="pref-grid__item" type="button">栃木県</button></li>
+          <li><button class="pref-grid__item" type="button">群馬県</button></li>
+          <li><button class="pref-grid__item" type="button">埼玉県</button></li>
+          <li>
+            <button class="pref-grid__item is-selected" type="button" aria-pressed="true">
+              千葉県<span class="sr-only">（選択中）</span>
+            </button>
+          </li>
+          <li><button class="pref-grid__item" type="button">東京都</button></li>
+          <li><button class="pref-grid__item" type="button">神奈川県</button></li>
+          <li><button class="pref-grid__item" type="button">新潟県</button></li>
+          <li><button class="pref-grid__item" type="button">富山県</button></li>
+          <li><button class="pref-grid__item" type="button">石川県</button></li>
+          <li><button class="pref-grid__item" type="button">福井県</button></li>
+          <li><button class="pref-grid__item" type="button">山梨県</button></li>
+          <li><button class="pref-grid__item" type="button">長野県</button></li>
+          <li><button class="pref-grid__item" type="button">岐阜県</button></li>
+          <li><button class="pref-grid__item" type="button">静岡県</button></li>
+          <li><button class="pref-grid__item" type="button">愛知県</button></li>
+          <li><button class="pref-grid__item" type="button">三重県</button></li>
+          <li><button class="pref-grid__item" type="button">滋賀県</button></li>
+          <li><button class="pref-grid__item" type="button">京都府</button></li>
+          <li><button class="pref-grid__item" type="button">大阪府</button></li>
+          <li><button class="pref-grid__item" type="button">兵庫県</button></li>
+          <li><button class="pref-grid__item" type="button">奈良県</button></li>
+          <li><button class="pref-grid__item" type="button">和歌山県</button></li>
+          <li><button class="pref-grid__item" type="button">鳥取県</button></li>
+          <li><button class="pref-grid__item" type="button">島根県</button></li>
+          <li><button class="pref-grid__item" type="button">岡山県</button></li>
+          <li><button class="pref-grid__item" type="button">広島県</button></li>
+          <li><button class="pref-grid__item" type="button">山口県</button></li>
+          <li><button class="pref-grid__item" type="button">徳島県</button></li>
+          <li><button class="pref-grid__item" type="button">香川県</button></li>
+          <li><button class="pref-grid__item" type="button">愛媛県</button></li>
+          <li><button class="pref-grid__item" type="button">高知県</button></li>
+          <li><button class="pref-grid__item" type="button">福岡県</button></li>
+          <li><button class="pref-grid__item" type="button">佐賀県</button></li>
+          <li><button class="pref-grid__item" type="button">長崎県</button></li>
+          <li><button class="pref-grid__item" type="button">熊本県</button></li>
+          <li><button class="pref-grid__item" type="button">大分県</button></li>
+          <li><button class="pref-grid__item" type="button">宮崎県</button></li>
+          <li><button class="pref-grid__item" type="button">鹿児島県</button></li>
+          <li><button class="pref-grid__item" type="button">沖縄県</button></li>
+        </ul>
+
+        <div class="preview-row">
+          <button class="btn btn--primary" type="button">この範囲で出題</button>
+          <button class="btn btn--ghost" type="button">全国にもどす</button>
+        </div>
+      </section>
+    </div>
+
+    <p class="preview-label">③ 出題</p>
+    <div class="board">
+      <section class="paper">
+        <header class="paper__header">
+          <h2 class="paper__title">第一問</h2>
+          <div class="field">
+            <span class="field__label">なまえ</span>
+            <input class="field__input" type="text" value="かわい" />
+          </div>
+          <div class="field">
+            <span class="field__label">得点</span>
+            <input class="field__input" type="text" value="30" readonly />
+          </div>
+        </header>
+
+        <p class="timer__label"><span aria-hidden="true">⌛</span> のこり 13 秒</p>
+        <div
+          class="timer"
+          role="progressbar"
+          aria-label="のこり時間"
+          aria-valuenow="65"
+          aria-valuemin="0"
+          aria-valuemax="100"
+        >
+          <span class="timer__bar" style="width: 65%"></span>
+        </div>
+
+        <p class="q-number">
+          <span class="q-number__text">問三 / 十</span>
+          <span class="stars q-number__stars" role="img" aria-label="難易度 3">★★★</span>
+        </p>
+        <p class="q-prompt">次の地名の読みをひらがなで書け。</p>
+        <p class="q-kanji">匝瑳<span class="q-suffix">［市］</span></p>
+        <p class="q-pref">千葉県</p>
+
+        <label class="sr-only" for="pv-answer">よみ（ひらがな）</label>
+        <input
+          class="answer-input"
+          id="pv-answer"
+          type="text"
+          placeholder="ひらがなで"
+          value="そうさ"
+          aria-describedby="pv-answer-hint"
+        />
+        <p class="answer-hint" id="pv-answer-hint">
+          ローマ字でもひらがなでも入力できます。漢字に変換されても読みに戻ります<span
+            class="answer-hint__mac"
+            >（IME を英数にすると変換なしで打てます）</span
+          >
+        </p>
+
+        <div class="preview-row">
+          <button class="btn btn--primary" type="button">こたえる</button>
+          <button class="btn btn--ghost" type="button">パスする</button>
+        </div>
+      </section>
+    </div>
+
+    <p class="preview-label">④ 結果</p>
+    <p class="preview-note">.review と .ranking が用紙の内側でスクロールする。帯とボタンは常に見える</p>
+    <div class="board">
+      <section class="paper">
+        <header class="paper__header">
+          <h2 class="paper__title">答案返却</h2>
+          <div class="field">
+            <span class="field__label">なまえ</span>
+            <input class="field__input" type="text" value="かわい" />
+          </div>
+          <p class="paper__subtitle">所要 1 分 42 秒 ／ 千葉県・かんたん</p>
+        </header>
+
+        <div class="preview-row">
+          <div class="stamp">
+            <span class="stamp__num">70</span>
+            <span class="stamp__label">テン</span>
+          </div>
+          <p class="q-prompt" style="margin: 0">
+            10 問中 <span class="marker marker--yellow">7 問正解</span>。
+            <span class="pen-comment">合格ラインまであと 1 問！</span>
+          </p>
+        </div>
+
+        <h3 class="paper__section">答案の見直し</h3>
+        <ul class="review">
+          <li class="review__row">
+            <span class="mark mark--correct" aria-hidden="true">○</span>
+            <span class="sr-only">正解</span>
+            <span class="review__q">匝瑳市</span>
+            <span class="review__mine">そうさ</span>
+            <span class="review__answer">正解 そうさ</span>
+          </li>
+          <li class="review__row">
+            <span class="mark mark--wrong" aria-hidden="true">×</span>
+            <span class="sr-only">誤り</span>
+            <span class="review__q">放出東</span>
+            <span class="review__mine">ほうしゅつひがし</span>
+            <span class="review__answer">正解 はなてんひがし</span>
+          </li>
+          <li class="review__row">
+            <span class="mark mark--correct" aria-hidden="true">○</span>
+            <span class="sr-only">正解</span>
+            <span class="review__q">飯山満町</span>
+            <span class="review__mine">はさまちょう</span>
+            <span class="review__answer">正解 はさまちょう</span>
+          </li>
+          <li class="review__row">
+            <span class="mark mark--wrong" aria-hidden="true">×</span>
+            <span class="sr-only">誤り（時間切れ）</span>
+            <span class="review__q">喜連瓜破</span>
+            <span class="review__mine">（時間切れ）</span>
+            <span class="review__answer">正解 きれうりわり</span>
+          </li>
+        </ul>
+
+        <h3 class="paper__section">順位表</h3>
+        <ol class="ranking">
+          <li class="ranking__row">
+            <span class="ranking__rank">1</span>
+            <span class="ranking__name">そうさのぬし</span>
+            <span class="ranking__score">100 点</span>
+            <span class="ranking__time">58.4 秒</span>
+          </li>
+          <li class="ranking__row">
+            <span class="ranking__rank">2</span>
+            <span class="ranking__name">ちばけんみん</span>
+            <span class="ranking__score">90 点</span>
+            <span class="ranking__time">1 分 05 秒</span>
+          </li>
+          <li class="ranking__row is-me">
+            <span class="ranking__rank"><span aria-hidden="true">★</span>3</span>
+            <span class="ranking__name">かわい<span class="sr-only">（あなた）</span></span>
+            <span class="ranking__score">70 点</span>
+            <span class="ranking__time">1 分 42 秒</span>
+          </li>
+          <li class="ranking__row">
+            <span class="ranking__rank">4</span>
+            <span class="ranking__name">なまえのながいひとのばあい</span>
+            <span class="ranking__score">70 点</span>
+            <span class="ranking__time">2 分 01 秒</span>
+          </li>
+        </ol>
+
+        <div class="preview-row">
+          <button class="btn btn--primary" type="button">もう一度</button>
+          <button class="btn btn--ghost" type="button">結果をシェア</button>
+          <button class="btn" type="button">範囲を変える</button>
+        </div>
+      </section>
+    </div>
+
+    <p class="preview-label">⑤ 部品カタログ（1 画面には出ない見本）</p>
+    <p class="preview-note">ここだけは見本の寄せ集めなので、用紙の中がスクロールしてよい</p>
+    <div class="board">
+      <section class="paper">
+        <header class="paper__header">
+          <h2 class="paper__title">部品</h2>
+        </header>
+
+        <p class="preview-h">ボタン</p>
+        <div class="preview-row">
+          <button class="btn btn--primary" type="button">はじめる</button>
+          <button class="btn btn--ghost" type="button">ランキングを見る</button>
+          <button class="btn" type="button">あそびかた</button>
+          <button class="btn btn--primary" type="button" disabled>準備中</button>
+        </div>
+
+        <hr class="preview-hr" />
+
+        <p class="preview-h">残り時間が少ないとき（.is-urgent）</p>
+        <p class="timer__label is-urgent"><span aria-hidden="true">⌛</span> のこり 3 秒</p>
+        <div class="timer is-urgent">
+          <span class="timer__bar" style="width: 15%"></span>
+        </div>
+
+        <hr class="preview-hr" />
+
+        <p class="preview-h">採点の瞬間（赤ペン）</p>
+        <p>
+          <span class="mark mark--correct" aria-hidden="true">○</span>
+          <span class="sr-only">正解</span>
+          <span class="pen-comment">よくできました！</span>
+        </p>
+        <p>
+          <span class="mark mark--wrong" aria-hidden="true">×</span>
+          <span class="sr-only">誤り</span>
+          <span class="pen-comment">おしい！ 正解は「はなてんひがし」</span>
+        </p>
+
+        <hr class="preview-hr" />
+
+        <p class="preview-h">難読の長い地名（375px での折返し確認）</p>
+        <p class="q-kanji">十二月田<span class="q-suffix">［町］</span></p>
+        <p class="q-pref">埼玉県 川口市</p>
+
+        <hr class="preview-hr" />
+
+        <p class="preview-h">マーカーと本文（明朝）</p>
+        <p class="q-prompt">
+          日本の<span class="marker marker--yellow">むずかしい地名</span>を 10 問。
+          読みを<span class="marker marker--pink">ひらがな</span>で書いてください。
+          制限時間は 1 問 <span class="marker marker--blue">20 秒</span>です。
+        </p>
+      </section>
+    </div>
+
+    <p class="preview-label">⑤ 下タブバー（.tabbar）と付箋（.sticky-note）</p>
+    <p class="preview-note">
+      タブバーは本番では .board の中・.paper の外に position: fixed で 1 本だけ置く（この見本だけ
+      流し込みに戻してある）。現在地は .is-current ＋ aria-current="page" の両方で示す。
+      高さは --tabbar-h（56px）、タブ本体は --tabbar-tab-h（46px）で、差の 10px が黒板色に残る
+    </p>
+    <div class="board preview-tabbar">
+      <section class="paper">
+        <header class="paper__header">
+          <h2 class="paper__title">答案</h2>
+          <!-- 見出し行の右端。.paper__help（丸い「？」）と同じ位置の作法 -->
+          <span class="paper__share"><button class="btn btn--ghost" type="button">共有</button></span>
+        </header>
+        <p>用紙の中に「タイトルへ戻る／範囲・科目へ／表紙へ」は置かない。戻る導線は下のタブバー 1 本。</p>
+        <div class="sticky-note">
+          <button class="btn" type="button">今日の10問（全国）</button>
+          <p class="cover__note cover__today-note">付箋は淡い黄色・少し傾ける・影 1 段。</p>
+        </div>
+      </section>
+
+      <nav class="tabbar" aria-label="メインメニュー">
+        <a class="tabbar__item is-current" href="#/" aria-current="page">検定</a>
+        <a class="tabbar__item" href="#/atlas">地名帳</a>
+        <a class="tabbar__item" href="#/ranking">順位</a>
+        <a class="tabbar__item" href="#/review">見直し</a>
+      </nav>
+    </div>
+
+    <p class="preview-note">
+      住所データ: デジタル庁「アドレス・ベース・レジストリ」（abr20260925）を加工して作成。<br />
+      これはテーマのスタイルガイドで、アプリ本体ではありません。正本の CSS は
+      <code>src/styles/tokens.css</code> ／ <code>src/styles/theme.css</code>。
+    </p>
+  </body>
+</html>

@@ -1,0 +1,571 @@
+{
+  "checkedOn": "2026-11-16",
+  "note": "市区町村名の由来（Issue #97）。キーは団体コード（問題バンクの lgCode）。text が空の件は、確かな出典を開いて確かめられなかったもの（画面には出さない）。note は点検用の覚え書きで、画面には出さない。一覧と書き方の決まりは docs/origins.md",
+  "cities": {
+    "013471": {
+      "name": "長万部町",
+      "pref": "北海道",
+      "text": "アイヌ語に由来するが諸説ある。カレイのよく捕れる河口を意味する「オサマムペ」とする説などがある。",
+      "certainty": "disputed",
+      "sources": [
+        {
+          "url": "https://ja.wikipedia.org/wiki/%E9%95%B7%E4%B8%87%E9%83%A8%E7%94%BA",
+          "title": "長万部町（町名の由来）",
+          "site": "Wikipedia",
+          "seen": "2026-11-16",
+          "wikipedia": true
+        }
+      ],
+      "note": "町の資料（写万部山をシャマンペ〈カレイ〉ヌプリと呼んだ転訛とする説明など）は PDF だけで、開いて確かめていない。Wikipedia の「諸説あり」の出典は北海道『アイヌ語地名リスト』（PDF）"
+    },
+    "022055": {
+      "name": "五所川原市",
+      "pref": "青森県",
+      "text": "",
+      "certainty": "unclear",
+      "sources": [],
+      "note": "市立図書館の『五所川原市の地名』は PDF だけ。市の HTML のページに「五所川原」の由来の記載は見つからなかった"
+    },
+    "033227": {
+      "name": "矢巾町",
+      "pref": "岩手県",
+      "text": "",
+      "certainty": "unclear",
+      "sources": [],
+      "note": "町の公式ページ・県のページに地名の由来の記載を見つけられなかった"
+    },
+    "044440": {
+      "name": "色麻町",
+      "pref": "宮城県",
+      "text": "日本最初の漢和辞典『和名類聚抄』に「之加萬」と読みが記され、室町時代の辞書にも「しかま」とある。",
+      "certainty": "official",
+      "sources": [
+        {
+          "url": "https://www.town.shikama.miyagi.jp/soshiki/shakai_kyoiku/8/447.html",
+          "title": "色麻町の歴史",
+          "site": "色麻町",
+          "seen": "2026-11-16"
+        }
+      ],
+      "note": "名の意味（語源）ではなく、古い読みの記録。語源の記載は見つからなかった"
+    },
+    "053279": {
+      "name": "上小阿仁村",
+      "pref": "秋田県",
+      "text": "",
+      "certainty": "unclear",
+      "sources": [],
+      "note": "村の公式ページには明治22年に9か村をまとめて村名を付けたとだけあり、「小阿仁」の由来の記載はない"
+    },
+    "062065": {
+      "name": "寒河江市",
+      "pref": "山形県",
+      "text": "寒河江の始まりを、神奈川県の寒川から移り住んだ人々に求める説がある。",
+      "certainty": "disputed",
+      "sources": [
+        {
+          "url": "https://www.city.sagae.yamagata.jp/shisei/sagae/yukoshimaitoshi.html",
+          "title": "友好姉妹都市",
+          "site": "寒河江市",
+          "seen": "2026-11-16"
+        }
+      ],
+      "note": "寒川町との姉妹都市締結のきっかけとして書かれた一文で、名の由来を正面から説明したページではない"
+    },
+    "073644": {
+      "name": "檜枝岐村",
+      "pref": "福島県",
+      "text": "村名は、山から出る上質の黒檜にちなむとされる。",
+      "certainty": "public",
+      "sources": [
+        {
+          "url": "https://www.pref.fukushima.lg.jp/w4/oze/column/column026.html",
+          "title": "【第26回】ふくしま尾瀬のまち＜檜枝岐村 編＞",
+          "site": "福島県",
+          "seen": "2026-11-16"
+        }
+      ],
+      "note": "村の公式ページには由来の記載が見つからず、県のコラムの一文による"
+    },
+    "082333": {
+      "name": "行方市",
+      "pref": "茨城県",
+      "text": "",
+      "certainty": "unclear",
+      "sources": [],
+      "note": "市の FAQ に「行細し（なめくわし）」の説明があったようだが、ページが無くなっていて開けなかった。ほかの公的なページでは見つからなかった"
+    },
+    "093611": {
+      "name": "壬生町",
+      "pref": "栃木県",
+      "text": "",
+      "certainty": "unclear",
+      "sources": [],
+      "note": "町の公式ページ・県のページに地名の由来の記載を見つけられなかった"
+    },
+    "104256": {
+      "name": "嬬恋村",
+      "pref": "群馬県",
+      "text": "日本武尊が鳥居峠で亡き妻をしのび「吾嬬者耶（あづまはや）」と嘆いた故事にちなむとされる。",
+      "certainty": "official",
+      "sources": [
+        {
+          "url": "https://www.vill.tsumagoi.gunma.jp/www/contents/1000000000249/index.html",
+          "title": "嬬恋村紹介",
+          "site": "嬬恋村",
+          "seen": "2026-11-16"
+        }
+      ],
+      "note": "村のページは故事にちなんで名付けたと書く（伝承なので文は「とされる」にした）"
+    },
+    "113271": {
+      "name": "越生町",
+      "pref": "埼玉県",
+      "text": "秩父へも上州へも尾根を越えて行く土地柄から、「尾越し（おごし）」が転じたとする説が有力。",
+      "certainty": "disputed",
+      "sources": [
+        {
+          "url": "https://www.town.ogose.saitama.jp/ogoseikatsu/ogosetoha/1453444262342.html",
+          "title": "越生町とは?",
+          "site": "越生町",
+          "seen": "2026-11-16"
+        }
+      ]
+    },
+    "122351": {
+      "name": "匝瑳市",
+      "pref": "千葉県",
+      "text": "「さ（美しい）」と「ふさ（麻）」から成る「さふさ」に、めでたい字をあてたとされる。語源は定まらない。",
+      "certainty": "disputed",
+      "sources": [
+        {
+          "url": "https://www.city.sosa.lg.jp/page/page000740.html",
+          "title": "匝瑳市の名称について",
+          "site": "匝瑳市",
+          "seen": "2026-11-16"
+        }
+      ]
+    },
+    "132187": {
+      "name": "福生市",
+      "pref": "東京都",
+      "text": "麻の古語「ふさ」に由来する説など諸説ある。「ふっさ」という呼び名に、縁起のよい「福」「生」の字をあてたとみられる。",
+      "certainty": "disputed",
+      "sources": [
+        {
+          "url": "https://www.city.fussa.tokyo.jp/municipal/aboutfussa/profile/1003147.html",
+          "title": "市の名前の由来",
+          "site": "福生市",
+          "seen": "2026-11-16"
+        }
+      ]
+    },
+    "143839": {
+      "name": "真鶴町",
+      "pref": "神奈川県",
+      "text": "",
+      "certainty": "unclear",
+      "sources": [],
+      "note": "町の公式ページは町章の鶴の説明だけ。Wikipedia に「半島の形が飛びたつ直前のツルに似ている」とある（出典は神奈川県町村会の冊子）が、出典を開けず採らなかった"
+    },
+    "152081": {
+      "name": "小千谷市",
+      "pref": "新潟県",
+      "text": "平安時代の『和名抄』に見える、古代魚沼郡の「千屋郷」が、地名のもとになったとされる。",
+      "certainty": "official",
+      "sources": [
+        {
+          "url": "https://www.city.ojiya.niigata.jp/site/furusato-tax/ojiya-profile.html",
+          "title": "小千谷市の紹介",
+          "site": "小千谷市",
+          "seen": "2026-11-16"
+        }
+      ]
+    },
+    "162060": {
+      "name": "滑川市",
+      "pref": "富山県",
+      "text": "",
+      "certainty": "unclear",
+      "sources": [],
+      "note": "市の宿場の案内などに地名の由来の記載は見つからなかった"
+    },
+    "172073": {
+      "name": "羽咋市",
+      "pref": "石川県",
+      "text": "王子と飼い犬が怪鳥を退治し、犬がその羽を食べたことから「はくい」と呼ぶという伝説がある。万葉集では「波久比」。",
+      "certainty": "official",
+      "sources": [
+        {
+          "url": "https://www.city.hakui.lg.jp/soshiki/sangyoukensetsubu/syoukoukankouka/12/1/2504.html",
+          "title": "はくいの地を治めた王子を祀る＿羽咋神社(はくいじんじゃ)",
+          "site": "羽咋市",
+          "seen": "2026-11-16"
+        },
+        {
+          "url": "https://www.city.hakui.lg.jp/rekimin/history/localhistory.html",
+          "title": "羽咋について",
+          "site": "羽咋市",
+          "seen": "2026-11-16"
+        }
+      ]
+    },
+    "182079": {
+      "name": "鯖江市",
+      "pref": "福井県",
+      "text": "空から落ちて敵の将に当たった矢が鯖の尾の形で「鯖矢」と呼ばれ、その「鯖」に「深江」の「江」を合わせたという伝説がある。",
+      "certainty": "disputed",
+      "sources": [
+        {
+          "url": "https://www.city.sabae.fukui.jp/about_city/shinoshokai/sonota/sabaenonanoyurai.html",
+          "title": "鯖江の名の由来",
+          "site": "鯖江市",
+          "seen": "2026-11-16"
+        }
+      ],
+      "note": "市のページは「種々の伝説」があるとし、「鯖」と「江」を合わせた話は「一説では」と書く"
+    },
+    "194247": {
+      "name": "忍野村",
+      "pref": "山梨県",
+      "text": "",
+      "certainty": "unclear",
+      "sources": [],
+      "note": "村の公式ページに由来の記載は見つからなかった。Wikipedia に忍草村と内野村の合併による合成地名とある（出典なし）が採らなかった"
+    },
+    "204463": {
+      "name": "麻績村",
+      "pref": "長野県",
+      "text": "伊勢神宮と関わりのある「麻績部（おみべ）」から起こった地名とみられている。",
+      "certainty": "official",
+      "sources": [
+        {
+          "url": "https://www.vill.omi.nagano.jp/bunkazai/list/kenchiku/25.html",
+          "title": "神明宮 拝殿 1棟",
+          "site": "麻績村",
+          "seen": "2026-11-16"
+        }
+      ],
+      "note": "村の文化財の解説の一文で、「〜ようである」と推測の形で書かれている"
+    },
+    "215040": {
+      "name": "七宗町",
+      "pref": "岐阜県",
+      "text": "",
+      "certainty": "unclear",
+      "sources": [],
+      "note": "町の概要のページ（hit001.hichiso.jp/gaiyou）に「町の東北部の7つの高峰に由来」とあるらしいが、サーバーにつながらず開けなかった"
+    },
+    "223255": {
+      "name": "函南町",
+      "pref": "静岡県",
+      "text": "",
+      "certainty": "unclear",
+      "sources": [],
+      "note": "「箱根（函嶺）の南」とする説明は町の統計書（PDF）と Wikipedia にあるが、Wikipedia が出典にする町長あいさつのページには由来の記載がなく、開いて確かめられた公的なページは無かった"
+    },
+    "234419": {
+      "name": "阿久比町",
+      "pref": "愛知県",
+      "text": "由来は不明だが、694年の木簡に「阿具比」と書かれ、のちに「英比（あぐい）」とも記された。",
+      "certainty": "official",
+      "sources": [
+        {
+          "url": "https://www.town.agui.lg.jp/contents_detail.php?frmId=179",
+          "title": "町の歴史",
+          "site": "阿久比町",
+          "seen": "2026-11-16"
+        }
+      ],
+      "note": "町は由来を「不明」とする。書き方の移り変わりの記録として載せた"
+    },
+    "242098": {
+      "name": "尾鷲市",
+      "pref": "三重県",
+      "text": "1954年に市が生まれるまでは「おわし」と呼ばれ、この時から「おわせ」の名に変わった。",
+      "certainty": "official",
+      "sources": [
+        {
+          "url": "https://www.city.owase.lg.jp/owase_kurashi/0000019775.html",
+          "title": "おわせを知る",
+          "site": "尾鷲市",
+          "seen": "2026-11-16"
+        }
+      ],
+      "note": "名の意味（語源）ではなく、読みの移り変わり。語源の記載は見つからなかった"
+    },
+    "252085": {
+      "name": "栗東市",
+      "pref": "滋賀県",
+      "text": "「栗太郡の東」に由来する。1954年に郡の東部の4つの村が合併して栗東町ができた。",
+      "certainty": "official",
+      "sources": [
+        {
+          "url": "https://www.city.ritto.lg.jp/koho/2109/091_4.html",
+          "title": "広報りっとう（2021年9月号）",
+          "site": "栗東市",
+          "seen": "2026-11-16"
+        }
+      ]
+    },
+    "262081": {
+      "name": "向日市",
+      "pref": "京都府",
+      "text": "丘陵の先に鎮座する「向日神社」の名が、市名の由来になっている。",
+      "certainty": "official",
+      "sources": [
+        {
+          "url": "https://www.city.muko.kyoto.jp/site/rekishi/1047.html",
+          "title": "市の地理",
+          "site": "向日市",
+          "seen": "2026-11-16"
+        }
+      ]
+    },
+    "272299": {
+      "name": "四條畷市",
+      "pref": "大阪府",
+      "text": "南北朝時代の戦場「四条縄手（畷）」にちなむ説と、明治に建った四條畷神社の名が広まったとする説がある。",
+      "certainty": "disputed",
+      "sources": [
+        {
+          "url": "https://www.city.shijonawate.lg.jp/page/3-6323.html",
+          "title": "市名の由来は?",
+          "site": "四條畷市",
+          "seen": "2026-11-16"
+        }
+      ]
+    },
+    "282278": {
+      "name": "宍粟市",
+      "pref": "兵庫県",
+      "text": "『播磨国風土記』の「宍禾（しさわ）」に由来し、「鹿（しし）に会う」から名づけたという話が伝わる。",
+      "certainty": "official",
+      "sources": [
+        {
+          "url": "https://www.city.shiso.lg.jp/soshiki/shichokoshitsu/tiikisouseika/osirase/1459152842451.html",
+          "title": "「宍粟の日」の選考までの経緯",
+          "site": "宍粟市",
+          "seen": "2026-11-16"
+        },
+        {
+          "url": "https://www.city.shiso.lg.jp/kanko/hakkonohurusatoshiso/8146.html",
+          "title": "漫画～播磨国しさわのこおり～",
+          "site": "宍粟市",
+          "seen": "2026-11-16"
+        }
+      ],
+      "note": "「鹿に会う」の話は市の漫画のせりふによる（伝承）"
+    },
+    "293440": {
+      "name": "斑鳩町",
+      "pref": "奈良県",
+      "text": "この地に「いかる」という鳥が群れていたからという説がよく知られる。由来には諸説ある。",
+      "certainty": "disputed",
+      "sources": [
+        {
+          "url": "https://www.town.ikaruga.nara.jp/0000000783.html",
+          "title": "町の鳥に「いかる」、町の花に「つばき」を制定",
+          "site": "斑鳩町",
+          "seen": "2026-11-16"
+        }
+      ]
+    },
+    "303909": {
+      "name": "印南町",
+      "pref": "和歌山県",
+      "text": "",
+      "certainty": "unclear",
+      "sources": [],
+      "note": "町の公式ページ・県のページに地名の由来の記載を見つけられなかった"
+    },
+    "313645": {
+      "name": "三朝町",
+      "pref": "鳥取県",
+      "text": "",
+      "certainty": "unclear",
+      "sources": [],
+      "note": "「三たび朝を迎えると元気になる」を温泉の名の由来とする記事はあるが、民間のサイトだけで、町・県などの公的なページでは確かめられなかった"
+    },
+    "324493": {
+      "name": "邑南町",
+      "pref": "島根県",
+      "text": "旧3町村の一帯を指す名として親しまれ、「邑」は人の集まる所、「南」は明るさを表すとして町名に決めた。",
+      "certainty": "official",
+      "sources": [
+        {
+          "url": "https://www.town.ohnan.lg.jp/soshiki/2/1479.html",
+          "title": "邑南町の紹介",
+          "site": "邑南町",
+          "seen": "2026-11-16"
+        }
+      ]
+    },
+    "334618": {
+      "name": "矢掛町",
+      "pref": "岡山県",
+      "text": "",
+      "certainty": "unclear",
+      "sources": [],
+      "note": "町の公式ページ・県のページに地名の由来の記載を見つけられなかった"
+    },
+    "342131": {
+      "name": "廿日市市",
+      "pref": "広島県",
+      "text": "嚴島神社の祭礼の最終日、20日に開かれた市が地名の由来といわれる。",
+      "certainty": "official",
+      "sources": [
+        {
+          "url": "https://www.city.hatsukaichi.hiroshima.jp/site/kanko/137458.html",
+          "title": "ようこそ！世界遺産・宮島のあるまち廿日市市へ。",
+          "site": "廿日市市",
+          "seen": "2026-11-16"
+        }
+      ]
+    },
+    "353434": {
+      "name": "田布施町",
+      "pref": "山口県",
+      "text": "",
+      "certainty": "unclear",
+      "sources": [],
+      "note": "町の公式ページに地名の由来の記載は見つからなかった（町章の説明だけ）"
+    },
+    "363839": {
+      "name": "牟岐町",
+      "pref": "徳島県",
+      "text": "",
+      "certainty": "unclear",
+      "sources": [],
+      "note": "町の公式ページ・県のページに地名の由来の記載を見つけられなかった"
+    },
+    "373222": {
+      "name": "土庄町",
+      "pref": "香川県",
+      "text": "",
+      "certainty": "unclear",
+      "sources": [],
+      "note": "町の公式ページは町章の「との」の説明だけで、地名の由来の記載は見つからなかった"
+    },
+    "382078": {
+      "name": "大洲市",
+      "pref": "愛媛県",
+      "text": "古くは「大津（おおつ）」と呼ばれた。1658年の幕府の許可書に「大洲の城」とあるのが、公式文書での初出とされる。",
+      "certainty": "public",
+      "sources": [
+        {
+          "url": "https://www.i-manabi.jp/system/regionals/regionals/ecode:2/64/view/8109",
+          "title": "愛媛県史 近世 上「加藤家の大洲藩就封と初期の加藤家」",
+          "site": "えひめの記憶（愛媛県生涯学習センター）",
+          "seen": "2026-11-16"
+        },
+        {
+          "url": "https://www.city.ozu.ehime.jp/site/bunkazai/0205.html",
+          "title": "大洲城跡",
+          "site": "大洲市",
+          "seen": "2026-11-16"
+        }
+      ],
+      "note": "「大洲」の字そのものの意味は確かめられなかった。読みの「おおつ」は市の大洲城跡のページ（大津城〈おおつ じょう〉）による"
+    },
+    "392081": {
+      "name": "宿毛市",
+      "pref": "高知県",
+      "text": "古くは枯れた葦を「すくも」と呼び、葦の多い湿地だったことが名の起こりとみられる。「宿毛」は音に合わせた後世の字。",
+      "certainty": "disputed",
+      "sources": [
+        {
+          "url": "https://www.city.sukumo.kochi.jp/sisi/008101.html",
+          "title": "宿毛市史 古代編-宿毛村の誕生",
+          "site": "宿毛市",
+          "seen": "2026-11-16"
+        }
+      ],
+      "note": "市史は葦の説を推しつつ、藻屑・藻塩の説も挙げて退けている"
+    },
+    "402044": {
+      "name": "直方市",
+      "pref": "福岡県",
+      "text": "1675年に藩名を改めたとき、領内の「直方（能方）村」の読みを生かし、『易経』にあるめでたい語「直方」を字にあてたとされる。",
+      "certainty": "official",
+      "sources": [
+        {
+          "url": "https://www.city.nogata.fukuoka.jp/shisei/_1233/_2027.html",
+          "title": "市名の由来",
+          "site": "直方市",
+          "seen": "2026-11-16"
+        }
+      ],
+      "note": "市のページは南北朝時代の「王方（のうがた）」にちなむという伝えも添えている"
+    },
+    "412082": {
+      "name": "小城市",
+      "pref": "佐賀県",
+      "text": "",
+      "certainty": "unclear",
+      "sources": [],
+      "note": "市の公式ページ（歴史・伝説）に「小城」の由来の記載は見つからなかった"
+    },
+    "423211": {
+      "name": "東彼杵町",
+      "pref": "長崎県",
+      "text": "",
+      "certainty": "unclear",
+      "sources": [],
+      "note": "町の記念誌（PDF）に「彼杵」の地名の起源の特集があるが、PDF は開かない決まりのため確かめていない。HTML のページには記載なし"
+    },
+    "433691": {
+      "name": "和水町",
+      "pref": "熊本県",
+      "text": "",
+      "certainty": "unclear",
+      "sources": [],
+      "note": "町の公式ページは町章の「和（緑）」「水（水色）」の説明だけ。合併した菊水町・三加和町の字を合わせたとする説明は Wikipedia（出典なし）と県の資料（PDF）にしか見つからず、採らなかった"
+    },
+    "442101": {
+      "name": "杵築市",
+      "pref": "大分県",
+      "text": "もとは「木付」と書いた。1712年に将軍の朱印状で「杵築」と書かれたのを機に、幕府に確かめてこの字で「きつき」と読むことになった。",
+      "certainty": "official",
+      "sources": [
+        {
+          "url": "https://www.city.kitsuki.lg.jp/kanko_rekishi/kankou_spot/jokamachi_sansaku/3409.html",
+          "title": "杵築城（木付城）",
+          "site": "杵築市",
+          "seen": "2026-11-16"
+        }
+      ]
+    },
+    "454061": {
+      "name": "都農町",
+      "pref": "宮崎県",
+      "text": "",
+      "certainty": "unclear",
+      "sources": [],
+      "note": "町の公式ページ・県のページに地名の由来の記載を見つけられなかった"
+    },
+    "462101": {
+      "name": "指宿市",
+      "pref": "鹿児島県",
+      "text": "1543年の板碑に「湯豊宿」と刻まれており、湯の豊かな土地としてこう書かれていたことがわかる。",
+      "certainty": "official",
+      "sources": [
+        {
+          "url": "https://www.city.ibusuki.lg.jp/cocco/furusatomap/assets/31/index.html",
+          "title": "31 方柱板碑「湯豊宿」",
+          "site": "指宿市（いぶすきふるさとマップ）",
+          "seen": "2026-11-16"
+        }
+      ],
+      "note": "名の意味（語源）ではなく、古い書き方の記録。市のページも「名前の由来を知る上で貴重な資料」とするにとどまる"
+    },
+    "473065": {
+      "name": "今帰仁村",
+      "pref": "沖縄県",
+      "text": "",
+      "certainty": "unclear",
+      "sources": [],
+      "note": "村・県の公的なページに村名の由来の記載を見つけられなかった"
+    }
+  }
+}
